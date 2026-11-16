@@ -6449,7 +6449,8 @@
       if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
         p.lookKey = lk; p.swordKey = swordId; scene.remove(p.ch.root);
         p.ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
-        equipWeapons(p.ch); p.ch.swordId = swordId;
+        // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
+        p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
         scene.add(p.ch.root);
       }
