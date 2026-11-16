@@ -2,7 +2,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000, MAX_PLAYERS_PER_ROOM = 40, MAX_TOTAL_PLAYERS = 400;
-const TOPICS = new Set(['fire', 'pvp', 'bsnap', 'bdmg', 'bhit']);
+const TOPICS = new Set(['fire', 'pvp', 'bsnap', 'bdmg', 'bhit', 'kraken']);
 const page = path.join(__dirname, 'public', 'index.html');
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
