@@ -4380,15 +4380,11 @@
     if (gameTime >= 24) { gameTime -= 24; dayNum++; }
     envSaveT -= dt;
     if (envSaveT <= 0) { envSaveT = 15; STATE.time = gameTime; STATE.day = dayNum; STATE.weather = weatherKey; save(); }
-    // In multiplayer, the room host is authoritative for weather transitions.
-    // Other clients receive the host's time/day/weather in their presence snapshot.
-    if (!MP.room || !MP.isHost || MP.isHost()) {
-      weatherT -= dt;
-      if (weatherT <= 0) {
-        weatherT = 150 + Math.random() * 220;
-        const nx = pickWeather();
-        if (nx !== weatherKey) { weatherKey = nx; toast(`The weather turns: ${WEATHERS[nx].name.toLowerCase()}.`); }
-      }
+    weatherT -= dt;
+    if (weatherT <= 0) {
+      weatherT = 150 + Math.random() * 220;
+      const nx = pickWeather();
+      if (nx !== weatherKey) { weatherKey = nx; toast(`The weather turns: ${WEATHERS[nx].name.toLowerCase()}.`); }
     }
     const tgt = WEATHERS[weatherKey], wk = Math.min(1, dt * 0.1);
     for (const key in tgt) if (key !== 'name') Wx[key] += (tgt[key] - Wx[key]) * wk;
@@ -5678,12 +5674,13 @@
 
   // ---- targets ----
   const krPlayerShip = () => ship && !ship.sinking ? ship : null;
-  function krTargetPos(T) { return T.kind === 'swim' ? P.pos : T.ent; }
+  function krTargetPos(T) { return T.kind === 'swim' ? P.pos : T.kind === 'remoteShip' ? T.ent : T.ent; }
   function krTargetOK(T) {
     if (!T) return false;
-    if (KR.ally > 0 && T.kind !== 'raider') return false;   // it won't harm the one who called it
+    if (KR.ally > 0 && T.kind !== 'raider' && T.kind !== 'remoteShip') return false;   // it won't harm the one who called it
     if (T.kind === 'swim') return (KR.heldPlayer || krSwimming()) && !STOM.on && PLAYER.hp > 0;
     if (T.kind === 'ship') return ship === T.ent && !ship.sinking;
+    if (T.kind === 'remoteShip') return !!(T.ent && window.__mpKrakenTargetAlive && window.__mpKrakenTargetAlive(T.ent.peer));
     return T.ent.state !== 'sinking' && T.ent.state !== 'gone';
   }
   function krSwimming() {
@@ -5692,8 +5689,12 @@
   }
   function krFindTarget() {
     let best = null, bd = 1e9;
-    if (KR.ally > 0) {   // as an ally it goes after the raiders nearest ye
+    if (KR.ally > 0) {   // as an ally it goes after raiders and other players' ships
       for (const r of raiders) if (r.state !== 'sinking' && r.state !== 'gone') { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < 900 && krDeep(r.x, r.z) && d < bd) { bd = d; best = { kind: 'raider', ent: r }; } }
+      if (window.__mpKrakenTargets) for (const q of window.__mpKrakenTargets()) {
+        const d = Math.hypot(q.x - KR.x, q.z - KR.z);
+        if (d < 1000 && d < bd && krDeep(q.x, q.z)) { bd = d; best = { kind: 'remoteShip', ent: q }; }
+      }
       return best;
     }
     const consider = (kind, ent, x, z, range) => { const d = Math.hypot(x - KR.x, z - KR.z); if (d < range && krDeep(x, z) && d < bd) { bd = d; best = { kind, ent }; } };
@@ -5916,9 +5917,18 @@
         else {
           const p = krTargetPos(T); gx = p.x; gz = p.z; sp = 76;
           const d = Math.hypot(gx - KR.x, gz - KR.z);
-          if (!KR.toldHunt && (T.kind !== 'raider') && d < 380) { KR.toldHunt = true; toast('Something enormous is movin\' beneath the waves... and it\'s comin\' for ye!'); SFX.roar(); }
+          if (T.kind === 'remoteShip' && d < 72) {
+            if ((KR.remoteHitCd || 0) <= 0 && window.__mpKrakenStrike) {
+              window.__mpKrakenStrike(T.ent.peer, 20);
+              KR.remoteHitCd = 3.2;
+              wSplash(gx + (Math.random() - 0.5) * 12, waveHeight(gx, gz, t) + 0.5, gz + (Math.random() - 0.5) * 12, true);
+              if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken lashes a rival ship with its tentacles!'); }
+            }
+            KR.st = 'roam'; KR.tgt = null; KR.cd = 1.5; KR.wp = null;
+          }
+          if (T.kind !== 'remoteShip' && !KR.toldHunt && (T.kind !== 'raider') && d < 380) { KR.toldHunt = true; toast('Something enormous is movin\' beneath the waves... and it\'s comin\' for ye!'); SFX.roar(); }
           if (d > 1000) { KR.tgt = null; KR.st = 'roam'; KR.cd = 8; }
-          else if (d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);
+          else if (T.kind !== 'remoteShip' && d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);
         }
       }
       if (KR.st === 'roam' || KR.st === 'hunt') {
@@ -6331,7 +6341,12 @@
       seen.add(e.peer);
       let p = MP.peers.get(e.peer);
       if (!p) p = mpAdd(e.peer, e.by, d);
-      p.tgt = d;
+      if (p.tgt && d.sh && p.tgt.sh) {
+        const elapsed = Math.max(0.05, (performance.now() - (p.tgtAt || performance.now())) / 1000);
+        p.shipVx = Math.max(-45, Math.min(45, (d.sh.x - p.tgt.sh.x) / elapsed));
+        p.shipVz = Math.max(-45, Math.min(45, (d.sh.z - p.tgt.sh.z) / elapsed));
+      }
+      p.tgt = d; p.tgtAt = performance.now();
     }
     for (const id of [...MP.peers.keys()]) if (!seen.has(id)) mpRemove(id);
   }
@@ -6344,8 +6359,16 @@
       MP.room.onPeers(mpOnPeers);
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
       MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
+      // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
+      MP.room.on('kraken', m => {
+        const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return;
+        const amount = Math.min(30, Math.max(1, +d.dmg || 0));
+        try { damageShip(ship, amount); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + (Math.random() - 0.5) * 0.18; SFX.crash({ x: ship.x, z: ship.z }); wSplash(ship.x, waveHeight(ship.x, ship.z, clock.elapsedTime) + 0.6, ship.z, true); toast("A rival captain's Kraken is tearing at yer ship!"); } catch (e) {}
+      });
+      window.__mpKrakenTargets = () => [...MP.peers.values()].filter(q => q.tgt && q.tgt.sh && q.ship && !q.ship.sinking).map(q => ({ peer: q.peer, x: q.ship.x, z: q.ship.z }));
+      window.__mpKrakenTargetAlive = peer => { const q = MP.peers.get(peer); return !!(q && q.tgt && q.tgt.sh && q.ship); };
+      window.__mpKrakenStrike = (peer, dmg) => MP.room.emit('kraken', { to: peer, dmg }).catch(() => {});
       const isHost = () => !!MP.me && [...MP.peers.keys()].every(k => MP.me < k);
-      MP.isHost = isHost;
       const ST = ['idle', 'chase', 'dead', 'gone'];
       window.__mpNear = b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 80;
       window.__mpTarget = b => {
@@ -6414,24 +6437,21 @@
       try {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         const r = v => Math.round(v * 100) / 100;
-        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, a: PLAYER.slashT > 0 ? 1 : 0, sh: null };
-        if (MP.isHost && MP.isHost()) st.env = { time: r(gameTime), day: dayNum, weather: weatherKey };
-        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0) };
+        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null };
+        if (ship && !ship.sinking) st.sh = { k: ship.key, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0) };
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
       } catch (e) {}
     }
-    const k = Math.min(1, dt * 10);
+    const k = 1 - Math.exp(-dt * 11);
     for (const p of MP.peers.values()) {
       const d = p.tgt; if (!d) continue;
-      if (d.env && !MP.isHost()) {
-        if (typeof d.env.time === 'number') gameTime = d.env.time;
-        if (typeof d.env.day === 'number') dayNum = d.env.day;
-        if (WEATHERS[d.env.weather]) { weatherKey = d.env.weather; STATE.weather = weatherKey; }
-      }
-      const lk = JSON.stringify(d.look || {});
-      if (lk !== p.lookKey) {   // they changed outfit: rebuild avatar
-        p.lookKey = lk; scene.remove(p.ch.root);
-        p.ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {}))); scene.add(p.ch.root);
+      const lk = JSON.stringify(d.look || {}), swordId = d.sw || 'rusty';
+      if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
+        p.lookKey = lk; p.swordKey = swordId; scene.remove(p.ch.root);
+        p.ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
+        equipWeapons(p.ch); p.ch.swordId = swordId;
+        if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
+        scene.add(p.ch.root);
       }
       const dx = d.x - p.pos.x, dz = d.z - p.pos.z;
       if (dx * dx + dz * dz > 40000) p.pos.set(d.x, d.y, d.z); else { p.pos.x += dx * k; p.pos.y += (d.y - p.pos.y) * k; p.pos.z += dz * k; }
@@ -6439,20 +6459,20 @@
       p.ch.root.position.copy(p.pos); p.ch.root.rotation.y = p.f;
       p.sp += ((d.s || 0) - p.sp) * k;
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
-      try { p.ch.slashP = p.sl; if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = !!d.a; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null); } catch (e) {}
+      try { p.ch.slashP = p.sl; if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null); } catch (e) {}
       // their ship
       const sh = d.sh;
-      if (sh && (!p.ship || p.shipKey !== sh.k || p.shipWreck !== !!sh.w)) {
+      if (sh && (!p.ship || p.shipKey !== sh.k)) {
         if (p.ship) scene.remove(p.ship.group);
-        try {
-          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : undefined);
-          if (sh.w) decorateWreck(p.ship);
-          p.shipKey = sh.k; p.shipWreck = !!sh.w; scene.add(p.ship.group);
-        } catch (e) { p.ship = null; }
+        try { p.ship = makeShip(sh.k); p.shipKey = sh.k; scene.add(p.ship.group); } catch (e) { p.ship = null; }
       } else if (!sh && p.ship) { scene.remove(p.ship.group); p.ship = null; p.shipKey = null; }
       if (p.ship && sh) {
         const g = p.ship.group;
-        g.position.x += (sh.x - g.position.x) * k; g.position.z += (sh.z - g.position.z) * k; g.position.y += (sh.y - g.position.y) * k;
+        const sx = sh.x - g.position.x, sz = sh.z - g.position.z;
+        // A little bounded velocity look-ahead offsets the 120 ms presence interval.
+        const lead = Math.min(0.16, Math.max(0, (performance.now() - (p.tgtAt || performance.now())) / 1000));
+        const tx = sh.x + (p.shipVx || 0) * lead, tz = sh.z + (p.shipVz || 0) * lead;
+        g.position.x += (tx - g.position.x) * k; g.position.z += (tz - g.position.z) * k; g.position.y += (sh.y - g.position.y) * k;
         let dh = sh.h - g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
         g.rotation.set(sh.p || 0, g.rotation.y + dh * k, sh.r || 0);
         g.rotation.order = 'YXZ';
