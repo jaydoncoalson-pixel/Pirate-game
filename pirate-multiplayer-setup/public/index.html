@@ -3,27 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pirate Game: The Ocean — Free Online Pirate Adventure</title>
-<meta name="description" content="Set sail in Pirate Game: The Ocean, a free browser-based pirate adventure. Explore the ocean, battle enemies, sail ships, and play together in public or private multiplayer seas.">
-<meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="theme-color" content="#8ec5e6">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Pirate Game: The Ocean — Free Online Pirate Adventure">
-<meta property="og:description" content="Explore the ocean, sail ships, battle enemies, and join friends in public or private multiplayer seas.">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Pirate Game: The Ocean">
-<meta name="twitter:description" content="A free browser-based pirate adventure with public and private multiplayer seas.">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "VideoGame",
-  "name": "Pirate Game: The Ocean",
-  "description": "A browser-based pirate adventure where players explore the ocean, sail ships, battle enemies, and play together in public or private multiplayer seas.",
-  "gamePlatform": "Web browser",
-  "playMode": ["SinglePlayer", "MultiPlayer"],
-  "applicationCategory": "Game"
-}
-</script>
+<title>Pirate Game: The Ocean</title>
 <style>
   html, body { margin: 0; height: 100%; background: #8ec5e6; overflow: hidden; font-family: Georgia, "Times New Roman", serif; }
   canvas { display: block; touch-action: none; cursor: grab; }
@@ -123,12 +103,6 @@
 </style>
 </head>
 <body>
-<noscript>
-  <main>
-    <h1>Pirate Game: The Ocean</h1>
-    <p>A free browser-based pirate adventure. Explore the ocean, sail ships, battle enemies, and join friends in public or private multiplayer seas. JavaScript must be enabled to play.</p>
-  </main>
-</noscript>
 <div id="hud">
   <h1>Gull Island</h1>
   <p>WASD to walk &middot; Shift to run &middot; Space to jump &middot; F to attack &middot; 1 / 2 switch weapon &middot; drag to look &middot; E to talk</p>
@@ -167,7 +141,7 @@
 <div id="dialog"><div id="dname"></div><div id="dtext"></div><div id="dopts"></div><div id="dhint">E or click to continue</div></div>
 <div id="err">Couldn't start 3D graphics in this browser.</div>
 <script>
-// Multiplayer client: public ocean + invite-code private seas over a WebSocket relay.
+// Multiplayer client: same room API the game already uses, but over a WebSocket relay server.
 (function () {
   if (window.claude && window.claude.use) return;
   let ws = null, me = null, mine = {}, lastSend = 0, sendTimer = null, fireTimer = null, retry = 0, wanted = null;
@@ -187,19 +161,19 @@
   const user = { profiles: async ids => Object.fromEntries(ids.map(i => [i, { name: names[i] || '' }])), id: async () => me, isOwner: () => false, canEdit: () => false };
   window.claude = { use: async n => n === 'room' ? roomP : n === 'user' ? user : null };
   function banner(txt) { let b = document.getElementById('mpBanner'); if (!b) { b = document.createElement('div'); b.id = 'mpBanner'; b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9998;background:rgba(20,14,8,.85);color:#ffe39a;padding:6px 14px;border-radius:8px;font:14px Georgia,serif'; document.body.appendChild(b); } b.textContent = txt; b.style.display = txt ? 'block' : 'none'; }
-  function connect(url, name, roomId, roomLabel) {
-    wanted = { url, name, roomId, roomLabel }; let first = true;
+  function connect(url, name) {
+    wanted = { url, name }; let first = true;
     const open = () => {
       try { ws = new WebSocket(url); } catch (e) { banner('Bad server address'); return; }
-      ws.onopen = () => { retry = 0; banner('Connecting to ' + roomLabel + '…'); ws.send(JSON.stringify({ t: 'hello', name, room: roomId })); };
+      ws.onopen = () => { retry = 0; banner(''); ws.send(JSON.stringify({ t: 'hello', name })); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-        if (m.t === 'welcome') { me = m.id; names[me] = name; peers.clear(); peers.set(me, { id: me, p: mine }); (m.peers || []).forEach(q => { names[q.id] = q.name; peers.set(q.id, { id: q.id, p: q.p || {} }); }); room.presence({}); firePeers(); banner('Sailing in ' + roomLabel + ' · share the game link' + (roomId === 'public' ? '' : ' and invite code ' + roomId)); if (first) { first = false; resolveRoom(room); } }
+        if (m.t === 'welcome') { me = m.id; names[me] = name; peers.clear(); peers.set(me, { id: me, p: mine }); (m.peers || []).forEach(q => { names[q.id] = q.name; peers.set(q.id, { id: q.id, p: q.p || {} }); }); room.presence({}); firePeers(); if (first) { first = false; resolveRoom(room); } }
         else if (m.t === 'join') { names[m.id] = m.name; peers.set(m.id, { id: m.id, p: {} }); firePeers(); }
         else if (m.t === 'pres') { const q = peers.get(m.id) || { id: m.id, p: {} }; q.p = m.p; peers.set(m.id, q); firePeers(); }
         else if (m.t === 'left') { peers.delete(m.id); firePeers(); }
         else if (m.t === 'emit') { (topics[m.topic] || []).forEach(f => { try { f({ topic: m.topic, data: m.data, peer: m.from, by: m.from, isMe: false, sameTab: false, kind: 'viewer', guest: false }); } catch (e) {} }); }
-        else if (m.t === 'full') banner('This sea is full — try another server');
+        else if (m.t === 'full') banner('Server is full');
       };
       ws.onclose = () => { const keep = peers.get(me); peers.clear(); if (keep) peers.set(me, keep); firePeers(); if (!wanted) return; retry++; banner('Disconnected, retrying…'); setTimeout(open, Math.min(8000, 1000 * retry)); };
     };
@@ -209,15 +183,12 @@
     const http = location.protocol.startsWith('http');
     const def = http ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host : (localStorage.getItem('pg_server') || 'wss://');
     const o = document.createElement('div');
-    o.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);font-family:Georgia,serif';
-    o.innerHTML = '<div style="background:#f4e4c1;border:3px solid #6b4423;border-radius:12px;padding:20px;width:min(440px,92vw);max-height:90vh;overflow:auto;color:#2a1a0c"><h2 style="margin:0 0 10px;font-weight:normal;color:#6b2a14">Choose your sea</h2><label style="font-size:13px">Pirate name</label><input id="pgName" maxlength="16" style="width:100%;box-sizing:border-box;margin:4px 0 10px;padding:8px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><label style="font-size:13px">Server address</label><input id="pgUrl" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:8px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><div style="border-top:1px solid #b99a6c;padding-top:12px"><b>Open-world ocean</b><p style="font-size:13px;margin:5px 0 9px">Meet anyone sailing on this server.</p><button id="pgPublic" style="width:100%;padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#6b4423;color:#fff3d6;cursor:pointer">Sail the public ocean</button></div><div style="border-top:1px solid #b99a6c;margin-top:13px;padding-top:12px"><b>Private sea</b><p style="font-size:13px;margin:5px 0 8px">Create an invite code or join a friend&#39;s private world.</p><input id="pgCode" maxlength="12" placeholder="Enter invite code" style="width:100%;box-sizing:border-box;margin:3px 0 8px;padding:8px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0;text-transform:uppercase"><div style="display:flex;gap:8px"><button id="pgCreate" style="flex:1;padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#8a4c20;color:#fff3d6;cursor:pointer">Create private sea</button><button id="pgJoin" style="flex:1;padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#6b4423;color:#fff3d6;cursor:pointer">Join with code</button></div></div><button id="pgOff" style="width:100%;margin-top:12px;padding:8px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#f4e4c1;color:#2a1a0c;cursor:pointer">Play offline</button></div>';
+    o.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);font-family:Georgia,serif';
+    o.innerHTML = '<div style="background:#f4e4c1;border:3px solid #6b4423;border-radius:12px;padding:20px;width:min(420px,90vw);color:#2a1a0c"><h2 style="margin:0 0 10px;font-weight:normal;color:#6b2a14">Join the crew</h2><label style="font-size:13px">Pirate name</label><input id="pgName" maxlength="16" style="width:100%;box-sizing:border-box;margin:4px 0 10px;padding:7px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><label style="font-size:13px">Server address</label><input id="pgUrl" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:7px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><div style="display:flex;gap:8px"><button id="pgGo" style="flex:1;padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#6b4423;color:#fff3d6;cursor:pointer">Join server</button><button id="pgOff" style="padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#f4e4c1;color:#2a1a0c;cursor:pointer">Play offline</button></div></div>';
     document.body.appendChild(o);
-    const nm = o.querySelector('#pgName'), ur = o.querySelector('#pgUrl'), code = o.querySelector('#pgCode');
-    nm.value = localStorage.getItem('pg_name') || ''; ur.value = def; code.value = localStorage.getItem('pg_private_code') || '';
-    function go(roomId, label) { const n = nm.value.trim() || 'Pirate', u = ur.value.trim(); if (!u) { alert('Enter your multiplayer server address.'); return; } localStorage.setItem('pg_name', n); if (!http) localStorage.setItem('pg_server', u); if (roomId !== 'public') localStorage.setItem('pg_private_code', roomId); o.remove(); connect(u, n, roomId, label); }
-    o.querySelector('#pgPublic').onclick = () => go('public', 'the public ocean');
-    o.querySelector('#pgCreate').onclick = () => { const c = Math.random().toString(36).slice(2, 8).toUpperCase(); code.value = c; go(c, 'private sea ' + c); alert('Your private invite code is ' + c + '. Share it with friends so they can join this sea.'); };
-    o.querySelector('#pgJoin').onclick = () => { const c = code.value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 12); if (!c) { alert('Enter your friend invite code first.'); return; } go(c, 'private sea ' + c); };
+    const nm = o.querySelector('#pgName'), ur = o.querySelector('#pgUrl');
+    nm.value = localStorage.getItem('pg_name') || ''; ur.value = def;
+    o.querySelector('#pgGo').onclick = () => { const n = nm.value.trim() || 'Pirate', u = ur.value.trim(); localStorage.setItem('pg_name', n); if (!http) localStorage.setItem('pg_server', u); o.remove(); connect(u, n); };
     o.querySelector('#pgOff').onclick = () => { o.remove(); resolveRoom(null); };
   }
   if (document.body) ui(); else document.addEventListener('DOMContentLoaded', ui);
@@ -4409,11 +4380,15 @@
     if (gameTime >= 24) { gameTime -= 24; dayNum++; }
     envSaveT -= dt;
     if (envSaveT <= 0) { envSaveT = 15; STATE.time = gameTime; STATE.day = dayNum; STATE.weather = weatherKey; save(); }
-    weatherT -= dt;
-    if (weatherT <= 0) {
-      weatherT = 150 + Math.random() * 220;
-      const nx = pickWeather();
-      if (nx !== weatherKey) { weatherKey = nx; toast(`The weather turns: ${WEATHERS[nx].name.toLowerCase()}.`); }
+    // In multiplayer, the room host is authoritative for weather transitions.
+    // Other clients receive the host's time/day/weather in their presence snapshot.
+    if (!MP.room || !MP.isHost || MP.isHost()) {
+      weatherT -= dt;
+      if (weatherT <= 0) {
+        weatherT = 150 + Math.random() * 220;
+        const nx = pickWeather();
+        if (nx !== weatherKey) { weatherKey = nx; toast(`The weather turns: ${WEATHERS[nx].name.toLowerCase()}.`); }
+      }
     }
     const tgt = WEATHERS[weatherKey], wk = Math.min(1, dt * 0.1);
     for (const key in tgt) if (key !== 'name') Wx[key] += (tgt[key] - Wx[key]) * wk;
@@ -6370,6 +6345,7 @@
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
       MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
       const isHost = () => !!MP.me && [...MP.peers.keys()].every(k => MP.me < k);
+      MP.isHost = isHost;
       const ST = ['idle', 'chase', 'dead', 'gone'];
       window.__mpNear = b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 80;
       window.__mpTarget = b => {
@@ -6439,13 +6415,19 @@
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, a: PLAYER.slashT > 0 ? 1 : 0, sh: null };
-        if (ship && !ship.sinking) st.sh = { k: ship.key, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0) };
+        if (MP.isHost && MP.isHost()) st.env = { time: r(gameTime), day: dayNum, weather: weatherKey };
+        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0) };
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
       } catch (e) {}
     }
     const k = Math.min(1, dt * 10);
     for (const p of MP.peers.values()) {
       const d = p.tgt; if (!d) continue;
+      if (d.env && !MP.isHost()) {
+        if (typeof d.env.time === 'number') gameTime = d.env.time;
+        if (typeof d.env.day === 'number') dayNum = d.env.day;
+        if (WEATHERS[d.env.weather]) { weatherKey = d.env.weather; STATE.weather = weatherKey; }
+      }
       const lk = JSON.stringify(d.look || {});
       if (lk !== p.lookKey) {   // they changed outfit: rebuild avatar
         p.lookKey = lk; scene.remove(p.ch.root);
@@ -6460,9 +6442,13 @@
       try { p.ch.slashP = p.sl; if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = !!d.a; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null); } catch (e) {}
       // their ship
       const sh = d.sh;
-      if (sh && (!p.ship || p.shipKey !== sh.k)) {
+      if (sh && (!p.ship || p.shipKey !== sh.k || p.shipWreck !== !!sh.w)) {
         if (p.ship) scene.remove(p.ship.group);
-        try { p.ship = makeShip(sh.k); p.shipKey = sh.k; scene.add(p.ship.group); } catch (e) { p.ship = null; }
+        try {
+          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : undefined);
+          if (sh.w) decorateWreck(p.ship);
+          p.shipKey = sh.k; p.shipWreck = !!sh.w; scene.add(p.ship.group);
+        } catch (e) { p.ship = null; }
       } else if (!sh && p.ship) { scene.remove(p.ship.group); p.ship = null; p.shipKey = null; }
       if (p.ship && sh) {
         const g = p.ship.group;
