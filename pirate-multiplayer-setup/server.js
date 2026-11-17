@@ -1,279 +1,166 @@
+const fs = require('fs');
 const http = require('http');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 const { DEFAULT_WORLD, cloneWorld } = require('./shared/world-state');
 
 const PORT = Number(process.env.PORT || 3000);
+const PUBLIC_DIR = path.resolve(__dirname, 'public');
+const WORLD_TICK_MS = 250;
 
-const world = {
-  ...cloneWorld(DEFAULT_WORLD),
-  players: {},
+const world = { ...cloneWorld(DEFAULT_WORLD), players: {} };
+const clients = new Map();
+let nextPlayerId = 1;
+let lastWorldTick = Date.now();
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
 };
 
-const state = {
-  nextPlayerId: 1,
-  sockets: new Map(),
-};
+function send(socket, message) {
+  if (socket.readyState === 1) socket.send(JSON.stringify(message));
+}
 
-const httpServer = http.createServer((req, res) => {
-  if (req.url === '/health') {
+function broadcast(message) {
+  for (const socket of clients.keys()) send(socket, message);
+}
+
+function getWorldSnapshot() {
+  const players = {};
+  for (const client of clients.values()) {
+    players[client.id] = { id: client.id, name: client.name, ...client.presence };
+  }
+  return { ...cloneWorld(world), players };
+}
+
+function broadcastWorld() {
+  // Use the existing game's relay event envelope so its room.on('world', ...) handlers work.
+  broadcast({ t: 'emit', topic: 'world', data: { world: getWorldSnapshot() }, from: 'server' });
+}
+
+function updateWorld() {
+  const now = Date.now();
+  const elapsedSeconds = Math.max(0, Math.min(5, (now - lastWorldTick) / 1000));
+  lastWorldTick = now;
+  // A full in-game day takes 20 real minutes.
+  world.timeOfDay = (world.timeOfDay + elapsedSeconds * 1.2) % 1440;
+  const minute = world.timeOfDay;
+  world.weather = minute < 360 || minute >= 1200 ? 'night'
+    : minute < 480 ? 'dawn'
+      : minute < 1080 ? 'clear' : 'dusk';
+}
+
+function safeResolvePublicPath(urlPath) {
+  let decoded;
+  try { decoded = decodeURIComponent(urlPath); } catch (_) { return null; }
+  const normalized = decoded.replace(/\\/g, '/').replace(/^\/+/, '');
+  const filePath = path.resolve(PUBLIC_DIR, normalized || 'index.html');
+  if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) return null;
+  return filePath;
+}
+
+function serveStatic(req, res) {
+  let pathname;
+  try { pathname = new URL(req.url, 'http://localhost').pathname; }
+  catch (_) { res.writeHead(400); res.end('Bad request'); return; }
+
+  if (pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('ok');
     return;
   }
 
-  if (req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    const body = `<!DOCTYPE html>
-<html>
-  <head><title>Pirate Game</title></head>
-  <body>
-    <div id="clock">00:00 • clear</div>
-    <script src="/js/world-sync.js"></script>
-  </body>
-</html>`;
-    res.end(body);
-    return;
-  }
+  const filePath = safeResolvePublicPath(pathname);
+  if (!filePath) { res.writeHead(403); res.end('Forbidden'); return; }
 
-  if (req.url === '/js/world-sync.js') {
-    const js = `(() => {
-      function formatTime(minutes) {
-        const value = Number(minutes) || 0;
-        const h = Math.floor(value / 60) % 24;
-        const m = Math.floor(value % 60);
-        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      }
+  fs.stat(filePath, (statError, stat) => {
+    if (statError) { res.writeHead(404); res.end('Not found'); return; }
+    const resolved = stat.isDirectory() ? path.join(filePath, 'index.html') : filePath;
 
-      function applyWorld(world) {
-        if (!world || typeof world !== 'object') return;
-        const el = document.getElementById('clock');
-        if (el) {
-          el.textContent = formatTime(world.timeOfDay || 0) + ' • ' + (world.weather || 'clear');
-        }
+    fs.readFile(resolved, (readError, contents) => {
+      if (readError) { res.writeHead(readError.code === 'ENOENT' ? 404 : 500); res.end(readError.code === 'ENOENT' ? 'Not found' : 'Server error'); return; }
 
-        const weather = world.weather || 'clear';
-        const palette = {
-          dawn: { bg: '#f3a261', glow: '#ffe0a8' },
-          clear: { bg: '#8ec5e6', glow: '#dff5ff' },
-          storm: { bg: '#2e3d4f', glow: '#ccd9ec' },
-          dusk: { bg: '#9b5b4d', glow: '#ffd39a' },
-          night: { bg: '#0d2238', glow: '#a3bcff' },
-        };
-        const active = palette[weather] || palette.clear;
-        document.body.style.background = active.bg;
-        document.body.style.boxShadow = 'inset 0 0 120px ' + active.glow;
-        document.body.dataset.weather = weather;
-        window.__serverWorld = world;
-      }
-
-      async function attach() {
-        try {
-          if (!window.claude || typeof window.claude.use !== 'function') return;
-          const room = await window.claude.use('room');
-          if (!room || typeof room.on !== 'function') return;
-          room.on('emit', (evt) => {
-            if (evt && evt.topic === 'world' && evt.data && evt.data.world) {
-              applyWorld(evt.data.world);
-            }
-          });
-          if (typeof room.emit === 'function') room.emit('world:request', {});
-        } catch (error) {
-          console.warn('World sync attach failed:', error);
-        }
-      }
-
-      window.addEventListener('DOMContentLoaded', attach);
-    })();`;
-    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
-    res.end(js);
-    return;
-  }
-
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('Pirate Game multiplayer world server');
-});
-
-const send = (socket, type, payload = {}) => {
-  if (!socket || socket.readyState !== 1) return;
-  socket.send(JSON.stringify({ t: type, ...payload }));
-};
-
-const broadcast = (type, payload = {}) => {
-  for (const socket of state.sockets.keys()) {
-    send(socket, type, payload);
-  }
-};
-
-const updateWorldState = () => {
-  world.timeOfDay = (world.timeOfDay + 1.2) % 1440;
-
-  if (world.timeOfDay < 360) {
-    world.weather = 'dawn';
-  } else if (world.timeOfDay < 720) {
-    world.weather = 'clear';
-  } else if (world.timeOfDay < 1020) {
-    world.weather = 'sunny';
-  } else if (world.timeOfDay < 1200) {
-    world.weather = 'storm';
-  } else {
-    world.weather = 'night';
-  }
-
-  world.enemies = world.enemies.map((enemy, index) => {
-    const driftX = Math.sin((Date.now() / 700) + index) * 1.5;
-    const driftZ = Math.cos((Date.now() / 900) + index) * 1.5;
-    const nextHp = Math.max(0, enemy.hp + Math.sin(Date.now() / 1200 + index) * 0.8);
-
-    return {
-      ...enemy,
-      x: enemy.x + driftX,
-      z: enemy.z + driftZ,
-      hp: Number(nextHp.toFixed(2)),
-    };
+      const type = MIME_TYPES[path.extname(resolved).toLowerCase()] || 'application/octet-stream';
+      res.writeHead(200, {
+        'Content-Type': type,
+        'Cache-Control': path.extname(resolved).toLowerCase() === '.html' ? 'no-cache' : 'public, max-age=3600',
+      });
+      res.end(contents);
+    });
   });
+}
 
-  world.kraken.x += Math.sin(Date.now() / 850) * 2.4;
-  world.kraken.z += Math.cos(Date.now() / 750) * 1.8;
-  world.kraken.phase = world.kraken.phase === 'idle' ? 'chasing' : 'idle';
-};
+function removeClient(socket) {
+  const client = clients.get(socket);
+  if (!client) return;
+  clients.delete(socket);
+  delete world.players[client.id];
+  broadcast({ t: 'left', id: client.id });
+  broadcastWorld();
+}
 
-const snapshotWorld = () => ({
-  ...cloneWorld(world),
-  players: Object.fromEntries(
-    Object.entries(world.players).map(([id, player]) => [
-      id,
-      {
-        id: player.id,
-        name: player.name,
-        x: player.x,
-        y: player.y,
-        z: player.z,
-        health: player.health,
-      },
-    ])
-  ),
-  enemies: world.enemies.map((enemy) => ({ ...enemy })),
-  kraken: { ...world.kraken },
-});
-
-const syncWorld = () => {
-  broadcast('world', { world: snapshotWorld() });
-};
-
-const removePlayer = (id) => {
-  if (!world.players[id]) return;
-  delete world.players[id];
-  broadcast('peer-left', { id });
-};
-
-const handleHello = (socket, payload) => {
-  const id = `player-${state.nextPlayerId++}`;
-  const name = payload && payload.name ? String(payload.name).slice(0, 20) : `Pirate ${id}`;
-
-  world.players[id] = {
-    id,
-    name,
-    x: 0,
-    y: 0,
-    z: 0,
-    health: 100,
-  };
-
-  state.sockets.set(socket, id);
-
-  send(socket, 'welcome', {
-    id,
-    name,
-    world: snapshotWorld(),
-    peers: Object.values(world.players).map((player) => ({
-      id: player.id,
-      name: player.name,
-    })),
-  });
-
-  broadcast('peer-joined', {
-    peer: { id, name },
-    world: snapshotWorld(),
-  });
-};
-
-const handlePresence = (socket, payload) => {
-  const id = state.sockets.get(socket);
-  if (!id || !world.players[id]) return;
-
-  const player = world.players[id];
-  const patch = payload || {};
-
-  if (typeof patch.x === 'number') player.x = patch.x;
-  if (typeof patch.y === 'number') player.y = patch.y;
-  if (typeof patch.z === 'number') player.z = patch.z;
-  if (typeof patch.health === 'number') player.health = patch.health;
-  if (typeof patch.name === 'string') player.name = patch.name.slice(0, 20);
-
-  broadcast('presence', {
-    id,
-    player: {
-      id: player.id,
-      name: player.name,
-      x: player.x,
-      y: player.y,
-      z: player.z,
-      health: player.health,
-    },
-  });
-};
-
-const handleEmit = (socket, payload) => {
-  if (!payload || !payload.topic) return;
-
-  const id = state.sockets.get(socket) || 'server';
-  broadcast('emit', {
-    topic: payload.topic,
-    data: payload.data || {},
-    from: id,
-  });
-};
-
-const wss = new WebSocketServer({ server: httpServer });
+const server = http.createServer(serveStatic);
+const wss = new WebSocketServer({ server });
 
 wss.on('connection', (socket) => {
   socket.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(String(raw));
-      if (!msg || !msg.t) return;
+    let message;
+    try { message = JSON.parse(String(raw)); } catch (_) { return; }
+    if (!message || typeof message.t !== 'string') return;
 
-      switch (msg.t) {
-        case 'hello':
-          handleHello(socket, msg);
-          break;
-        case 'pres':
-          handlePresence(socket, msg.p);
-          break;
-        case 'emit':
-          handleEmit(socket, msg);
-          break;
-        default:
-          break;
+    if (message.t === 'hello') {
+      if (clients.has(socket)) return;
+      const id = `player-${nextPlayerId++}`;
+      const name = String(message.name || 'Pirate').trim().slice(0, 20) || 'Pirate';
+      const peers = [...clients.values()].map(({ id: peerId, name: peerName, presence }) => ({ id: peerId, name: peerName, p: presence }));
+      clients.set(socket, { id, name, presence: {} });
+      world.players[id] = { id, name };
+      send(socket, { t: 'welcome', id, name, peers, world: getWorldSnapshot() });
+      broadcast({ t: 'join', id, name });
+      broadcastWorld();
+      return;
+    }
+
+    const client = clients.get(socket);
+    if (!client) return;
+
+    if (message.t === 'pres' && message.p && typeof message.p === 'object' && !Array.isArray(message.p)) {
+      client.presence = { ...client.presence, ...message.p };
+      broadcast({ t: 'pres', id: client.id, p: client.presence });
+      return;
+    }
+
+    if (message.t === 'emit' && typeof message.topic === 'string') {
+      if (message.topic === 'world:request') {
+        send(socket, { t: 'emit', topic: 'world', data: { world: getWorldSnapshot() }, from: 'server' });
+        return;
       }
-    } catch (error) {
-      // ignore malformed packets
+      // Preserve the existing game's relay behavior for chat/actions/customization events.
+      broadcast({ t: 'emit', topic: message.topic, data: message.data || {}, from: client.id });
     }
   });
 
-  socket.on('close', () => {
-    const id = state.sockets.get(socket);
-    if (id) removePlayer(id);
-    state.sockets.delete(socket);
-  });
+  socket.on('close', () => removeClient(socket));
+  socket.on('error', () => removeClient(socket));
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Pirate Game world server listening on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Pirate Game listening on port ${PORT}`);
 });
 
 setInterval(() => {
-  updateWorldState();
-  syncWorld();
-}, 250);
+  updateWorld();
+  broadcastWorld();
+}, WORLD_TICK_MS);
 
-module.exports = { world, snapshotWorld, updateWorldState };
+module.exports = { world, getWorldSnapshot, updateWorld };
