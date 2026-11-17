@@ -1,177 +1,279 @@
-const fs = require('fs');
 const http = require('http');
-const path = require('path');
 const { WebSocketServer } = require('ws');
 const { DEFAULT_WORLD, cloneWorld } = require('./shared/world-state');
 
 const PORT = Number(process.env.PORT || 3000);
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const WORLD_TICK_MS = 250;
 
-const world = { ...cloneWorld(DEFAULT_WORLD), players: {} };
-const clients = new Map(); // socket => { id, name, presence }
-let nextId = 1;
-let lastTick = Date.now();
-
-const mimeTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
+const world = {
+  ...cloneWorld(DEFAULT_WORLD),
+  players: {},
 };
 
-function renderWorld() {
-  return cloneWorld({
-    ...world,
-    players: Object.fromEntries(
-      [...clients.values()].map(({ id, name, presence }) => [id, { id, name, ...presence }])
-    ),
-  });
-}
+const state = {
+  nextPlayerId: 1,
+  sockets: new Map(),
+};
 
-function send(socket, message) {
-  if (socket.readyState === 1) socket.send(JSON.stringify(message));
-}
-
-function broadcast(message) {
-  for (const socket of clients.keys()) send(socket, message);
-}
-
-function broadcastWorld() {
-  const snapshot = renderWorld();
-  // Preserve the relay protocol expected by the existing game client.
-  broadcast({ t: 'emit', topic: 'world', data: { world: snapshot }, from: 'server' });
-}
-
-function weatherAt(minute) {
-  if (minute < 360) return 'night';
-  if (minute < 480) return 'dawn';
-  if (minute < 1020) return 'clear';
-  if (minute < 1140) return 'dusk';
-  return 'night';
-}
-
-function tickWorld() {
-  const now = Date.now();
-  const elapsedSeconds = Math.max(0, Math.min(5, (now - lastTick) / 1000));
-  lastTick = now;
-  // One in-game day takes 20 real minutes. Every client receives the same server clock.
-  world.timeOfDay = (world.timeOfDay + elapsedSeconds * 1.2) % 1440;
-  world.weather = weatherAt(world.timeOfDay);
-}
-
-function contentType(filePath) {
-  return mimeTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
-}
-
-function serve(req, res) {
-  const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (pathname === '/health') {
+const httpServer = http.createServer((req, res) => {
+  if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('ok');
     return;
   }
 
-  let relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
-  let filePath = path.resolve(PUBLIC_DIR, relative);
-  if (!filePath.startsWith(PUBLIC_DIR + path.sep) && filePath !== path.join(PUBLIC_DIR, 'index.html')) {
-    res.writeHead(403); res.end('Forbidden'); return;
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const body = `<!DOCTYPE html>
+<html>
+  <head><title>Pirate Game</title></head>
+  <body>
+    <div id="clock">00:00 • clear</div>
+    <script src="/js/world-sync.js"></script>
+  </body>
+</html>`;
+    res.end(body);
+    return;
   }
 
-  fs.readFile(filePath, (error, body) => {
-    if (error) {
-      res.writeHead(error.code === 'ENOENT' ? 404 : 500);
-      res.end(error.code === 'ENOENT' ? 'Not found' : 'Server error');
-      return;
-    }
+  if (req.url === '/js/world-sync.js') {
+    const js = `(() => {
+      function formatTime(minutes) {
+        const value = Number(minutes) || 0;
+        const h = Math.floor(value / 60) % 24;
+        const m = Math.floor(value % 60);
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      }
 
-    if (path.extname(filePath).toLowerCase() === '.html') {
-      const script = '<script src="/js/world-sync.js"></script>';
-      const html = body.toString('utf8').replace(/<\/body\s*>/i, `${script}</body>`);
-      res.writeHead(200, { 'Content-Type': contentType(filePath), 'Cache-Control': 'no-cache' });
-      res.end(html);
-      return;
-    }
+      function applyWorld(world) {
+        if (!world || typeof world !== 'object') return;
+        const el = document.getElementById('clock');
+        if (el) {
+          el.textContent = formatTime(world.timeOfDay || 0) + ' • ' + (world.weather || 'clear');
+        }
 
-    res.writeHead(200, { 'Content-Type': contentType(filePath) });
-    res.end(body);
+        const weather = world.weather || 'clear';
+        const palette = {
+          dawn: { bg: '#f3a261', glow: '#ffe0a8' },
+          clear: { bg: '#8ec5e6', glow: '#dff5ff' },
+          storm: { bg: '#2e3d4f', glow: '#ccd9ec' },
+          dusk: { bg: '#9b5b4d', glow: '#ffd39a' },
+          night: { bg: '#0d2238', glow: '#a3bcff' },
+        };
+        const active = palette[weather] || palette.clear;
+        document.body.style.background = active.bg;
+        document.body.style.boxShadow = 'inset 0 0 120px ' + active.glow;
+        document.body.dataset.weather = weather;
+        window.__serverWorld = world;
+      }
+
+      async function attach() {
+        try {
+          if (!window.claude || typeof window.claude.use !== 'function') return;
+          const room = await window.claude.use('room');
+          if (!room || typeof room.on !== 'function') return;
+          room.on('emit', (evt) => {
+            if (evt && evt.topic === 'world' && evt.data && evt.data.world) {
+              applyWorld(evt.data.world);
+            }
+          });
+          if (typeof room.emit === 'function') room.emit('world:request', {});
+        } catch (error) {
+          console.warn('World sync attach failed:', error);
+        }
+      }
+
+      window.addEventListener('DOMContentLoaded', attach);
+    })();`;
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+    res.end(js);
+    return;
+  }
+
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Pirate Game multiplayer world server');
+});
+
+const send = (socket, type, payload = {}) => {
+  if (!socket || socket.readyState !== 1) return;
+  socket.send(JSON.stringify({ t: type, ...payload }));
+};
+
+const broadcast = (type, payload = {}) => {
+  for (const socket of state.sockets.keys()) {
+    send(socket, type, payload);
+  }
+};
+
+const updateWorldState = () => {
+  world.timeOfDay = (world.timeOfDay + 1.2) % 1440;
+
+  if (world.timeOfDay < 360) {
+    world.weather = 'dawn';
+  } else if (world.timeOfDay < 720) {
+    world.weather = 'clear';
+  } else if (world.timeOfDay < 1020) {
+    world.weather = 'sunny';
+  } else if (world.timeOfDay < 1200) {
+    world.weather = 'storm';
+  } else {
+    world.weather = 'night';
+  }
+
+  world.enemies = world.enemies.map((enemy, index) => {
+    const driftX = Math.sin((Date.now() / 700) + index) * 1.5;
+    const driftZ = Math.cos((Date.now() / 900) + index) * 1.5;
+    const nextHp = Math.max(0, enemy.hp + Math.sin(Date.now() / 1200 + index) * 0.8);
+
+    return {
+      ...enemy,
+      x: enemy.x + driftX,
+      z: enemy.z + driftZ,
+      hp: Number(nextHp.toFixed(2)),
+    };
   });
-}
 
-const server = http.createServer(serve);
-const wss = new WebSocketServer({ server });
+  world.kraken.x += Math.sin(Date.now() / 850) * 2.4;
+  world.kraken.z += Math.cos(Date.now() / 750) * 1.8;
+  world.kraken.phase = world.kraken.phase === 'idle' ? 'chasing' : 'idle';
+};
 
-function join(socket, message) {
-  if (clients.has(socket)) return;
-  const id = `player-${nextId++}`;
-  const name = String(message.name || 'Pirate').trim().slice(0, 20) || 'Pirate';
-  const peerList = [...clients.values()].map((peer) => ({
-    id: peer.id,
-    name: peer.name,
-    p: peer.presence,
-  }));
-  const client = { id, name, presence: {} };
-  clients.set(socket, client);
-  world.players[id] = { id, name };
+const snapshotWorld = () => ({
+  ...cloneWorld(world),
+  players: Object.fromEntries(
+    Object.entries(world.players).map(([id, player]) => [
+      id,
+      {
+        id: player.id,
+        name: player.name,
+        x: player.x,
+        y: player.y,
+        z: player.z,
+        health: player.health,
+      },
+    ])
+  ),
+  enemies: world.enemies.map((enemy) => ({ ...enemy })),
+  kraken: { ...world.kraken },
+});
 
-  send(socket, { t: 'welcome', id, name, peers: peerList, world: renderWorld() });
-  broadcast({ t: 'join', id, name });
-  broadcastWorld();
-}
+const syncWorld = () => {
+  broadcast('world', { world: snapshotWorld() });
+};
+
+const removePlayer = (id) => {
+  if (!world.players[id]) return;
+  delete world.players[id];
+  broadcast('peer-left', { id });
+};
+
+const handleHello = (socket, payload) => {
+  const id = `player-${state.nextPlayerId++}`;
+  const name = payload && payload.name ? String(payload.name).slice(0, 20) : `Pirate ${id}`;
+
+  world.players[id] = {
+    id,
+    name,
+    x: 0,
+    y: 0,
+    z: 0,
+    health: 100,
+  };
+
+  state.sockets.set(socket, id);
+
+  send(socket, 'welcome', {
+    id,
+    name,
+    world: snapshotWorld(),
+    peers: Object.values(world.players).map((player) => ({
+      id: player.id,
+      name: player.name,
+    })),
+  });
+
+  broadcast('peer-joined', {
+    peer: { id, name },
+    world: snapshotWorld(),
+  });
+};
+
+const handlePresence = (socket, payload) => {
+  const id = state.sockets.get(socket);
+  if (!id || !world.players[id]) return;
+
+  const player = world.players[id];
+  const patch = payload || {};
+
+  if (typeof patch.x === 'number') player.x = patch.x;
+  if (typeof patch.y === 'number') player.y = patch.y;
+  if (typeof patch.z === 'number') player.z = patch.z;
+  if (typeof patch.health === 'number') player.health = patch.health;
+  if (typeof patch.name === 'string') player.name = patch.name.slice(0, 20);
+
+  broadcast('presence', {
+    id,
+    player: {
+      id: player.id,
+      name: player.name,
+      x: player.x,
+      y: player.y,
+      z: player.z,
+      health: player.health,
+    },
+  });
+};
+
+const handleEmit = (socket, payload) => {
+  if (!payload || !payload.topic) return;
+
+  const id = state.sockets.get(socket) || 'server';
+  broadcast('emit', {
+    topic: payload.topic,
+    data: payload.data || {},
+    from: id,
+  });
+};
+
+const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (socket) => {
   socket.on('message', (raw) => {
-    let message;
-    try { message = JSON.parse(String(raw)); } catch (_) { return; }
-    if (!message || typeof message.t !== 'string') return;
+    try {
+      const msg = JSON.parse(String(raw));
+      if (!msg || !msg.t) return;
 
-    if (message.t === 'hello') {
-      join(socket, message);
-      return;
-    }
-
-    const client = clients.get(socket);
-    if (!client) return;
-
-    if (message.t === 'pres' && message.p && typeof message.p === 'object' && !Array.isArray(message.p)) {
-      client.presence = { ...client.presence, ...message.p };
-      broadcast({ t: 'pres', id: client.id, p: client.presence });
-      broadcastWorld();
-      return;
-    }
-
-    if (message.t === 'emit' && typeof message.topic === 'string') {
-      if (message.topic === 'world:request') {
-        send(socket, { t: 'emit', topic: 'world', data: { world: renderWorld() }, from: 'server' });
-        return;
+      switch (msg.t) {
+        case 'hello':
+          handleHello(socket, msg);
+          break;
+        case 'pres':
+          handlePresence(socket, msg.p);
+          break;
+        case 'emit':
+          handleEmit(socket, msg);
+          break;
+        default:
+          break;
       }
-      // Clients may relay gameplay events, but only server code mutates world snapshots.
-      broadcast({ t: 'emit', topic: message.topic, data: message.data || {}, from: client.id });
+    } catch (error) {
+      // ignore malformed packets
     }
   });
 
   socket.on('close', () => {
-    const client = clients.get(socket);
-    if (!client) return;
-    clients.delete(socket);
-    delete world.players[client.id];
-    broadcast({ t: 'left', id: client.id });
-    broadcastWorld();
+    const id = state.sockets.get(socket);
+    if (id) removePlayer(id);
+    state.sockets.delete(socket);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Pirate Game listening on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Pirate Game world server listening on http://localhost:${PORT}`);
 });
 
 setInterval(() => {
-  tickWorld();
-  broadcastWorld();
-}, WORLD_TICK_MS);
+  updateWorldState();
+  syncWorld();
+}, 250);
 
-module.exports = { world, renderWorld, tickWorld };
+module.exports = { world, snapshotWorld, updateWorldState };
