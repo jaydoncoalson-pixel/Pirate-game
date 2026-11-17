@@ -3,6 +3,7 @@ services:
     name: pirate-game-ocean
     runtime: node
     plan: free
+    rootDir: pirate-multiplayer-setup
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
