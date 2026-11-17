@@ -1295,9 +1295,9 @@
     { name: 'Harbormaster Hal', shop: true, at: dockWorld(-5, DOCK_LEN + 5), face: DOCK_DIR.clone().negate(), look: { coat: 0x1f3a5f, shirt: 0xf2ead8, pants: 0x2d2a33, hat: 'tricorn', hatColor: 0x1f3a5f, feather: 0xb38b2e, beard: 0x9a9a9a, hair: 0x9a9a9a, skin: 0xd9a77c }, lines: [] },
     { name: 'Marina', patrol: [dockWorld(0, 6), dockWorld(0, DOCK_LEN + 2), dockWorld(-9, DOCK_LEN + 4)], look: { shirt: 0xe7d9b8, pants: 0x3f5368, hat: 'bandana', hatColor: 0x2b6cb0, hair: 0x6b3a1f, longHair: true, skin: 0xb9805a },
       lines: ["Can't stop to chat, these crates won't move themselves!", "Merchant ships come in from the east most mornings. Pirates too, if we're unlucky."] },
-    { name: 'Gus', at: local(-23.5, 3), face: DOCK_DIR, look: { shirt: 0xf3efe6, pants: 0x4f3a28, hair: 0x2a1a10, beard: 0x2a1a10, skin: 0xdba57a, belt: 0xe8e2d0, scale: 1.12 },
+    { name: 'Gus', at: local(-21, 7), face: DOCK_DIR, look: { shirt: 0xf3efe6, pants: 0x4f3a28, hair: 0x2a1a10, beard: 0x2a1a10, skin: 0xdba57a, belt: 0xe8e2d0, scale: 1.12 },
       lines: ["Welcome to the Salty Gull! Best grog on the island.", "...Only grog on the island, too.", "Captain Blackwater drank here once. Left without payin'. Typical."] },
-    { name: 'Rosa', at: local(1, 4.5), face: PERP.clone().negate(), look: { shirt: 0xc0392b, dress: 0x6c3483, pants: 0x6c3483, hair: 0x1a1a1a, longHair: true, skin: 0xa8714f },
+    { name: 'Rosa', at: local(1, 7), face: PERP.clone().negate(), look: { shirt: 0xc0392b, dress: 0x6c3483, pants: 0x6c3483, hair: 0x1a1a1a, longHair: true, skin: 0xa8714f },
       lines: ["Fresh oranges! Rope! Slightly used cannonballs!", "Come back when ye've got some coins, love."] },
     { name: 'Silas', at: ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.68).addScaledVector(PERP, 40), face: DOCK_DIR, look: { coat: 0x2c3e50, shirt: 0xdcdcdc, pants: 0x34495e, hat: 'cap', hatColor: 0x2c3e50, beard: 0xbfbfbf, skin: 0xe0b48e },
       lines: ["Forty years I've kept that light burnin'.", "Storms past the reef have sunk many a ship. Mind the rocks, captain."] },
@@ -1320,9 +1320,9 @@
     { name: 'Sailor Bram', wander: true, area: () => frameLocal(PORT_FRAME, -18 + rand() * 40, (rand() - 0.5) * 14), look: { shirt: 0xb03a2e, pants: 0x2f4050, hat: 'bandana', hatColor: 0x1c1c1c, beard: 0x3b2414, hair: 0x3b2414, skin: 0x8d5a3b },
       lines: ["Skull Isle's to the north-west o' here. Ye'll know it by the giant skull.", "I sailed with Blackwater once. Never saw a man bury so much gold."] },
     { name: 'Dockmaster Nell', at: local(17, -4), face: DOCK_DIR, look: { shirt: 0x416b68, pants: 0x44372c, hair: 0x70452c, skin: 0xc58b63 }, lines: ["The harbour's never short of trouble, captain."] },
-    { name: 'Marta the baker', at: local(-12, 24), face: DOCK_DIR, look: { shirt: 0xe6c7a2, dress: 0x9a5b48, hair: 0x4a2d1c, skin: 0xe0b18a }, lines: ["Fresh bread for the crews, if only the supply boats would arrive."] },
-    { name: 'Quartermaster Pell', at: local(12, -25), face: DOCK_DIR, look: { coat: 0x596b7b, shirt: 0xe8dfc9, pants: 0x332b27, hat: 'cap', hatColor: 0x394a5c, beard: 0x5b4635, skin: 0xb9825d }, lines: ["A good captain keeps careful stores."] },
-    { name: 'Fisher Toma', at: local(-20, -24), face: DOCK_DIR, look: { shirt: 0x557b8c, pants: 0x4a3b2a, hat: 'straw', hatColor: 0xc9b078, skin: 0x9d6d4e }, lines: ["The reefs are full of fish, and full of teeth."] },
+    { name: 'Marta the baker', at: local(-12, 8), face: DOCK_DIR, look: { shirt: 0xe6c7a2, dress: 0x9a5b48, hair: 0x4a2d1c, skin: 0xe0b18a }, lines: ["Fresh bread for the crews, if only the supply boats would arrive."] },
+    { name: 'Quartermaster Pell', at: local(12, -8), face: DOCK_DIR, look: { coat: 0x596b7b, shirt: 0xe8dfc9, pants: 0x332b27, hat: 'cap', hatColor: 0x394a5c, beard: 0x5b4635, skin: 0xb9825d }, lines: ["A good captain keeps careful stores."] },
+    { name: 'Fisher Toma', at: local(-20, -8), face: DOCK_DIR, look: { shirt: 0x557b8c, pants: 0x4a3b2a, hat: 'straw', hatColor: 0xc9b078, skin: 0x9d6d4e }, lines: ["The reefs are full of fish, and full of teeth."] },
     { name: 'Porter Venn', at: frameLocal(PORT_FRAME, -12, -18), face: PORT_FRAME.dir, look: { shirt: 0x8d493a, pants: 0x39332e, hair: 0x211a16, skin: 0xb77d58 }, lines: ["Port Coral's warehouses are bursting."] },
     { name: 'Captain Inez', at: frameLocal(PORT_FRAME, 13, 18), face: PORT_FRAME.dir, look: { coat: 0x294f63, shirt: 0xe6d6b8, pants: 0x39332e, hat: 'tricorn', hatColor: 0x294f63, hair: 0x211a16, skin: 0xc68c67 }, lines: ["I've sailed every current from here to the far shoals."] },
     { name: 'Old Pavo', at: frameLocal(PORT_FRAME, 27, -5), face: PORT_FRAME.dir, look: { shirt: 0x7c6a45, pants: 0x39332e, beard: 0xb4a58d, hair: 0xb4a58d, skin: 0xc28d6b }, lines: ["The sea leaves things behind. Some are worth finding."] },
@@ -3122,12 +3122,53 @@
     { q: 'gem', st: 0, spot: () => GEM_SPOT, r: 7, label: 'Take the fire gem', act: () => { gemMesh.visible = false; advanceQuest('gem'); toast('Picked up a glowing fire gem!'); } },
   ];
   const EXTRA_QUEST_IDS = ['lostBell', 'bakerRun', 'supplyRun', 'bigCatch', 'warehouse', 'charting', 'keepsake', 'message'];
-  EXTRA_QUEST_IDS.forEach((id, i) => QSPOTS.push({
-    q: id, st: 0, spot: () => EXTRA_QSPOTS[i], r: 13,
-    label: 'Recover the lost item',
-    act: () => { SFX.quest(); completeQuest(id); toast('Recovered the item and completed the contract!'); }
-  }));
+  EXTRA_QUEST_IDS.forEach((id, i) => {
+    const spot = EXTRA_QSPOTS[i];
+    const item = new THREE.Group();
+    const wood = lam(0x80502b), gold = lam(0xd8ad45), cloth = lam(0x9b4938);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.85, 1.25), wood);
+    base.position.y = 0.55; item.add(base);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.12, 1.34), gold);
+    band.position.y = 0.58; item.add(band);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 1.3), cloth);
+    top.position.y = 1.02; item.add(top);
+    if (i === 0) {
+      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 10), gold);
+      bell.scale.y = 0.8; bell.position.y = 1.55; item.add(bell);
+      const clapper = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), wood);
+      clapper.position.y = 1.12; item.add(clapper);
+    } else if (i === 3) {
+      const pearl = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), lam(0xf4ead6));
+      pearl.position.y = 1.42; item.add(pearl);
+    } else if (i === 7) {
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.05, 10), lam(0x4c9a75));
+      bottle.position.set(0, 1.5, 0); item.add(bottle);
+      const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 8), wood);
+      cork.position.y = 2.12; item.add(cork);
+    } else {
+      const bundle = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.5, 0.75), cloth);
+      bundle.position.y = 1.35; item.add(bundle);
+    }
+    item.position.set(spot.x, groundAt(spot.x, spot.y) + 0.08, spot.y);
+    item.rotation.y = (i * 0.73) % (Math.PI * 2);
+    item.userData.questId = id;
+    scene.add(item);
+    enableShadows(item);
+    QSPOTS.push({
+      q: id, st: 0, spot: () => spot, r: 13, item,
+      label: 'Pick up the marked quest item',
+      act: () => {
+        SFX.quest();
+        item.visible = false;
+        completeQuest(id);
+        toast('Recovered the item and completed the contract!');
+      }
+    });
+  });
   function nearQSpot() {
+    for (const q of QSPOTS) {
+      if (q.item) q.item.visible = STATE.quests[q.q] === q.st;
+    }
     if (onShip || sailing || inInterior) return null;
     return QSPOTS.find(q => STATE.quests[q.q] === q.st && Math.hypot(P.pos.x - q.spot().x, P.pos.z - q.spot().z) < q.r) || null;
   }
