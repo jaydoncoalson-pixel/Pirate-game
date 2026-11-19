@@ -1059,9 +1059,9 @@
   // low banks of mist that drift around ye inside the shoals
   const mistBanks = [];
   { const mm = () => new THREE.SpriteMaterial({ map: cloudTex, color: 0xdfe5e8, transparent: true, depthWrite: false, opacity: 0 });
-    for (let i = 0; i < 36; i++) { const sp = new THREE.Sprite(mm()); sp.userData = { vx: (Math.random() - 0.3) * 4, vz: (Math.random() - 0.5) * 3, base: 0.45 + Math.random() * 0.35 }; sp.visible = false; scene.add(sp); mistBanks.push(sp); } }
+    for (let i = 0; i < 64; i++) { const sp = new THREE.Sprite(mm()); sp.userData = { vx: (Math.random() - 0.3) * 4, vz: (Math.random() - 0.5) * 3, base: 0.6 + Math.random() * 0.35 }; sp.visible = false; scene.add(sp); mistBanks.push(sp); } }
   function updateMist(dt, f, day) {
-    const c = camera.position;
+    const c = camera.position, part = MIST.part || 0, clearR = 260 * part;   // the Sword of the Sea pushes the banks back into a wall around ye
     mistGroup.visible = Math.hypot(c.x - MIST.x, c.z - MIST.z) < MIST.r + 6000 && !inInterior;
     for (const sp of mistBanks) {
       sp.visible = f > 0.02 && !inInterior;
@@ -1069,12 +1069,13 @@
       const u = sp.userData;
       sp.position.x += u.vx * dt; sp.position.z += u.vz * dt;
       const dx = sp.position.x - c.x, dz = sp.position.z - c.z;
-      if (!u.placed || Math.hypot(dx, dz) > 420) {   // drift back in somewhere around the camera
-        const a = Math.random() * 6.28, r = u.placed ? 300 + Math.random() * 110 : 40 + Math.random() * 360;
+      const dd = Math.hypot(dx, dz), far = 420 + clearR;
+      if (!u.placed || dd > far || (part > 0.5 && dd < clearR * 0.5)) {   // drift back in somewhere around the camera
+        const a = Math.random() * 6.28, r0 = Math.max(70, clearR + 20), r = u.placed ? far - 120 + Math.random() * 110 : r0 + Math.random() * (far - r0 - 20);
         sp.position.set(c.x + Math.cos(a) * r, 3 + Math.random() * 22, c.z + Math.sin(a) * r);
         const sc = 120 + Math.random() * 160; sp.scale.set(sc, sc * 0.32, 1); u.placed = true;
       }
-      sp.material.opacity = u.base * f;
+      sp.material.opacity = u.base * f * (part > 0.01 ? sstep(clearR * 0.6, clearR + 30, dd) : 1);
       sp.material.color.setScalar(0.25 + 0.65 * day);
     }
   }
@@ -4980,15 +4981,21 @@
     { // the Mistwrack Shoals: thick fog that closes in as ye sail into them, whatever the weather
       const mp0 = mapPos(), md = Math.hypot(mp0.x - MIST.x, mp0.z - MIST.z), mf = sstep(MIST.r + 450, MIST.r - 250, md);
       MIST.f = mf;
+      const sea = STATE.sword === 'seasword' && !inInterior;
+      MIST.part = (MIST.part || 0) + ((sea ? 1 : 0) - (MIST.part || 0)) * Math.min(1, dt * 0.7);
+      if (sea && mf > 0.5 && !MIST.toldPart) { MIST.toldPart = true; toast('The mist parts before the Sword of the Sea.'); }
+      if (mf < 0.2 || !sea) MIST.toldPart = false;
+      const pt = MIST.part;
       if (mf > 0) {
-        cTmp.setHex(0xb4bcc0).multiplyScalar(0.14 + 0.86 * day);
+        cTmp.setHex(0xb4bcc0).multiplyScalar((0.12 + 0.8 * day) * (1 + 0.12 * pt));
         SKY_HORIZON.lerp(cTmp, mf * 0.95); scene.fog.color.lerp(cTmp, mf * 0.97); SKY_TOP.lerp(cTmp, mf * 0.85);
-        scene.fog.far += (250 - scene.fog.far) * mf; scene.fog.near += (4 - scene.fog.near) * mf;
-        oceanMat.uniforms.fogDist.value += (150 - oceanMat.uniforms.fogDist.value) * mf;
+        // thick as wool: ~170 m of sight (was 250), or a clear lane ~650 m wide with the Sword of the Sea
+        scene.fog.far += (170 + 500 * pt - scene.fog.far) * mf; scene.fog.near += (6 + 130 * pt - scene.fog.near) * mf;
+        oceanMat.uniforms.fogDist.value += (95 + 385 * pt - oceanMat.uniforms.fogDist.value) * mf;
       }
       updateMist(dt, mf, day);
     }
-    skyU.sunK.value = (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8) * (1 - 0.85 * (MIST.f || 0));
+    skyU.sunK.value = (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8) * (1 - (0.92 - 0.5 * (MIST.part || 0)) * (MIST.f || 0));
     skyU.nightK.value = night * (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8) * (1 - 0.9 * (MIST.f || 0));
     // sunlight by day, moonlight by night
     const sunUp = sstep(-0.06, 0.12, e), moonUp = sstep(-0.02, -0.18, e);
