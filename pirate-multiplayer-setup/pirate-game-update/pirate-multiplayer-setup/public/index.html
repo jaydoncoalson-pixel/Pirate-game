@@ -430,16 +430,17 @@
   // ---------- The Mistwrack Shoals: a wide field of sea stacks and reefs in the south-west, always shrouded in fog ----------
   // Part of the terrain itself (heightAt), so ships, raiders, cannonballs, the kraken and the autopilot all treat the rocks as solid.
   // The server builds the very same rocks from the same seed (world.js); keep the two in step.
-  const MIST = { x: -3300, z: 3300, r: 1250, rocks: [], name: 'The Mistwrack Shoals' };
+  const MIST = { x: -3300, z: 3300, r: 1350, rocks: [], name: 'The Mistwrack Shoals' };
   {
     let s = 917; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const J = ISLANDS[2], jx = J.c.x, jz = J.c.y, jr = J.r * 1.7 + 120;
-    for (let tries = 0; tries < 4000 && MIST.rocks.length < 90; tries++) {
+    // mountains of rock rising sheer out of the sea, with smaller stacks between them and channels wide enough to sail
+    for (let tries = 0; tries < 8000 && MIST.rocks.length < 52; tries++) {
       const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
-      const big = mr() < 0.22, r = big ? 34 + mr() * 22 : 12 + mr() * 20, hp = big ? 26 + mr() * 34 : 4 + mr() * 18;
-      if (Math.abs(x) > 4750 || Math.abs(z) > 4750 || Math.hypot(x - jx, z - jz) < jr + r) continue;
-      if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 28)) continue;
-      MIST.rocks.push({ x, z, r, hp, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
+      const big = MIST.rocks.length < 14, r = big ? 110 + mr() * 85 : 34 + mr() * 42, hp = big ? 140 + mr() * 150 : 26 + mr() * 60;
+      if (Math.abs(x) > 4700 || Math.abs(z) > 4700 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+      if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 75)) continue;
+      MIST.rocks.push({ x, z, r, hp, e: big ? 0.85 : 0.6, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
     }
   }
   // a sea stack rises steeply from the sea floor (-7) to its peak; slightly oval so they don't all look turned on a lathe
@@ -451,7 +452,7 @@
       const dx = x - o.x, dz = z - o.z; if (dx > o.r || dx < -o.r || dz > o.r || dz < -o.r) continue;
       const c = Math.cos(o.rot), sn = Math.sin(o.rot), u = (dx * c + dz * sn) / o.sx, v = (-dx * sn + dz * c) * o.sx, d = Math.hypot(u, v);
       if (d >= o.r) continue;
-      const v2 = -7 + (o.hp + 7) * Math.pow(1 - d / o.r, 0.55); if (v2 > h) h = v2;
+      const v2 = -7 + (o.hp + 7) * Math.pow(1 - d / o.r, o.e); if (v2 > h) h = v2;
     }
     return h;
   }
@@ -1015,18 +1016,33 @@
   const mistGroup = new THREE.Group(); scene.add(mistGroup);
   {
     let s = 4711; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    const rockMats = [0x575d5c, 0x4c5250, 0x63625a].map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
+    const rockMats = [0x575d5c, 0x4c5250, 0x63625a].map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true, vertexColors: true }));
     const foamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
     const guano = new THREE.MeshLambertMaterial({ color: 0xd8d4c8, flatShading: true });
     for (const o of MIST.rocks) {
-      const pts = [], n = 9;
-      for (let k = 0; k <= n; k++) { const y = -7 + (o.hp + 7) * k / n, d = o.r * (1 - Math.pow((y + 7) / (o.hp + 7), 1 / 0.55)); pts.push(new THREE.Vector2(Math.max(0.01, d), y)); }
-      const geo = new THREE.LatheGeometry(pts, 9), pos = geo.attributes.position;
-      for (let k = 0; k < pos.count; k++) { const y = pos.getY(k); if (y > o.hp - 0.5) continue; const j = 1 + (mr() - 0.5) * 0.22; pos.setX(k, pos.getX(k) * j); pos.setZ(k, pos.getZ(k) * j); pos.setY(k, y + (mr() - 0.5) * 1.2); }
+      const big = o.r > 90, n = big ? 16 : 9, seg = big ? 22 : 10, sd = mr() * 50;
+      const pts = [];
+      for (let k = 0; k <= n; k++) { const y = -7 + (o.hp + 7) * k / n, d = o.r * (1 - Math.pow((y + 7) / (o.hp + 7), 1 / o.e)); pts.push(new THREE.Vector2(Math.max(0.01, d), y)); }
+      let geo = new THREE.LatheGeometry(pts, seg);
+            const pos = geo.attributes.position, cols = new Float32Array(pos.count * 3);
+      for (let k = 0; k < pos.count; k++) {
+        const x = pos.getX(k), y = pos.getY(k), z = pos.getZ(k), rad = Math.hypot(x, z), ang = Math.atan2(z, x);
+        const ht = (y + 7) / (o.hp + 7);
+        // ridges and gullies running down the slopes, plus some crags, so it reads as a mountain, not a cone
+        const ridge = (vnoise(Math.cos(ang) * 2.2 + sd, Math.sin(ang) * 2.2 + ht * 1.5) - 0.5) * 0.55 + (vnoise(ang * 4 + sd * 2, ht * 6) - 0.5) * 0.22;
+        const j = rad > 0.5 ? 1 + ridge * (big ? 1 : 0.6) : 1;
+        pos.setX(k, x * j); pos.setZ(k, z * j);
+        if (y < o.hp - 1) pos.setY(k, y + (vnoise(ang * 3 + sd, ht * 5 + sd) - 0.5) * (big ? 10 : 2));
+        // wet dark rock at the waterline, grey cliffs, a little green where moss and scrub cling, pale crags up top
+        const yy = pos.getY(k), wet = yy < 3, moss = yy > 8 && yy < o.hp * 0.55 && vnoise(ang * 5 + sd, yy * 0.08) > 0.62, top = ht > 0.82;
+        const c = wet ? [0.55, 0.58, 0.58] : moss ? [0.62, 0.78, 0.55] : top ? [1.25, 1.22, 1.15] : [0.95 + (vnoise(ang * 7, yy * 0.2) - 0.5) * 0.3, 0.95, 0.92];
+        cols[k * 3] = c[0]; cols[k * 3 + 1] = c[1]; cols[k * 3 + 2] = c[2];
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
       geo.computeVertexNormals();
       const m = new THREE.Mesh(geo, rockMats[Math.floor(mr() * 3)]);
       m.position.set(o.x, 0, o.z); m.rotation.y = -o.rot; m.scale.set(o.sx, 1, 1 / o.sx); mistGroup.add(m);
-      if (o.hp > 24) { const cap = new THREE.Mesh(new THREE.ConeGeometry(o.r * 0.12, o.hp * 0.08, 7), guano); cap.position.set(o.x, o.hp - o.hp * 0.03, o.z); mistGroup.add(cap); }   // sea birds' work
+      if (!big && o.hp > 40) { const cap = new THREE.Mesh(new THREE.ConeGeometry(o.r * 0.1, o.hp * 0.06, 7), guano); cap.position.set(o.x, o.hp - o.hp * 0.02, o.z); mistGroup.add(cap); }   // sea birds' work
       const wl = o.r * (1 - Math.pow(7 / (o.hp + 7), 1 / 0.55));
       if (wl > 1) { const f = new THREE.Mesh(new THREE.RingGeometry(wl * 0.92, wl * 1.35 + 1.5, 22), foamM); f.rotation.x = -Math.PI / 2; f.position.set(o.x, 0.25, o.z); f.scale.set(o.sx, 1 / o.sx, 1); f.rotation.z = o.rot; mistGroup.add(f); }
     }
@@ -1046,7 +1062,7 @@
     for (let i = 0; i < 36; i++) { const sp = new THREE.Sprite(mm()); sp.userData = { vx: (Math.random() - 0.3) * 4, vz: (Math.random() - 0.5) * 3, base: 0.45 + Math.random() * 0.35 }; sp.visible = false; scene.add(sp); mistBanks.push(sp); } }
   function updateMist(dt, f, day) {
     const c = camera.position;
-    mistGroup.visible = Math.hypot(c.x - MIST.x, c.z - MIST.z) < MIST.r + 3500 && !inInterior;
+    mistGroup.visible = Math.hypot(c.x - MIST.x, c.z - MIST.z) < MIST.r + 6000 && !inInterior;
     for (const sp of mistBanks) {
       sp.visible = f > 0.02 && !inInterior;
       if (!sp.visible) continue;
