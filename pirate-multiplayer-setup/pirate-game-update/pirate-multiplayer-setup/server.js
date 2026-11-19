@@ -21,7 +21,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
-const RELAY_TOPICS = new Set(['fire', 'pvp', 'kraken', 'krsic', 'kroff', 'krres']);   // krsic/kroff/krres: Sword of the Sea kraken sent at a player
+const RELAY_TOPICS = new Set(['fire', 'pvp']);
 
 // ---------- static files ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
@@ -48,6 +48,7 @@ const serverEmit = (topic, data) => ({ t: 'emit', topic, data, from: 'server' })
 const sim = createSim({
   sendTo: (id, topic, data) => { const q = players.get(id); if (q) send(q.ws, serverEmit(topic, data)); },
   broadcast: (topic, data) => broadcastRaw(serverEmit(topic, data)),
+  adminOk: d => !ADMIN_KEY || (d && d.key === ADMIN_KEY),
 });
 
 const env = createEnv();
@@ -68,7 +69,8 @@ wss.on('connection', ws => {
       players.set(id, { ws, name, p: {} });
       send(ws, { t: 'welcome', id, peers });
       const snap = sim.snapshot();   // so the newcomer sees the world right away
-      send(ws, serverEmit('bsnap', snap.bsnap)); send(ws, serverEmit('rsnap', snap.rsnap)); send(ws, serverEmit('env', env.snapshot()));
+      for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) send(ws, serverEmit(k, snap[k]));
+      send(ws, serverEmit('env', env.snapshot()));
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
       return;
@@ -86,6 +88,7 @@ wss.on('connection', ws => {
         if (env.admin(d)) { broadcastRaw(serverEmit('env', env.snapshot())); console.log(`admin ${me.name}: ${d.reset ? 'reset time and weather' : JSON.stringify({ time: d.time, weather: d.weather })}`); }
         return;
       }
+      if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
       if (RELAY_TOPICS.has(m.topic)) broadcastRaw({ t: 'emit', topic: m.topic, data: m.data, from: id }, id);
       // anything else (e.g. a client trying to send bsnap/rsnap/bhit) is dropped
@@ -115,8 +118,7 @@ setInterval(() => {
   if (snapAcc >= SNAP_MS && players.size) {
     snapAcc = 0;
     const snap = sim.snapshot();
-    broadcastRaw(serverEmit('bsnap', snap.bsnap));
-    broadcastRaw(serverEmit('rsnap', snap.rsnap));
+    for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) broadcastRaw(serverEmit(k, snap[k]));
   }
 }, TICK_MS);
 

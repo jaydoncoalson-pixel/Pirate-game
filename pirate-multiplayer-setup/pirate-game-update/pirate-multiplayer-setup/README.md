@@ -11,6 +11,8 @@ Open http://localhost:8080 (or your server's address) in each browser. The join 
 ## Files
 - `server.js` — serves `public/`, accepts WebSocket players, runs the world at 20 ticks/s, sends snapshots at 10/s
 - `sim.js` — bandit AI and raider AI (moved here from the browser)
+- `monsters.js` — the shared Kraken and sea serpents
+- `env.js` — shared clock and weather
 - `world.js` — terrain, docks, camps and ship sizes, ported from the game so the server knows where land is
 - `public/index.html` — the game, updated to follow the server
 
@@ -19,8 +21,11 @@ Open http://localhost:8080 (or your server's address) in each browser. The join 
 |---|---|
 | Bandit movement, attacks, HP, death and respawn | server |
 | Raider sailing, targeting, firing, HP, sinking, respawn, kill credit | server |
+| The Kraken: where it is, whom it hunts, its health, Sword of the Sea summons | server |
+| Sea serpents: hunting, circling, strikes, health, death | server |
+| Day/night clock and weather | server |
 | Your own player, ship hull HP, gold, quests | your browser |
 | Cannonballs hitting your own ship | your browser |
-| PvP sword hits, kraken strikes on rival ships | relayed player to player, as before |
+| PvP sword hits and broadsides | relayed player to player |
 
 If you edit the islands in `index.html`, make the same change in `world.js`.

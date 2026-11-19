@@ -3577,10 +3577,11 @@
         if (d > st.r) continue;
         if (st.type === 'sail') { advanceQuest(id); continue; }
         if (!STATE.qprog[id] && !ship.submerged && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown' && KR.ally <= 0) {
-          // the Kraken rises to meet ye
+          // the Kraken rises to meet ye (online it's the one everyone shares, so the server sends it)
           STATE.qprog[id] = 1; save();
-          const ang = Math.random() * 6.28; KR.x = ship.x + Math.sin(ang) * 250; KR.z = ship.z + Math.cos(ang) * 250;
-          KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null;
+          if (window.__mpKraken && window.__mpKraken()) window.__mpKrSend('kquest', {});
+          else { const ang = Math.random() * 6.28; KR.x = ship.x + Math.sin(ang) * 250; KR.z = ship.z + Math.cos(ang) * 250;
+          KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null; }
           SFX.roar(); toast('The water goes still... something vast is rising from the deep!'); refreshQuestHud();
         }
       }
@@ -3850,11 +3851,12 @@
       if (!ship) { toast('Ye have no ship yet.'); return; }
       if (!krDeep(ship.x, ship.z)) { toast('Yer ship is too close to an island. Sail out to open sea first.'); return; }
       if (KR.st === 'attack' || KR.st === 'grip') { toast('The kraken is already attacking.'); return; }
+      if (window.__mpKraken && window.__mpKraken()) { window.__mpKrAdmin({ cmd: 'send' }); closeUI(); toast('The Kraken is coming for yer ship. Everyone on the server will see it.'); return; }
       const a = Math.random() * 6.28; KR.x = ship.x + Math.sin(a) * 250; KR.z = ship.z + Math.cos(a) * 250;
       KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; closeUI();
     });
     btn(c, 'Where is it?', () => { const d = Math.hypot(KR.x - P.pos.x, KR.z - P.pos.z), b = Math.atan2(KR.x - P.pos.x, -(KR.z - P.pos.z)) * 180 / Math.PI; const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west']; toast(`The kraken is ${KR.st === 'roam' ? 'roaming' : KR.st === 'hunt' ? 'hunting' : KR.st === 'dead' ? 'resting in the deep' : 'attacking'}, ${Math.round(d)} m to the ${dirs[Math.round(((b + 360) % 360) / 45) % 8]}.`); });
-    btn(c, 'Defeat it', () => { if (KR.st === 'attack' || KR.st === 'grip') KR.hp = 0; else toast('The kraken is not attacking anyone.'); });
+    btn(c, 'Defeat it', () => { if (KR.st === 'attack' || KR.st === 'grip') { if (window.__mpKraken && window.__mpKraken()) window.__mpKrAdmin({ cmd: 'defeat' }); else KR.hp = 0; } else toast('The kraken is not attacking anyone.'); });
   }
 
   function openUI(which, tab) {
@@ -6315,7 +6317,7 @@
     }
     if (krNearPlayer(T)) {
       SFX.roar();
-      toast(T.kind === 'swim' ? 'The water around ye turns black... something huge rises beneath ye!' : T.kind === 'ship' ? 'The ship lurches to a dead stop! The sea around her turns black as ink...' : T.kind === 'remoteShip' ? `${T.ent.pname || 'A rival'}'s ship lurches to a dead stop as yer kraken rises around her!` : 'A raider ship lurches to a dead stop as the sea turns black around her...');
+      toast(T.kind === 'swim' ? 'The water around ye turns black... something huge rises beneath ye!' : T.kind === 'ship' ? 'The ship lurches to a dead stop! The sea around her turns black as ink...' : T.kind === 'remoteShip' ? `${T.ent.pname || 'A rival'}'s ship lurches to a dead stop as ${KR.ally > 0 ? 'yer kraken rises' : 'the Kraken rises'} around her!` : 'A raider ship lurches to a dead stop as the sea turns black around her...');
     }
     KR.tents.forEach((q, i) => { q.st = 'under'; q.t = -(0.6 + i * 0.35); q.hp = q.max; q.act = null; q.crew = null; q.mast = null; q.u = 0; q.cool = Math.random() * 2; q.regrow = 0; });
   }
@@ -6431,7 +6433,7 @@
         if (c.krSl <= 0) { c.krSl = 0.8 + Math.random() * 0.5; c.slT = 0.4; }
         if (c.slT > 0) {
           const before = c.slT; c.slT -= dt; action = 'slash'; c.ch.slashP = 1 - Math.max(0, c.slT) / 0.4;
-          if (before > 0.2 && c.slT <= 0.2) krHurtTent(q, 4, krRail(q, e, false, 1), false);
+          if (before > 0.2 && c.slT <= 0.2) krHurtTent(q, 4, krRail(q, e, false, 1), false, e);
         }
       }
     } else if (c.krHome) {
@@ -6446,13 +6448,19 @@
   }
 
   // ---- damage ----
-  function krHurtTent(q, n, at, loud) {
+  // online the one shared Kraken lives on the server: send it the hurt, don't take it off locally
+  const krNet = () => !!(window.__mpKraken && window.__mpKraken());
+  function krHurt(n) { if (krNet()) window.__mpKrSend('kdmg', { dmg: Math.round(n * 10) / 10 }); else KR.hp -= n; }
+  // hull damage from the Kraken: yer own ship takes it here; a raider's is worked out on the server
+  function krDamage(e, n) { if (krNet() && e !== ship && !e.remote) return; damageShip(e, n); }
+  function krHurtTent(q, n, at, loud, src) {
     if (q.st !== 'act' && q.st !== 'idle' && q.st !== 'rise') return;
-    q.hp -= n; KR.hp -= n * 0.6;
+    const counts = !krNet() || !src || src === ship;   // online, a raider crew's blows are the server's business
+    q.hp -= n; if (counts) krHurt(n * 0.6);
     if (at) puff(at.x, at.y, at.z, { color: 0x3a1a4a, size: loud ? 2.4 : 1.4, life: 0.8, grow: 1.6, vy: 1.5, op: 0.85 });
     if (loud) SFX.hit(at);
     if (q.hp <= 0) {
-      KR.hp -= 12;
+      if (counts) krHurt(12);
       if (q.crew) { const c = q.crew; krDropCrew(q); if (c !== 'player' && krNearPlayer(KR.tgt)) toast(`${krCrewName(c)} is cut free!`); }
       q.st = 'retract'; q.t = 0; q.regrow = 6 + Math.random() * 3;
       if (krNearPlayer(KR.tgt)) { SFX.roar(); toast('A tentacle is hacked away and sinks beneath the waves!'); }
@@ -6468,10 +6476,52 @@
     }
   }
 
+  // ---- the shared Kraken: the server says where it is, what it's after and how it's faring; we draw the fight ----
+  const KST = ['roam', 'hunt', 'engaged', 'drown', 'leaving', 'dying', 'dead'];
+  function krResolve(tg) {
+    if (!tg) return null;
+    const me = window.__mpMe && window.__mpMe();
+    if (tg.k === 'ship') { if (tg.id === me) return ship && !ship.sinking ? { kind: 'ship', ent: ship } : null; const e = window.__mpKrakenShip && window.__mpKrakenShip(tg.id); return e ? { kind: 'remoteShip', ent: e } : null; }
+    if (tg.k === 'raider') { const r = raiders[tg.i]; return r && r.state !== 'gone' ? { kind: 'raider', ent: r } : null; }
+    if (tg.k === 'swim') return tg.id === me ? { kind: 'swim', ent: null } : null;
+    return null;
+  }
+  function krNetSync(N, dt) {
+    const st = KST[N.s] || 'roam', me = window.__mpMe && window.__mpMe();
+    const engagedLocal = KR.st === 'grip' || KR.st === 'attack';
+    KR.max = N.max; KR.hp = N.hp;
+    KR.ally = N.ally && N.ally === me ? Math.max(0.01, N.aT) : 0;
+    if (st === 'engaged') {
+      if (!engagedLocal && KR.st !== 'drown' && KR.st !== 'dying') {
+        const T = krResolve(N.tg);
+        if (T) { if (T.ent) { KR.x = T.ent.x; KR.z = T.ent.z; } else { KR.x = P.pos.x; KR.z = P.pos.z; } KR.st = 'hunt'; krEngage(T); }
+        else { KR.st = 'hunt'; KR.tgt = null; KR.x += (N.x - KR.x) * Math.min(1, dt * 6); KR.z += (N.z - KR.z) * Math.min(1, dt * 6); }   // a fight too far off to draw
+      }
+      return;
+    }
+    if (engagedLocal) {
+      if (st === 'dying') KR.hp = 0;          // the fight branch pays out and plays the death
+      else if (st !== 'drown') krRelease(false);
+      return;
+    }
+    if (st === 'dying' || st === 'dead') { if (KR.st !== 'dying' && KR.st !== 'dead' && KR.st !== 'drown') { KR.st = 'dead'; KR.rs = 1e9; } return; }
+    if (KR.st === 'dead') { KR.st = 'roam'; KR.hp = KR.max; KR.x = N.x; KR.z = N.z; }
+    if (KR.st === 'roam' || KR.st === 'hunt') {
+      const T = st === 'hunt' ? krResolve(N.tg) : null;
+      if (st === 'hunt' && T && (T.kind === 'ship' || T.kind === 'swim') && !KR.toldHunt && Math.hypot(N.x - P.pos.x, N.z - P.pos.z) < 380) { KR.toldHunt = true; toast('Something enormous is movin\' beneath the waves... and it\'s comin\' for ye!'); SFX.roar(); }
+      if (st !== 'hunt') KR.toldHunt = false;
+      KR.st = st === 'hunt' ? 'hunt' : 'roam'; KR.tgt = T;
+      const d = Math.hypot(N.x - KR.x, N.z - KR.z);
+      if (d > 400) { KR.x = N.x; KR.z = N.z; } else { const k = Math.min(1, dt * 5); KR.x += (N.x - KR.x) * k; KR.z += (N.z - KR.z) * k; }
+      KR.head = angLerp(KR.head, N.h, Math.min(1, dt * 3));
+    }
+  }
   // ---- the hunt ----
   function updateKraken(dt, t) {
     if (STOM.on || STOM.done) return;
     KR.callCd = Math.max(0, KR.callCd - dt);
+    const KN = window.__mpKraken ? window.__mpKraken() : null;
+    if (KN) krNetSync(KN, dt);
     KR.remoteHitCd = Math.max(0, (KR.remoteHitCd || 0) - dt);
     if (KR.ally > 0) {
       KR.ally -= dt; krBar.firstChild.textContent = 'The Kraken (yer ally)';
@@ -6490,12 +6540,13 @@
     KR.dark += (dk - KR.dark) * Math.min(1, dt * (dk ? 0.6 : 0.35));
     if (KR.tgt && (KR.st === 'grip' || KR.st === 'attack')) KR.darkR = KR.tgt.kind !== 'swim' ? KR.tgt.ent.T.L * 1.3 + 50 : 70;
     oceanMat.uniforms.krDark.value.set(KR.x, KR.z, KR.darkR || 70, KR.dark);
-    if (KR.st === 'dead') { KR.rs -= dt; krSwirl.visible = false; if (KR.rs <= 0) { KR.st = 'roam'; KR.hp = KR.max; KR.cd = 30; } return; }
+    if (KR.st === 'dead') { KR.rs -= dt; krSwirl.visible = false; if (KR.rs <= 0 && !KN) { KR.st = 'roam'; KR.hp = KR.max; KR.cd = 30; } return; }
     const w = waveHeight(KR.x, KR.z, t);
     // roaming and hunting beneath the surface
     if (KR.st === 'roam' || KR.st === 'hunt') {
       KR.cd = Math.max(0, KR.cd - dt);
       let gx, gz, sp;
+      if (!KN) {
       if (KR.st === 'roam') {
         if (!KR.wp || Math.hypot(KR.wp.x - KR.x, KR.wp.z - KR.z) < 60) {
           for (let i = 0; i < 30; i++) { const a = Math.random() * 6.28, r = 400 + Math.random() * 900, x = KR.x + Math.sin(a) * r, z = KR.z + Math.cos(a) * r; if (krDeep(x, z)) { KR.wp = { x, z }; break; } }
@@ -6539,6 +6590,7 @@
         if (sp > 0) KR.head = angLerp(KR.head, b, Math.min(1, dt * 3));
         if (krDeep(nx, nz)) { KR.x = nx; KR.z = nz; } else { KR.wp = null; if (KR.st === 'hunt' && Math.random() < dt) { KR.st = 'roam'; KR.tgt = null; KR.cd = 6; } }
       }
+      }   // (offline brain)
       const near = Math.hypot(KR.x - camera.position.x, KR.z - camera.position.z) < 1500;
       krSwirl.visible = near; KRG.visible = false;
       if (near) {
@@ -6594,7 +6646,7 @@
       if (KR.ram >= 0) {
         KR.ram += dt;
         if (KR.ram > 1.3 && !KR.rammed) {
-          KR.rammed = true; damageShip(T.ent, 20); T.ent.krJolt = 1.6; T.ent.krRz = (T.ent.krRz || 0) - KR.side * 0.12;
+          KR.rammed = true; krDamage(T.ent, 20); T.ent.krJolt = 1.6; T.ent.krRz = (T.ent.krRz || 0) - KR.side * 0.12;
           if (krNearPlayer(T)) { SFX.crash({ x: T.ent.x, z: T.ent.z }); if (onShip && T.ent === ship) { hurtPlayer(10); PS.vy = 6; PS.grounded = false; } }
           const hp = krW(T.ent, KR.side * (T.ent.T.B / T.ent.K / 2 + 2), 0, 0); wSplash(hp.x, waveHeight(hp.x, hp.z, t) + 0.5, hp.z, true);
         }
@@ -6780,7 +6832,7 @@
     if (KR.st === 'attack' || KR.st === 'grip') {
       for (let i = balls.length - 1; i >= 0; i--) {
         const bl = balls[i]; if (bl.enemy || KR.ally > 0) continue; const p = bl.m.position; let hitIt = false;   // nor will yer cannons while it's on yer side
-        if (KRG.visible && p.distanceTo(KRG.position) < 9 * KRG.scale.x) { KR.hp -= 10; hitIt = true; }
+        if (KRG.visible && p.distanceTo(KRG.position) < 9 * KRG.scale.x) { krHurt(10); hitIt = true; }
         else for (const q of KR.tents) { if ((q.st === 'act' || q.st === 'idle') && q.pts.some((pt, s) => s % 3 === 0 && pt.distanceTo(p) < krRadius(q, s) + 1.5)) { krHurtTent(q, 14, p, false); hitIt = true; break; } }
         if (hitIt) { scene.remove(bl.m); balls.splice(i, 1); SFX.crash({ x: p.x, z: p.z }); puff(p.x, p.y, p.z, { color: 0x3a1a4a, size: 5, life: 1.6, grow: 2, vy: 2, op: 0.85 }); }
       }
@@ -6834,6 +6886,7 @@
     const old = KR.tgt;
     if (krIsCurrent(o)) { toast('Yer kraken is already after that ship.'); return; }
     KR.pick = krPickOf(o);
+    if (krNet()) { window.__mpKrSend('kpick', { pick: krPickMsg(o) }); toast(o.kind === 'player' ? `Ye point the Sword of the Sea at ${o.name}'s ship...` : 'Ye point the Sword of the Sea at the raiders...'); return; }
     if (KR.st === 'grip' || KR.st === 'attack') krRelease(false);
     else if (KR.st === 'hunt') { if (old && old.kind === 'remoteShip' && window.__mpKrOff) window.__mpKrOff(old.ent.peer); KR.st = 'roam'; KR.tgt = null; }
     KR.cd = 0; KR.scanT = 0;
@@ -6846,10 +6899,12 @@
     if (KR.callCd > 0) { toast(`The Sword of the Sea is gatherin' its strength... (${Math.ceil(KR.callCd)}s)`); return; }
     krOpenPick();
   }
+  const krPickMsg = o => o && o.kind === 'player' ? { kind: 'player', peer: o.peer } : o && o.kind === 'raiderOne' ? { kind: 'raider', i: raiders.indexOf(o.ent) } : { kind: 'raider' };
   function krCallAlly(o) {
     if (STATE.sword !== 'seasword') return;
     if (talk || uiOpen || STOM.on || MERM.held) return;
     KR.pick = o ? krPickOf(o) : { kind: 'raider' };
+    if (krNet() && KR.callCd <= 0) window.__mpKrSend('kcall', { pick: krPickMsg(o) });
     if (KR.callCd > 0) { toast(`The Sword of the Sea is gatherin' its strength... (${Math.ceil(KR.callCd)}s)`); return; }
     KR.callCd = 120;
     const wasHostile = KR.tgt && KR.tgt.kind !== 'raider' && (KR.st === 'attack' || KR.st === 'grip');
@@ -6927,10 +6982,10 @@
     KR.st = 'roam'; KR.cd = KR.ally > 0 ? 0 : 60; KR.wp = null;
   }
   // hull damage over time, added up so small amounts still count
-  function damageAcc(e, n) { e.krDmg = (e.krDmg || 0) + n; if (e.krDmg >= 1) { const d = Math.floor(e.krDmg); e.krDmg -= d; damageShip(e, d); e.krJolt = Math.max(e.krJolt || 0, 0.25); } }
+  function damageAcc(e, n) { e.krDmg = (e.krDmg || 0) + n; if (e.krDmg >= 1) { const d = Math.floor(e.krDmg); e.krDmg -= d; krDamage(e, d); e.krJolt = Math.max(e.krJolt || 0, 0.25); } }
   function krSlam(q, at, e) {
     if (e) {
-      damageShip(e, 14); e.krJolt = 1;
+      krDamage(e, 14); e.krJolt = 1;
       puff(at.x, at.y + 0.5, at.z, { color: 0xb08a5a, size: 3, life: 1, grow: 1.6, vy: 3, op: 0.9 });
       if (krNearPlayer(KR.tgt)) { SFX.crash({ x: at.x, z: at.z }); }
       // knock anyone standing close
@@ -7046,10 +7101,13 @@
     const nx = s.x + Math.sin(nh) * s.speed * dt, nz = s.z + Math.cos(nh) * s.speed * dt;
     if (heightAt(nx, nz) < -4.5) { s.x = nx; s.z = nz; } else s.speed *= 0.5;
   }
+  const serpNet = () => !!(window.__mpSerpOnline && window.__mpSerpOnline());
   function serpentHurt(s, n, at) {
     if (!serpAlive(s)) return;
-    s.hp -= n; SFX.hit(at || { x: s.x, z: s.z });
+    SFX.hit(at || { x: s.x, z: s.z });
     puff(at ? at.x : s.x, at ? at.y : 2, at ? at.z : s.z, { color: 0x3a6e3a, size: 1.6, life: 0.6, grow: 1.4, vy: 1.5, op: 0.85 });
+    if (serpNet()) { window.__mpKrSend('sdmg', { i: SERP.indexOf(s), dmg: Math.round(n * 10) / 10 }); return; }   // online the server keeps its health
+    s.hp -= n;
     if (s.st === 'roam') s.st = 'hunt';
     if (s.hp <= 0) {
       s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none'; SFX.roar();
@@ -7075,19 +7133,52 @@
       else for (let k = 0; k < 10; k++) { const m = s.segs[k]; if (m.position.y > -2 && Math.hypot(P.pos.x - m.position.x, P.pos.z - m.position.z) < sw.reach + 3.5) { serpentHurt(s, sw.dmg * 0.7, m.position); break; } }
     }
   }
+  // online: the server says when a serpent strikes our hull, and when one dies
+  function serpentBite(i, dmg) {
+    const s = SERP[i]; if (!s || !ship || ship.sinking) return;
+    damageShip(ship, dmg); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + s.side * 0.1;
+    SFX.crash({ x: ship.x, z: ship.z }); wSplash(s.x, 0.6, s.z, true);
+    if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(14);
+    toast('A sea serpent slams into the hull!');
+  }
+  function serpentDied(i, mine) {
+    const s = SERP[i]; if (!s || !serpAlive(s)) return;
+    s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none';
+    if (Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 700) { SFX.roar(); toast('The sea serpent shrieks and sinks beneath the waves!'); }
+    if (mine) { addGold(350, 'Slew a sea serpent!'); addMat('pearl', 2); }
+  }
   const serpFighting = () => SERP.some(s => s.st === 'circle' || s.st === 'strike');
   // for the cannons' auto-aim
   const serpTargets = () => SERP.filter(s => serpAlive(s) && s.st !== 'roam').map(s => ({ x: s.x, z: s.z, heading: s.heading, speed: s.speed, T: { L: 16 }, group: { position: { y: 1.5 } } }));
   function updateSerpents(dt, t) {
     const prey = serpPrey(), calm = STATE.sword === 'seasword';
     const cam = camera.position;
+    const online = serpNet(), me = window.__mpMe ? window.__mpMe() : null;
     for (const s of SERP) {
       s.t += dt;
+      const N = online && s.net && performance.now() - s.net.t < 3000 ? s.net : null;
+      if (N) {
+        // follow the server: where it is, what it's doing, how hurt it is
+        if (N.st === 'gone') { s.st = 'gone'; s.g.visible = false; s.tag.style.display = 'none'; continue; }
+        if (s.st === 'gone' || Math.hypot(N.x - s.x, N.z - s.z) > 200) { s.x = N.x; s.z = N.z; s.trail.forEach(p => { p.x = N.x; p.z = N.z; }); if (s.st === 'gone') { s.st = 'roam'; s.y = -1; s.g.visible = true; } }
+        if (N.st === 'dying' && serpAlive(s)) serpentDied(SERP.indexOf(s), false);
+        if (serpAlive(s)) {
+          const was = s.st;
+          if (N.st === 'strike' && was !== 'strike') { s.sk = N.sk; SFX.roar(); } else if (N.st === 'strike') s.sk = Math.max(s.sk + dt, N.sk); else s.sk = 0;
+          s.st = N.st;
+          if (N.tg === me && (N.st === 'hunt' || N.st === 'circle') && !s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
+          if (N.tg === me && N.st === 'escort' && !s.toldCalm) { s.toldCalm = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
+          if (N.st === 'roam') { s.told = false; s.toldCalm = false; }
+        }
+        s.hp = N.hp;
+        const lead = Math.min(0.3, (performance.now() - N.t) / 1000), tx = N.x + Math.sin(N.h) * N.sp * lead, tz = N.z + Math.cos(N.h) * N.sp * lead, k = Math.min(1, dt * 6);
+        s.x += (tx - s.x) * k; s.z += (tz - s.z) * k; s.heading += angDiff(s.heading, N.h) * k; s.speed = N.sp;
+      }
       if (s.st === 'gone') { s.deadT -= dt; s.g.visible = false; if (s.deadT <= 0) { const q = mistSpot(); s.x = q.x; s.z = q.z; s.hp = s.max; s.st = 'roam'; s.y = -1; s.trail.forEach(p => { p.x = s.x; p.z = s.z; }); } continue; }
       if (s.st === 'dying') { s.deadT += dt; s.y -= dt * 3; if (s.deadT > 5) { s.st = 'gone'; s.deadT = 300; } }
       const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = Math.hypot(s.x - MIST.x, s.z - MIST.z) < MIST.r + 900;
       let lift = 0;   // how far the head rears out of the water
-      if (s.st !== 'dying') {
+      if (s.st !== 'dying' && !N) {
         // the Sword of the Sea: they bow their heads and escort ye instead
         if (calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) { s.st = 'escort'; s.jawT = 0; }
         if (!calm && s.st === 'escort') s.st = 'roam';
@@ -7135,6 +7226,7 @@
           if (s.sk > 1.9) { s.st = 'circle'; s.strikeT = 3.5 + Math.random() * 2.5; }
         }
       }
+      if (N) lift = s.st === 'strike' ? (s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6)) : 0;
       // remember where the head has been: the body follows that path
       const last = s.trail[0];
       if (Math.hypot(s.x - last.x, s.z - last.z) > 0.5) { s.trail.unshift({ x: s.x, z: s.z }); if (s.trail.length > s.N * s.SPACING / 0.5 + 8) s.trail.pop(); }
@@ -7227,23 +7319,12 @@
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
       MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
       // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
-      MP.room.on('kraken', m => {
-        const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return;
-        const amount = Math.min(30, Math.max(1, +d.dmg || 0));
-        try { damageShip(ship, amount); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + (Math.random() - 0.5) * 0.18; SFX.crash({ x: ship.x, z: ship.z }); wSplash(ship.x, waveHeight(ship.x, ship.z, clock.elapsedTime) + 0.6, ship.z, true); toast("A rival captain's Kraken is tearing at yer ship!"); } catch (e) {}
-      });
       // Sword of the Sea vs players: the target's own game runs its kraken on their ship (full attack, they can fight back);
       // ours plays the same fight on our copy of their ship, and they tell us how it ends.
       const tagShip = q => { if (q.ship) { q.ship.remote = true; q.ship.peer = q.peer; q.ship.pname = q.name; } return q.ship; };
       window.__mpKrakenPlayers = () => [...MP.peers.values()].filter(q => q.tgt && q.tgt.sh && q.ship).map(q => ({ peer: q.peer, name: q.name, ship: tagShip(q) }));
       window.__mpKrakenShip = peer => { const q = MP.peers.get(peer); return q && q.tgt && q.tgt.sh && q.ship ? tagShip(q) : null; };
-      window.__mpKrSic = peer => MP.room.emit('krsic', { to: peer }).catch(() => {});
-      window.__mpKrOff = peer => MP.room.emit('kroff', { to: peer }).catch(() => {});
-      window.__mpKrRes = (peer, r) => MP.room.emit('krres', { to: peer, r }).catch(() => {});
       const peerName = id => (MP.peers.get(id)?.name) || 'A rival captain';
-      MP.room.on('krsic', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; let r = 'away'; try { r = window.__krSicOnMe(m.peer, peerName(m.peer)); } catch (e) {} if (r !== 'ok') window.__mpKrRes(m.peer, r); });
-      MP.room.on('kroff', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; try { window.__krCalledOff(m.peer); } catch (e) {} });
-      MP.room.on('krres', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; try { window.__krResult(m.peer, peerName(m.peer), d.r); } catch (e) {} });
       // ---- Server-authoritative world ----
       // The server runs the bandits and the Blackwater raiders for everyone. This browser only
       // sends what its own player did (hits) and draws the snapshots the server sends back.
@@ -7336,19 +7417,23 @@
       };
       MP.room.on('admin_denied', m => {
         if (m.peer !== 'server') return;
-        const k = prompt('This server needs its admin key to change the time and weather for everyone. Enter the key:');
-        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
+        const k = prompt(`This server needs its admin key to ${m.data && m.data.what === 'kraken' ? 'command the Kraken' : 'change the time and weather'} for everyone. Enter the key:`);
+        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (m.data && m.data.what === 'kraken') { if (MP.lastAdminK) window.__mpKrAdmin(MP.lastAdminK); } else if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
         else toast('Not changed: the server needs the admin key.');
       });
       // Tell the server when our kraken grabs or lets go of a raider, so it stops sailing her.
-      MP.krHeld = null;
-      MP.syncTick = () => {
-        const held = KR.lock && raiders.includes(KR.lock) ? KR.lock : null;
-        if (held === MP.krHeld) return;
-        if (MP.krHeld) MP.room.emit('rhold', { i: raiders.indexOf(MP.krHeld), on: 0 }).catch(() => {});
-        if (held) MP.room.emit('rhold', { i: raiders.indexOf(held), on: 1 }).catch(() => {});
-        MP.krHeld = held;
-      };
+      // ---- The shared Kraken and sea serpents: the server runs them; this browser draws them and fights its own corner ----
+      MP.k = null;
+      MP.room.on('ksnap', m => { if (m.peer !== 'server' || !m.data || typeof m.data.x !== 'number') return; MP.k = Object.assign({}, m.data, { at: performance.now() }); });
+      window.__mpKraken = () => (online() && MP.k && performance.now() - MP.k.at < 3000) ? MP.k : null;
+      window.__mpKrSend = (topic, data) => { if (!online()) return false; MP.room.emit(topic, data || {}).catch(() => {}); return true; };
+      window.__mpKrAdmin = d => { let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {} MP.lastAdminK = d; MP.room.emit('kadmin', Object.assign({}, d, { key })).catch(() => {}); };
+      window.__mpMe = () => MP.me;
+      MP.room.on('ksunk', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; const name = peerName(d.id); toast(`Yer kraken drags ${name}'s ship down to the depths!`); addGold(300, `Yer kraken sank ${name}'s ship!`); });
+      MP.room.on('ssnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const sp = SERP[e[0]]; if (sp) sp.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone'][e[5]] || 'roam', sk: e[6], sp: e[7], tg: e[8], t }; } });
+      MP.room.on('sbite', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { serpentBite(d.i | 0, Math.min(30, +d.dmg || 0)); } catch (e) {} });
+      MP.room.on('sdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return; try { serpentDied(d.i | 0, d.by === MP.me); } catch (e) {} });
+      window.__mpSerpOnline = () => online();
       window.__mpShips = () => [...MP.peers.values()].filter(q => q.ship && q.tgt && q.tgt.sh).map(q => q.ship);
       window.__mpFire = side => { MP.room.emit('fire', { s: side }).catch(() => {}); };
       window.__mpSlash = delay => setTimeout(() => {
@@ -7374,6 +7459,7 @@
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null,
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
+          swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0 };   // w: weapon in hand
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0 };   // a: crewed, so raiders will hunt it

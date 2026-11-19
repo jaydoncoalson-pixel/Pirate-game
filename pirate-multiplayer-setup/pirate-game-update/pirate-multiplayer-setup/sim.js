@@ -3,6 +3,7 @@
 // (hit a bandit, hit a raider) and render the snapshots the server sends back.
 'use strict';
 const W = require('./world');
+const { createMonsters } = require('./monsters');
 
 const BST = ['idle', 'chase', 'dead', 'gone'];
 const RST = ['patrol', 'attack', 'sinking', 'gone'];
@@ -10,7 +11,7 @@ const angDiff = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (M
 const angLerp = (a, b, t) => a + angDiff(a, b) * t;
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 
-function createSim({ sendTo, broadcast }) {
+function createSim({ sendTo, broadcast, adminOk = () => true }) {
   // ---------- state ----------
   const bandits = W.BANDIT_SPAWNS.map(s => ({
     name: s.name, home: s.home, x: s.x, z: s.z, facing: s.facing,
@@ -132,7 +133,7 @@ function createSim({ sendTo, broadcast }) {
         if (!r.wpt || Math.hypot(r.wpt.x - r.x, r.wpt.z - r.z) < 120) raiderWaypoint(r);
         desired = Math.atan2(r.wpt.x - r.x, r.wpt.z - r.z); want = r.galleon ? 11 : 14;
       }
-      if (r.heldBy) { if (!players.has(r.heldBy)) r.heldBy = null; else { desired = r.heading; want = 0; r.speed = 0; } }   // a kraken has her
+      if (r.heldBy) { if (r.heldBy !== 'kraken' && !players.has(r.heldBy)) r.heldBy = null; else { desired = r.heading; want = 0; r.speed = 0; } }   // a kraken has her
       const diff = angDiff(r.heading, desired), nh = r.heading + Math.max(-0.45 * dt, Math.min(0.45 * dt, diff));
       r.steer += (Math.sign(diff) * Math.min(1, Math.abs(diff)) - r.steer) * Math.min(1, dt * 2);
       r.speed += (want - r.speed) * Math.min(1, dt * 0.4);
@@ -147,33 +148,39 @@ function createSim({ sendTo, broadcast }) {
     const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z;
     if (Math.min(Math.hypot(px - r.x, pz - r.z), Math.hypot(q.p.x - r.x, q.p.z - r.z)) > 1000) return;   // cannon or kraken range
     r.hp -= Math.max(0, Math.min(40, +dmg || 0)); r.lastHitBy = from; r.lastHitKr = !!kr;
-    if (r.hp <= 0) {
-      r.hp = 0; r.state = 'sinking'; r.sinkT = 0; r.heldBy = null;
-      broadcast('rsunk', { i, by: from, kr: r.lastHitKr ? 1 : 0, gal: r.galleon ? 1 : 0 });
-    }
+    if (r.hp <= 0) sinkRaider(r, from, r.lastHitKr);
+  }
+  function sinkRaider(r, by, kr) {
+    if (r.state === 'sinking' || r.state === 'gone') return;
+    r.hp = 0; r.state = 'sinking'; r.sinkT = 0; r.heldBy = null;
+    broadcast('rsunk', { i: raiders.indexOf(r), by, kr: kr ? 1 : 0, gal: r.galleon ? 1 : 0 });
   }
 
   raiders.forEach(r => spawnRaider(r, new Map()));
+  // the Kraken and the sea serpents, shared by everyone
+  const monsters = createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk });
 
   // ---------- public API ----------
   return {
-    tick(dt, players) { updateBandits(dt, players); updateRaiders(dt, players); },
+    tick(dt, players) { updateBandits(dt, players); updateRaiders(dt, players); monsters.tick(dt, players); },
     snapshot() {
       return {
         bsnap: bandits.map((b, i) => [i, r1(b.x), r1(b.z), r2(b.facing), Math.max(0, Math.round(b.hp)), BST.indexOf(b.state), b.slashT > 0 ? 1 : 0]),
         rsnap: raiders.map((r, i) => [i, r1(r.x), r1(r.z), r2(r.heading), Math.max(0, Math.round(r.hp)), RST.indexOf(r.state), r1(r.speed), r2(r.steer), r.target || 0]),
+        ...monsters.snapshot(),
       };
     },
     // events from a browser; returns true if the sim consumed the topic
     handle(from, topic, d, players) {
+      if (monsters.handle(from, topic, d, players)) return true;
       if (!d || typeof d !== 'object') return topic === 'bdmg' || topic === 'rdmg' || topic === 'rhold';
       if (topic === 'bdmg') { hitBandit(d.i | 0, d.dmg, from, players); return true; }
       if (topic === 'rdmg') { hitRaider(d.i | 0, d.dmg, d.kr, from, players); return true; }
       if (topic === 'rhold') { const r = raiders[d.i | 0]; if (r) { if (d.on && (r.state === 'patrol' || r.state === 'attack')) r.heldBy = from; else if (r.heldBy === from) r.heldBy = null; } return true; }
       return false;
     },
-    removePlayer(id) { for (const r of raiders) if (r.heldBy === id) r.heldBy = null; for (const b of bandits) if (b.victim === id) b.victim = null; },
-    _state: { bandits, raiders },
+    removePlayer(id) { monsters.removePlayer(id); for (const r of raiders) if (r.heldBy === id) r.heldBy = null; for (const b of bandits) if (b.victim === id) b.victim = null; },
+    _state: { bandits, raiders, monsters: monsters._state },
   };
 }
 
