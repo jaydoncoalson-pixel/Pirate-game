@@ -63,9 +63,6 @@
   .qt { font-size: 16px; color: #6b2a14; }
   .qt span { font-size: 12px; color: #2a1a0c; opacity: .7; margin-left: 6px; }
   .qd { font-size: 14px; margin-top: 4px; }
-  #teleList { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
-  #teleList button { padding: 9px 10px; font-size: 14px; text-align: left; }
-  #teleList h3 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 15px; font-weight: normal; color: #6b2a14; }
   #bigc { cursor: crosshair; }
   #bigc { width: min(640px, calc(100vw - 80px), calc(100vh - 170px)); aspect-ratio: 1; border-radius: 8px; display: block; }
   #bars { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
@@ -2650,6 +2647,23 @@
   }
 
   // ---------- The captain's quarters ----------
+  // The stern windows show the real sea behind the ship: a small camera off the stern renders into a texture.
+  const STERN = { rt: new THREE.WebGLRenderTarget(1024, 168), cam: new THREE.PerspectiveCamera(24, 1024 / 168, 1, 14000), frame: 0 };
+  function renderSternView() {
+    if (!ship || !interior || !interior.stern || (STERN.frame++ % 3)) return;
+    const h = ship.heading, back = ship.T.L * 0.5 + 6, cam = STERN.cam;
+    const cx = ship.x - Math.sin(h) * back, cz = ship.z - Math.cos(h) * back, cy = Math.max(4, ship.group.position.y + 5);
+    cam.position.set(cx, cy, cz);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(cx - Math.sin(h) * 200, cy - 6 + ship.pitch * 60, cz - Math.cos(h) * 200);
+    cam.rotateZ(-ship.roll * 0.7);
+    // the sea, sky and clouds follow the main camera; move them to this one for a moment
+    const keep = [ocean.position.clone(), far.position.clone(), sky.position.clone(), clouds.position.clone(), oceanMat.uniforms.camPos.value.clone()];
+    ocean.position.set(Math.round(cx / CELL) * CELL, 0, Math.round(cz / CELL) * CELL); far.position.x = cx; far.position.z = cz;
+    sky.position.copy(cam.position); clouds.position.set(cx, 0, cz); oceanMat.uniforms.camPos.value.copy(cam.position);
+    renderer.setRenderTarget(STERN.rt); renderer.render(scene, cam); renderer.setRenderTarget(null);
+    ocean.position.copy(keep[0]); far.position.copy(keep[1]); sky.position.copy(keep[2]); clouds.position.copy(keep[3]); oceanMat.uniforms.camPos.value.copy(keep[4]);
+  }
   function buildQuarters() {
     const C = { W: 6.5, Lr: 7.5, H: 3.4 }, { W, Lr, H } = C;
     const sc = new THREE.Scene(); sc.background = new THREE.Color(0x1a110b); sc.fog = new THREE.Fog(0x1a110b, 25, 60);
@@ -2665,13 +2679,26 @@
       g.strokeStyle = '#c9a646'; g.lineWidth = 3; g.strokeRect(24, 24, w - 48, 120); g.strokeRect(24, 168, w - 48, 64);
       g.fillStyle = '#c9a646'; g.fillRect(0, 152, w, 6);
     }); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; });
-    const rugTex = cached('rug', () => canvasTex(256, 192, (g, w, h) => {
-      g.fillStyle = '#7a1e1e'; g.fillRect(0, 0, w, h);
-      g.strokeStyle = '#d4af37'; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20); g.lineWidth = 2; g.strokeRect(22, 22, w - 44, h - 44);
-      g.fillStyle = '#1f3a5f'; g.beginPath(); g.ellipse(w / 2, h / 2, 60, 42, 0, 0, 7); g.fill();
-      g.strokeStyle = '#d4af37'; g.lineWidth = 3; g.beginPath(); g.ellipse(w / 2, h / 2, 60, 42, 0, 0, 7); g.stroke();
-      g.fillStyle = '#d4af37'; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.beginPath(); g.arc(w / 2 + Math.cos(a) * 30, h / 2 + Math.sin(a) * 20, 5, 0, 7); g.fill(); }
-      for (let x = 34; x < w - 30; x += 16) { g.fillRect(x, 28, 6, 6); g.fillRect(x, h - 34, 6, 6); }
+    const rugTex = cached('rug2', () => canvasTex(512, 384, (g, w, h) => {
+      // a worn Persian carpet: deep madder field, navy border, ivory and saffron motifs, a little faded
+      g.fillStyle = '#5c1717'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#1b2c48'; g.fillRect(0, 0, w, 44); g.fillRect(0, h - 44, w, 44); g.fillRect(0, 0, 44, h); g.fillRect(w - 44, 0, 44, h);
+      g.strokeStyle = '#c99a3a'; g.lineWidth = 3; g.strokeRect(8, 8, w - 16, h - 16); g.strokeRect(46, 46, w - 92, h - 92); g.lineWidth = 1.5; g.strokeRect(52, 52, w - 104, h - 104);
+      g.fillStyle = '#d9c9a3';
+      for (let x = 26; x < w - 10; x += 26) { g.save(); g.translate(x, 22); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); g.save(); g.translate(x, h - 22); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); }
+      for (let y = 48; y < h - 40; y += 26) { g.save(); g.translate(22, y); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); g.save(); g.translate(w - 22, y); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore(); }
+      // field pattern of small lozenges
+      for (let y = 70; y < h - 60; y += 22) for (let x = 70; x < w - 60; x += 22) { g.fillStyle = (x + y) % 44 ? 'rgba(201,154,58,0.35)' : 'rgba(217,201,163,0.25)'; g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x + 5, y); g.lineTo(x, y + 5); g.lineTo(x - 5, y); g.fill(); }
+      // central medallion
+      const cx = w / 2, cy = h / 2;
+      g.fillStyle = '#1b2c48'; g.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? 70 : 95; g.lineTo(cx + Math.cos(a) * r * 1.3, cy + Math.sin(a) * r); } g.closePath(); g.fill();
+      g.strokeStyle = '#c99a3a'; g.lineWidth = 3; g.stroke();
+      g.fillStyle = '#7d2a1c'; g.beginPath(); g.ellipse(cx, cy, 58, 42, 0, 0, 7); g.fill(); g.strokeStyle = '#d9c9a3'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#c99a3a'; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.beginPath(); g.ellipse(cx + Math.cos(a) * 30, cy + Math.sin(a) * 21, 9, 5, a, 0, 7); g.fill(); }
+      g.fillStyle = '#d9c9a3'; g.beginPath(); g.arc(cx, cy, 9, 0, 7); g.fill();
+      // corner pieces and wear
+      [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(([sx, sy]) => { g.fillStyle = '#1b2c48'; g.beginPath(); g.moveTo(cx + sx * (w / 2 - 54), cy + sy * (h / 2 - 54)); g.lineTo(cx + sx * (w / 2 - 130), cy + sy * (h / 2 - 54)); g.lineTo(cx + sx * (w / 2 - 54), cy + sy * (h / 2 - 110)); g.fill(); });
+      for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,240,210' : '0,0,0'},${Math.random() * 0.06})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
     }));
     const paintTex = cached('paint', () => canvasTex(256, 160, (g, w, h) => {
       const sky = g.createLinearGradient(0, 0, 0, h * 0.6); sky.addColorStop(0, '#d9b98a'); sky.addColorStop(1, '#f1dcb4'); g.fillStyle = sky; g.fillRect(0, 0, w, h * 0.62);
@@ -2693,16 +2720,22 @@
     for (let z = -Lr + 1.25; z < Lr; z += 2.5) add(new THREE.BoxGeometry(W * 2, 0.28, 0.32), darkW, 0, H - 0.14, z);
     [[-W + 0.03, 0, Math.PI / 2, Lr * 2], [W - 0.03, 0, -Math.PI / 2, Lr * 2]].forEach(([x, z, r, len]) => add(new THREE.BoxGeometry(len, 0.08, 0.04), goldM, x, H - 0.4, z, 0, r));
     // the gallery of stern windows and a cushioned seat beneath
+    const viewM = new THREE.MeshBasicMaterial({ map: STERN.rt.texture, fog: false }), glassM = new THREE.MeshBasicMaterial({ color: 0xa8d4e0, transparent: true, opacity: 0.1, fog: false });
+    const g0 = -W + 0.35, gw = W * 2 - 0.7;
     for (let i = 0; i < 6; i++) {
       const x = -W + 1.1 + i * (W * 2 - 2.2) / 5;
-      add(new THREE.PlaneGeometry(1.5, 2.0), new THREE.MeshBasicMaterial({ color: 0xbfe3f2 }), x, 1.95, -Lr + 0.02);
+      // each pane shows its own slice of one wide view, so the windows read as one panorama of the wake
+      const pg = new THREE.PlaneGeometry(1.5, 2.0), uv = pg.attributes.uv, pos = pg.attributes.position;
+      for (let k = 0; k < uv.count; k++) uv.setXY(k, (x + pos.getX(k) - g0) / gw, (1.95 + pos.getY(k) - 0.95) / 2.0);
+      add(pg, viewM, x, 1.95, -Lr + 0.02);
+      add(new THREE.PlaneGeometry(1.5, 2.0), glassM, x, 1.95, -Lr + 0.035);
       [[0, 2.98, 1.7, 0.1], [0, 0.92, 1.7, 0.1], [-0.8, 1.95, 0.1, 2.1], [0.8, 1.95, 0.1, 2.1], [0, 1.95, 0.06, 2.0], [0, 1.6, 1.5, 0.05], [0, 2.3, 1.5, 0.05]].forEach(([dx, y, w, h]) => add(new THREE.BoxGeometry(w, h, 0.08), goldM, x + dx, y, -Lr + 0.06));
     }
     add(new THREE.BoxGeometry(W * 2 - 0.6, 0.5, 0.9), mahog, 0, 0.25, -Lr + 0.5);
     add(new THREE.BoxGeometry(W * 2 - 0.8, 0.16, 0.8), velvet, 0, 0.58, -Lr + 0.52);
     for (let i = 0; i < 5; i++) add(new THREE.BoxGeometry(0.7, 0.4, 0.18), velvet, -W + 1.8 + i * 2.2, 0.85, -Lr + 0.22, -0.2);
     cols.push({ box: true, x: 0, z: -Lr + 0.5, hw: W, hd: 0.5, rot: 0 });
-    const sl = new THREE.PointLight(0xdcefff, 1.0, 16, 2); sl.position.set(0, 2, -Lr + 1.5); root.add(sl);
+    const sl = new THREE.PointLight(0xdcefff, 1.0, 16, 2); sl.position.set(0, 2, -Lr + 1.5); root.add(sl);   // daylight through the windows (dims at night)
     // rug
     add(new THREE.PlaneGeometry(7, 5), new THREE.MeshLambertMaterial({ map: rugTex }), 0, 0.01, -1.2, -Math.PI / 2);
     // the captain's desk
@@ -2765,10 +2798,8 @@
       add(new THREE.BoxGeometry(1.4, 0.75, 0.9), L_(0x6b3d1f), x, 0.38, z);
       [-0.5, 0, 0.5].forEach(dx => add(new THREE.BoxGeometry(0.08, 0.8, 0.95), goldM, x + dx, 0.4, z));
       const lid = add(new THREE.CylinderGeometry(0.45, 0.45, 1.4, 12, 1, false, 0, Math.PI), L_(0x6b3d1f), x, 0.8, z - 0.4, -1.1, 0, Math.PI / 2);
-      const coinM = new THREE.MeshLambertMaterial({ color: 0xffd34d });
-      for (let i = 0; i < 26; i++) add(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 10), coinM, x + (crand() - 0.5) * 1.1, 0.76 + crand() * 0.1, z + (crand() - 0.5) * 0.6, crand(), 0, crand());
-      add(new THREE.SphereGeometry(0.32, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), coinM, x, 0.72, z, 0, 0, 0).scale.y = 0.4;
       cols.push({ box: true, x, z, hw: 0.8, hd: 0.55, rot: 0 }); }
+    const chestAt = { x: W - 1.2, z: -5.6 };
     // sideboard with bottles
     { const x = -W + 0.5, z = -3.6;
       add(new THREE.BoxGeometry(0.8, 1.0, 2.4), mahog, x, 0.5, z);
@@ -2780,7 +2811,7 @@
       const p = add(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: tex }), x, y, z, 0, ry); p.translateZ(0.04);
     };
     frame(-W + 0.04, 2.15, -3.6, Math.PI / 2, 1.8, 1.15, paintTex);
-    frame(W - 0.04, 2.0, -1.8, -Math.PI / 2, 1.3, 0.85, paintTex);
+    frame(W - 0.04, 2.15, -4.6, -Math.PI / 2, 1.3, 0.85, paintTex);
     frame(-3.6, 1.95, Lr - 0.04, Math.PI, 2.0, 1.4, mapTex());
     // crossed swords beside the door
     [0.6, -0.6].forEach(r => { const s = add(new THREE.BoxGeometry(0.06, 1.3, 0.02), L_(0xc9ccd1), 3.4, 2.0, Lr - 0.05, 0, 0, r); add(new THREE.BoxGeometry(0.28, 0.06, 0.05), goldM, 3.4 - Math.sin(r) * 0.55, 2.0 - Math.cos(r) * 0.55, Lr - 0.06, 0, 0, r); });
@@ -2800,6 +2831,41 @@
     });
     add(new THREE.BoxGeometry(2.4, 0.16, 0.12), goldM, 0, 2.48, Lr - 0.06);
     const dl = new THREE.PointLight(0xffb867, 0.6, 7, 2); dl.position.set(0, 2.1, Lr - 0.8); root.add(dl);
+    // wainscot rail and skirting all round
+    [[-W + 0.03, Math.PI / 2, Lr * 2], [W - 0.03, -Math.PI / 2, Lr * 2]].forEach(([x, r, len]) => { add(new THREE.BoxGeometry(len, 0.07, 0.05), mahog, x, 1.05, 0, 0, r); add(new THREE.BoxGeometry(len, 0.16, 0.05), darkW, x, 0.08, 0, 0, r); });
+    add(new THREE.BoxGeometry(W * 2, 0.16, 0.05), darkW, 0, 0.08, Lr - 0.03);
+    // a curved ceiling: the deck beams above have knees down into the walls
+    for (let z = -Lr + 1.25; z < Lr; z += 2.5) [-1, 1].forEach(sx => add(new THREE.BoxGeometry(0.18, 0.55, 0.26), darkW, sx * (W - 0.12), H - 0.42, z, 0, 0, sx * 0.5));
+    // the trophy cabinet: something from every job ye've finished (filled in by refreshQuartersDecor)
+    const cab = { x: W - 0.32, z: -0.9, len: 3.0 };
+    add(new THREE.BoxGeometry(0.05, 2.2, cab.len), L_(0x2a1609), W - 0.04, 1.15, cab.z);                       // back
+    [-1, 1].forEach(e => add(new THREE.BoxGeometry(0.62, 2.3, 0.08), darkW, cab.x + 0.02, 1.15, cab.z + e * (cab.len / 2 + 0.04)));   // sides
+    add(new THREE.BoxGeometry(0.62, 0.32, cab.len + 0.16), darkW, cab.x + 0.02, 0.16, cab.z);                    // plinth
+    [0.32, 0.92, 1.52].forEach(y => add(new THREE.BoxGeometry(0.58, 0.04, cab.len), mahog, cab.x - 0.01, y, cab.z));   // shelves
+    add(new THREE.BoxGeometry(0.66, 0.1, cab.len + 0.2), goldM, cab.x + 0.02, 2.33, cab.z);
+    add(new THREE.PlaneGeometry(cab.len, 2.0), new THREE.MeshBasicMaterial({ color: 0xcfe8f0, transparent: true, opacity: 0.08 }), cab.x - 0.33, 1.2, cab.z, 0, -Math.PI / 2);
+    [-1, 0, 1].forEach(k => add(new THREE.BoxGeometry(0.04, 2.1, 0.05), goldM, cab.x - 0.32, 1.15, cab.z + k * cab.len / 2));
+    add(new THREE.PlaneGeometry(0.62, 0.14), new THREE.MeshLambertMaterial({ map: canvasTex(256, 56, (g, w, h) => { g.fillStyle = '#b8902e'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a2410'; g.font = 'bold 26px Georgia'; g.textAlign = 'center'; g.fillText('TROPHIES', w / 2, 37); }) }), cab.x - 0.34, 2.12, cab.z, 0, -Math.PI / 2);
+    const cabLight = new THREE.PointLight(0xffd7a0, 0.5, 3.2, 2); cabLight.position.set(cab.x - 0.8, 1.9, cab.z); root.add(cabLight);
+    cols.push({ box: true, x: cab.x, z: cab.z, hw: 0.36, hd: cab.len / 2 + 0.1, rot: 0 });
+    // the sword rack on the port wall
+    const rack = { x: -W + 0.05, z: 0.3 };
+    add(new THREE.BoxGeometry(0.06, 1.75, 1.9), mahog, rack.x, 1.85, rack.z);
+    add(new THREE.BoxGeometry(0.07, 1.85, 2.0), goldM, rack.x - 0.01, 1.85, rack.z).scale.set(0.5, 1, 1);
+    // a wardrobe with a looking-glass by the door: change yer outfit here
+    const ward = { x: W - 0.45, z: 6.25 };
+    add(new THREE.BoxGeometry(0.85, 2.5, 1.3), mahog, ward.x, 1.25, ward.z);
+    add(new THREE.BoxGeometry(0.9, 0.12, 1.36), goldM, ward.x, 2.52, ward.z);
+    add(new THREE.PlaneGeometry(0.75, 1.5), new THREE.MeshPhongMaterial({ color: 0xbfd2d8, specular: 0xffffff, shininess: 90, emissive: 0x1a2226 }), ward.x - 0.43, 1.45, ward.z, 0, -Math.PI / 2);
+    add(new THREE.BoxGeometry(0.05, 1.62, 0.87), goldM, ward.x - 0.43, 1.45, ward.z).scale.set(1, 1, 1);
+    cols.push({ box: true, x: ward.x, z: ward.z, hw: 0.47, hd: 0.68, rot: 0 });
+    // a few more candles that gutter in the draught
+    const flick = [];
+    [[-W + 0.5, 1.0, -2.6], [W - 0.42, 2.38, -0.2]].forEach(([x, y, z]) => {
+      add(new THREE.CylinderGeometry(0.05, 0.07, 0.12, 8), goldM, x, y + 0.06, z);
+      add(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6), linen, x, y + 0.22, z);
+      add(new THREE.SphereGeometry(0.03, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffc04d }), x, y + 0.36, z);
+    });
     // the steward and the ship's parrot
     crew.push(makeCrewMember({ role: 'steward', name: 'Steward Wilkes', at: [-W + 1.7, -1.8], face: Math.PI / 2 }, [], root, 1));
     cols.push({ x: -W + 1.7, z: -1.8, r: 0.45 });
@@ -2821,7 +2887,70 @@
         ch: { root: bird, update: (dt) => { parrot.t = (parrot.t || 0) + dt; head.rotation.y = Math.sin(parrot.t * 2.3) * 0.6; head.rotation.z = Math.sin(parrot.t * 1.1) * 0.25; } } };
       tagLayer.appendChild(parrot.tag);
       crew.push(parrot); cols.push({ x: px, z: pz, r: 0.4 }); }
-    return { scene: sc, root, C, cols, lanterns, crew, spawn: { x: 0, z: Lr - 1.9, facing: Math.PI }, exit: { x: 0, z: Lr - 0.6 }, title: "Captain's quarters", exitLabel: 'Go out on deck' };
+    root.traverse(o => { if (o.isPointLight && o !== sl && o !== cabLight) flick.push({ l: o, base: o.intensity, ph: Math.random() * 9 }); });
+    const decor = new THREE.Group(); root.add(decor);
+    return { scene: sc, root, C, cols, lanterns, crew, spawn: { x: 0, z: Lr - 1.9, facing: Math.PI }, exit: { x: 0, z: Lr - 0.6 }, title: "Captain's quarters", exitLabel: 'Go out on deck',
+      stern: true, winLight: sl, flick, decor, cab, rack, ward, chestAt };
+  }
+  // ---- what's on show in yer quarters: trophies from finished quests, the swords ye own, and yer gold ----
+  const TROPHIES = {
+    treasure: ["Blackwater's gold", (g, M) => { [[-0.06, 0, 0], [0.06, 0, 0], [0, 0.05, 0]].forEach(([x, y]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.07), M(0xe0b23c)); b.position.set(0, y + 0.025, x); g.add(b); }); }],
+    ledger: ["Gus's ledger", (g, M) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.26), M(0x5a2d16)); b.position.y = 0.03; b.rotation.y = 0.3; g.add(b); const s = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.065, 0.03), M(0xc9a646)); s.position.y = 0.03; s.rotation.y = 0.3; g.add(s); }],
+    oranges: ["Jonah's thank-you oranges", (g, M) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.09, 0.26), M(0x8a5a33)); c.position.y = 0.045; g.add(c); [[-0.05, -0.06], [0.05, -0.06], [-0.05, 0.06], [0.05, 0.06], [0, 0]].forEach(([x, z], i) => { const o = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), M(0xf28a1c)); o.position.set(x, 0.12 + (i === 4 ? 0.04 : 0), z); g.add(o); }); }],
+    oil: ["The first oil lamp from the lighthouse", (g, M) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.08, 10), M(0xb8902e)); b.position.y = 0.04; g.add(b); const gl = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.85 })); gl.position.y = 0.14; g.add(gl); }],
+    gem: ['A fire gem from Smoke Peak', (g, M) => { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08, 0), M(0x2f2926)); r.position.y = 0.05; g.add(r); const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: 0xff4a1a })); c.scale.y = 1.6; c.position.y = 0.16; g.add(c); }],
+    lostBell: ["A copy of Nell's harbour bell", (g, M) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.09, 0.13, 14, 1, true), M(0xd4a83a)); b.material.side = THREE.DoubleSide; b.position.y = 0.075; g.add(b); const t = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M(0xd4a83a)); t.position.y = 0.14; g.add(t); }],
+    bakerRun: ["Marta's spiced loaf", (g, M) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), M(0xc98a4a)); l.scale.set(0.8, 0.55, 1.3); l.position.y = 0.05; g.add(l); }],
+    supplyRun: ['A captured Blackwater flag', (g, M) => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.26), M(0x1a1a1a)); f.position.y = 0.025; g.add(f); const sk = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), M(0xeeeeee)); sk.position.y = 0.06; g.add(sk); }],
+    bigCatch: ['The giant pearl (a twin of Toma’s)', (g, M) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.18), M(0x8e1f1f)); c.position.y = 0.02; g.add(c); const p = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshPhongMaterial({ color: 0xf6f2ea, specular: 0xffffff, shininess: 120 })); p.position.y = 0.1; g.add(p); }],
+    warehouse: ["Venn's cargo manifest", (g, M) => { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 10), M(0xefe2c0)); s.rotation.x = Math.PI / 2; s.position.y = 0.035; g.add(s); const r = new THREE.Mesh(new THREE.TorusGeometry(0.037, 0.008, 4, 12), M(0xa01e1e)); r.position.y = 0.035; g.add(r); }],
+    charting: ["Inez's brass sextant", (g, M) => { const a = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.01, 4, 16, Math.PI / 3), M(0xc9a646)); a.rotation.set(0, Math.PI / 2, -Math.PI / 6 - Math.PI / 2); a.position.y = 0.16; g.add(a); [-0.06, 0.06].forEach(z => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.13, 0.01), M(0xc9a646)); b.position.set(0, 0.1, z * 0.5); b.rotation.x = z * 4; g.add(b); }); }],
+    keepsake: ["Pavo's silver locket (on loan)", (g, M) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), M(0xc8ccd2)); l.scale.y = 0.4; l.rotation.x = Math.PI / 2; l.position.y = 0.06; g.add(l); const ch = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.005, 4, 18), M(0xc8ccd2)); ch.rotation.x = Math.PI / 2; ch.position.y = 0.01; g.add(ch); }],
+    message: ['The message in a bottle', (g, M) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 10), new THREE.MeshPhongMaterial({ color: 0x4c9a75, transparent: true, opacity: 0.6, shininess: 80 })); b.rotation.z = Math.PI / 2; b.position.y = 0.05; g.add(b); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.04, 6), M(0x80502b)); c.rotation.z = Math.PI / 2; c.position.set(0.12, 0.05, 0); g.add(c); const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.02), M(0xefe2c0)); p.position.y = 0.05; g.add(p); }],
+  };
+  function refreshQuartersDecor(Q) {
+    const d = Q.decor;
+    while (d.children.length) d.remove(d.children[0]);
+    const M = c => new THREE.MeshLambertMaterial({ color: c });
+    // trophies, three shelves of five
+    const ids = Object.keys(TROPHIES).filter(id => STATE.quests[id] === 'done');
+    ids.forEach((id, i) => {
+      const g = new THREE.Group(), shelf = Math.floor(i / 5), slot = i % 5;
+      g.position.set(Q.cab.x - 0.06, [0.34, 0.94, 1.54][shelf] || 1.54, Q.cab.z - Q.cab.len / 2 + 0.3 + slot * (Q.cab.len - 0.6) / 4);
+      g.rotation.y = -Math.PI / 2; g.scale.setScalar(1.7); TROPHIES[id][1](g, M); d.add(g);
+    });
+    Q.trophyCount = ids.length;
+    // swords ye own hang on the rack, all but the one at yer hip
+    const owned = Object.keys(SWORDS).filter(k => STATE.swords.includes(k) && k !== STATE.sword);
+    owned.slice(0, 9).forEach((k, i) => {
+      const b = buildBlade(SWORDS[k].look);
+      b.position.set(Q.rack.x + 0.1, 2.6 - i * 0.19, Q.rack.z - 0.6); b.rotation.set(0, 0, Math.PI / 2); b.scale.setScalar(1.3);
+      d.add(b);
+      [-0.35, 0.65].forEach(dz => { const peg = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6), M(0xc9a646)); peg.rotation.z = Math.PI / 2; peg.position.set(Q.rack.x + 0.06, 2.57 - i * 0.19, Q.rack.z + dz); d.add(peg); });
+    });
+    Q.swordCount = owned.length;
+    // the chest holds as much as yer purse: a few coins for a poor captain, a heap spilling onto the floor for a rich one
+    const gold = Math.max(0, STATE.gold), coinM = new THREE.MeshLambertMaterial({ color: 0xffd34d }), cx = Q.chestAt.x, cz = Q.chestAt.z;
+    const fill = Math.min(1, Math.log10(gold + 10) / 4.7);   // 0.2 at 0 gold, full at about 50,000
+    const heap = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), coinM);
+    heap.scale.set(1, 0.08 + fill * 0.55, 0.62); heap.position.set(cx, 0.7, cz); d.add(heap);
+    const loose = Math.min(60, Math.floor(gold / 120));
+    for (let i = 0; i < loose; i++) {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 10), coinM), onFloor = i > 22;
+      if (onFloor) c.position.set(cx + (Math.random() - 0.7) * 1.8, 0.012, cz + 0.55 + Math.random() * 0.9);
+      else c.position.set(cx + (Math.random() - 0.5) * 1.1, 0.72 + fill * 0.3 + Math.random() * 0.06, cz + (Math.random() - 0.5) * 0.55);
+      c.rotation.set(onFloor ? 0 : Math.random(), Math.random() * 6, onFloor ? 0 : Math.random()); d.add(c);
+    }
+  }
+  const inQuarters = () => inInterior && interior && interior.stern;
+  const nearWardrobe = () => inQuarters() && Math.hypot(IP.x - interior.ward.x, IP.z - interior.ward.z) < 1.8;
+  const nearTrophies = () => inQuarters() && IP.x > interior.cab.x - 1.6 && Math.abs(IP.z - interior.cab.z) < interior.cab.len / 2 + 0.4;
+  function showTrophies() {
+    const done = Object.keys(TROPHIES).filter(id => STATE.quests[id] === 'done'), total = Object.keys(TROPHIES).length;
+    const lines = done.length ? [`${done.length} of ${total} trophies: ${done.map(id => TROPHIES[id][0]).join(', ')}.`] : ['The cabinet is empty. Finish jobs for the folk of the islands and yer trophies will fill these shelves.'];
+    if (done.length && done.length < total) lines.push(`${total - done.length} shelf spot${total - done.length > 1 ? 's' : ''} still bare. Check yer quest log (Q).`);
+    if (done.length === total) lines.push('Every shelf is full. The whole sea knows yer name, captain.');
+    talk = { npc: { def: { name: 'Trophy cabinet', lines: [] }, pos: new THREE.Vector3() }, line: 0, lines }; showLine();
   }
 
   const interiors = {};
@@ -2844,6 +2973,7 @@
     savedDist = dist; dist = Math.min(dist, 6); yaw = P.facing + Math.PI; pitch = 0.3;
     camera.near = 0.1; camera.updateProjectionMatrix();
     hudHint.innerHTML = kind === 'quarters' ? quartersHint : belowHint;
+    if (kind === 'quarters') { refreshQuartersDecor(interior); STERN.frame = 0; }
   }
   function goUp() {
     SFX.door(); interior.root.remove(player.root);
@@ -2887,6 +3017,7 @@
       interior.root.rotation.x = ship.pitch * 0.7; interior.root.rotation.z = ship.roll * 0.7;
       interior.root.updateMatrixWorld(); player.root.getWorldPosition(P.pos);
       for (const c of interior.crew) { animateCrewMember(c, dt, 1, IP.x, IP.z, null); placeTag(c, 2.9 * (c.def.look.scale || 1), true); }
+      quartersLights(t);
       return;
     }
     const C = interior.C;
@@ -2911,6 +3042,13 @@
     for (const l of interior.lanterns) { l.rotation.z = Math.sin(t * 1.4 + l.userData.ph) * 0.12 - ship.roll * 0.7; l.rotation.x = Math.cos(t * 1.1 + l.userData.ph) * 0.06 - ship.pitch * 0.7; }
     interior.root.updateMatrixWorld(); player.root.getWorldPosition(P.pos);
     for (const c of interior.crew) { animateCrewMember(c, dt, 1, IP.x, IP.z, null); placeTag(c, 2.9 * (c.def.look.scale || 1), true); }
+    quartersLights(t);
+  }
+  // candles gutter, and the daylight through the stern windows follows the sun
+  function quartersLights(t) {
+    if (!interior.flick) return;
+    for (const f of interior.flick) f.l.intensity = f.base * (0.86 + 0.07 * Math.sin(t * 11 + f.ph) + 0.07 * Math.sin(t * 6.7 + f.ph * 2.3));
+    interior.winLight.intensity = 0.15 + 1.0 * Math.max(0, Math.min(1, SUN_DIR.y * 3 + 0.35));
   }
 
   // ---------- Crews ----------
@@ -3827,7 +3965,7 @@
     if (sailing) { leaveWheel(); return; }
     if (inInterior) { if (deskSeated) { if (uiOpen === 'map') closeUI(); else openCaptainChart(); return; }
       if (Math.hypot(IP.x, IP.z + 4.7) < 1.7) { openCaptainChart(); return; }
-      if (nearLadder()) goUp(); else if (nearBed()) sleep(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
+      if (nearLadder()) goUp(); else if (nearBed()) sleep(); else if (nearWardrobe()) openUI('custom', 'pirate'); else if (nearTrophies()) showTrophies(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
     if (nearWheel()) { takeWheel(); return; }
@@ -7125,7 +7263,7 @@
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
     else if (sailing) promptHtml = ship && ship.submerged ? '<b>C</b> Rise · <b>V</b> Dive · <b>E</b> Leave wheel' : '<b>E</b> Step away from the wheel';
-    else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
+    else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : nearWardrobe() ? '<b>E</b> Change yer outfit at the looking-glass' : nearTrophies() ? '<b>E</b> Look at yer trophies' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
     else if (nearHatch()) promptHtml = '<b>E</b> Go below deck';
     else if (nearDoor()) promptHtml = "<b>E</b> Enter the captain's quarters";
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
@@ -7204,6 +7342,7 @@
     oceanMat.uniforms.camPos.value.copy(camera.position);
 
     if (STOM.scene) updatePuffIn(dt);
+    if (inInterior && interior.stern) renderSternView();
     renderer.render(inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
     requestAnimationFrame(tick);
   }
