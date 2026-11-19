@@ -7245,6 +7245,17 @@
     }
   }
   const serpAlive = s => s.st !== 'dying' && s.st !== 'gone';
+  // Record the path a serpent's head swims, one point every `step` metres: each body segment sits a fixed number of
+  // points back, so the points must stay evenly spaced. A fast serpent moves several steps in one frame, so fill in
+  // the points in between (it used to add only one per frame, and the body stretched apart).
+  function serpTrailPush(trail, x, z, step, maxLen) {
+    const last = trail[0], d = Math.hypot(x - last.x, z - last.z);
+    if (d < step) return;
+    if (d > step * 400) { for (const p of trail) { p.x = x; p.z = z; } return; }   // a jump (respawn, teleport): don't smear the body across the sea
+    const n = Math.floor(d / step), ux = (x - last.x) / d, uz = (z - last.z) / d;
+    for (let i = 1; i <= n; i++) trail.unshift({ x: last.x + ux * step * i, z: last.z + uz * step * i });
+    while (trail.length > maxLen) trail.pop();
+  }
   // who it goes for: yer ship, while ye're aboard, unless ye carry the Sword of the Sea
   const serpPrey = () => ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
   // serpents never leave the mist: anything they steer for is pulled back inside its edge
@@ -7415,7 +7426,7 @@
       if (N && !bp) lift = s.st === 'strike' ? (s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6)) : 0;
       // remember where the head has been: the body follows that path
       const last = s.trail[0];
-      if (Math.hypot(s.x - last.x, s.z - last.z) > 0.5) { s.trail.unshift({ x: s.x, z: s.z }); if (s.trail.length > s.N * s.SPACING / 0.5 + 8) s.trail.pop(); }
+      serpTrailPush(s.trail, s.x, s.z, 0.5, s.N * s.SPACING / 0.5 + 8);
       const near = Math.hypot(s.x - cam.x, s.z - cam.z) < 1600 && !inInterior;
       s.g.visible = near;
       if (!near) { s.tag.style.display = 'none'; continue; }
@@ -7508,7 +7519,7 @@
   function poseElder(m, x, z, h, lift, emerge, dt, t, opts = {}) {
     m.t += dt;
     const K = m.K, st = K.trail, last = m.trail[0];
-    if (Math.hypot(x - last.x, z - last.z) > st) { m.trail.unshift({ x, z }); if (m.trail.length > m.N * m.SPACING / st + 8) m.trail.pop(); }
+    serpTrailPush(m.trail, x, z, st, m.N * m.SPACING / st + 8);
     const sink = (1 - emerge) * K.sink, still = opts.still ? 0.35 : 1;
     const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
     m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
