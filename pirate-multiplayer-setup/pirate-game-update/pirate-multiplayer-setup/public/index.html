@@ -7514,16 +7514,44 @@
   }
   const elderLift = sk => sk < 0.9 ? sk / 0.9 : sk < 1.15 ? 1 : Math.max(0, 1 - (sk - 1.15) / 0.6);
   // steer for a point, feeling ahead for land: he's too big for the shallows
+  // Pathfinding: when land or rocks stand between him and where he's going, he follows a route from the same
+  // open-water chart the autopilot uses, round islands and through the shoals' channels; he replans if the goal
+  // moves on or he gets stuck.
+  function elderWaypoint(tx, tz) {
+    if (!navGrid) buildNavGrid();
+    const now = clock.elapsedTime, here = { x: ELD.x, z: ELD.z }, goal = { x: tx, z: tz };
+    if (Math.hypot(tx - ELD.x, tz - ELD.z) < ELD.K.probe * 1.5 || navClear(here, goal)) { ELD.route = null; return goal; }
+    const R = ELD.route, stale = !R || Math.hypot(R.gx - tx, R.gz - tz) > 150 || now - R.t > 8 || (ELD.stuckT || 0) > 1.2;
+    if (stale && now - (ELD.planT ?? -9) > 1.5) {
+      ELD.planT = now; ELD.stuckT = 0;
+      const plan = planRoute(ELD.x, ELD.z, tx, tz);
+      ELD.route = plan && plan.pts.length ? { pts: plan.pts, i: 0, gx: tx, gz: tz, t: now } : null;
+    }
+    const r = ELD.route; if (!r) return goal;
+    // skip ahead past points already reached, or ones he can already see past
+    while (r.i < r.pts.length - 1 && (Math.hypot(r.pts[r.i].x - ELD.x, r.pts[r.i].z - ELD.z) < 60 || navClear(here, r.pts[r.i + 1]))) r.i++;
+    const w = r.pts[r.i];
+    if (r.i === r.pts.length - 1 && Math.hypot(w.x - ELD.x, w.z - ELD.z) < 60) return goal;   // end of the route: close the last bit directly
+    return w;
+  }
   function elderSteer(tx, tz, want, dt, turn = 1.3) {
-    const desired = Math.atan2(tx - ELD.x, tz - ELD.z);
+    const w = elderWaypoint(tx, tz);
+    if (w.x !== tx || w.z !== tz) { turn = Math.max(turn, 1.6); want = Math.max(want, Math.min(ELD.K.max, 30)); }   // on a detour: keep moving
+    const desired = Math.atan2(w.x - ELD.x, w.z - ELD.z);
     let nh = ELD.h + Math.max(-turn * dt, Math.min(turn * dt, angDiff(ELD.h, desired)));
     for (let tries = 0; tries < 8; tries++) { const ax = ELD.x + Math.sin(nh) * ELD.K.probe, az = ELD.z + Math.cos(nh) * ELD.K.probe; if (heightAt(ax, az) < -4.5) break; nh += (tries % 2 ? -1 : 1) * 0.45 * (tries + 1); }
     ELD.h = nh; ELD.speed += (want - ELD.speed) * Math.min(1, dt * 1.2);
-    elderMove(dt);
+    const moved = elderMove(dt);
+    // stuck: hardly moving though he wants to go somewhere
+    ELD.stuckT = (!moved || (want > 10 && ELD.speed < want * 0.25)) ? (ELD.stuckT || 0) + dt : Math.max(0, (ELD.stuckT || 0) - dt);
   }
+  // move along his heading; against a rock or a shore he slides along it instead of stopping dead
   function elderMove(dt) {
-    const nx = ELD.x + Math.sin(ELD.h) * ELD.speed * dt, nz = ELD.z + Math.cos(ELD.h) * ELD.speed * dt;
-    if (heightAt(nx, nz) < -4.5 && Math.abs(nx) < EDGE && Math.abs(nz) < EDGE) { ELD.x = nx; ELD.z = nz; return true; }
+    const step = ELD.speed * dt, ok = (x, z) => heightAt(x, z) < -4.5 && Math.abs(x) < EDGE && Math.abs(z) < EDGE;
+    for (const da of [0, 0.5, -0.5, 1.0, -1.0]) {
+      const h = ELD.h + da, k = da ? Math.cos(da) : 1, nx = ELD.x + Math.sin(h) * step * k, nz = ELD.z + Math.cos(h) * step * k;
+      if (ok(nx, nz)) { ELD.x = nx; ELD.z = nz; if (da) { ELD.h += da * 0.3; ELD.speed *= 0.97; } return !da || step < 0.01 ? true : 'slid'; }
+    }
     ELD.speed *= 0.4; return false;
   }
   // what he's guarding: yer ship if ye have one afloat, otherwise yerself
