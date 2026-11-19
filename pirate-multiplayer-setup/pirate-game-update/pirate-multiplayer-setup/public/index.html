@@ -4021,7 +4021,8 @@
     const mp = mapPos(); drawMapTo(mctx, 200, 200, mp.x, mp.z, 18, false);
     if (uiOpen === 'map') drawBigMap();
   }
-  const BIG = { cx: 300, cz: 0, s: 15.5 };   // the chart shows the home waters, as it always has
+  const BIG = { cx: 300, cz: 0, s: 15.5 };
+  const STATE_unknown = { out: false };   // the chart shows the home waters, as it always has
   function drawBigMap() { drawMapTo(bctx, 640, 640, BIG.cx, BIG.cz, BIG.s, true); drawRouteOverlay(); }
   function drawRouteOverlay() {
     if (!autoRoute || !bigc) return;
@@ -4991,6 +4992,11 @@
     scene.fog.far = fogFar; scene.fog.near = fogFar * 0.1; oceanMat.uniforms.fogDist.value = fogFar * 0.68;
     { // the Mistwrack Shoals: thick fog that closes in as ye sail into them, whatever the weather
       const mp0 = mapPos(), md = Math.hypot(mp0.x - MIST.x, mp0.z - MIST.z), mf = sstep(MIST.r + 450, MIST.r - 250, md);
+      { // leaving the part of the sea the chart shows
+        const half = 320 * BIG.s, ox = Math.abs(mp0.x - BIG.cx) - half, oz = Math.abs(mp0.z - BIG.cz) - half, out = Math.max(ox, oz);
+        if (!inInterior && out > 30 && !STATE_unknown.out) { STATE_unknown.out = true; toast('You venture into unknown waters.'); }
+        else if (out < -100) STATE_unknown.out = false;
+      }
       MIST.f = mf;
       const sea = STATE.sword === 'seasword' && !inInterior;
       MIST.part = (MIST.part || 0) + ((sea ? 1 : 0) - (MIST.part || 0)) * Math.min(1, dt * 0.7);
