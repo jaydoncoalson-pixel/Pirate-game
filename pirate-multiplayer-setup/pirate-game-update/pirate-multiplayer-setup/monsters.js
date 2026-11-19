@@ -179,8 +179,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     const ships = [];
     for (const [id, q] of players) {
       if (!q.p || !q.p.sh || q.p.sh.a !== 1) { prevSh.delete(id); continue; }
-      const sh = q.p.sh, pv = prevSh.get(id), sp = pv ? Math.min(40, Math.hypot(sh.x - pv.x, sh.z - pv.z) / Math.max(dt, 0.01)) : 0;
-      prevSh.set(id, { x: sh.x, z: sh.z });
+      const sh = q.p.sh, pv = prevSh.get(id), raw = pv ? Math.min(150, Math.hypot(sh.x - pv.x, sh.z - pv.z) / Math.max(dt, 0.01)) : 0, sp = pv ? pv.sp + (raw - pv.sp) * Math.min(1, dt * 3) : 0;
+      prevSh.set(id, { x: sh.x, z: sh.z, sp });
       ships.push({ id, x: sh.x, z: sh.z, h: sh.h || 0, sp, calm: q.p.sw === 'seasword' });
     }
     const M = W.MIST;
@@ -209,7 +209,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
           // swim up alongside her, just off the beam; once there, rise out of the sea and bow; then keep her company
           const sx = Math.sin(prey.h), sz = Math.cos(prey.h), bowing = s.st === 'bow' || s.bowed !== prey.id, off = (bowing ? 24 : 38) * s.side, ahead = bowing ? 4 : 25;
           const tx = prey.x + sz * off + sx * ahead, tz = prey.z - sx * off + sz * ahead, ds = Math.hypot(tx - s.x, tz - s.z);
-          serpSteer(s, tx, tz, Math.max(6, Math.min(40, prey.sp + ds * (bowing ? 0.4 : 0.05))), dt, 2.4);
+          serpSteer(s, tx, tz, Math.max(6, Math.min(120, prey.sp + ds * (bowing ? 0.4 : 0.08))), dt, 2.4);
           if (s.st === 'escort') { s.wait = (s.wait || 0) + dt; if (s.bowed !== prey.id && ds < 16 && (Math.abs(angDiff(s.h, prey.h)) < 0.7 || s.wait > 12)) { s.st = 'bow'; s.sk = 0; } }
           else { s.sk += dt; if (s.sk > BOW_T) { s.st = 'escort'; s.bowed = prey.id; s.sk = 0; } }
         }
@@ -220,18 +220,18 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
         serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
       } else if (s.st === 'hunt') {
         if (!prey || !leash) { s.st = 'roam'; s.tg = null; }
-        else { s.tg = prey.id; s.ang = Math.atan2(s.x - prey.x, s.z - prey.z); serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 34, dt, 2.6); if (d < 80) { s.st = 'circle'; s.strikeT = 1 + Math.random(); } }
+        else { s.tg = prey.id; s.ang = Math.atan2(s.x - prey.x, s.z - prey.z); serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, Math.max(55, prey.sp + 25), dt, 2.6); if (d < 80) { s.st = 'circle'; s.strikeT = 1 + Math.random(); } }
       } else if (s.st === 'circle') {
         if (!prey || !leash) { s.st = 'roam'; s.tg = null; }
         else if (d > 170) s.st = 'hunt';
         else {
           s.ang += dt * 0.55 * s.side;
-          serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(18, prey.sp + 12), dt, 3);
+          serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(25, prey.sp + 20), dt, 3);
           s.strikeT -= dt; if (s.strikeT <= 0 && d < 66) { s.st = 'strike'; s.sk = 0; s.hit = false; }
         }
       } else if (s.st === 'strike') {
         s.sk += dt;
-        if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? 4 : 18, dt, 3);
+        if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? Math.max(4, prey.sp) : prey.sp + 18, dt, 3);   // keep pace with her while rearing up
         if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < 48) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22 }); }
         if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
       }
