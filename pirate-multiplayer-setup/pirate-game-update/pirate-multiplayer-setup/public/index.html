@@ -4489,7 +4489,7 @@
     }, 900);
   }
   function playerAttack() {
-    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer;
+    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer || (onShip && serpFighting());
     if ((!playerTargetable() && !STOM.on && !krDeckFight) || PLAYER.cool > 0 || PLAYER.hp <= 0) return;
     if (!STOM.on && !onShip && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword(); PLAYER.slashDur = Math.max(0.22, Math.min(0.45, sw.cool * 0.75)); PLAYER.slashT = PLAYER.slashDur; PLAYER.cool = sw.cool; PLAYER.hitPending = PLAYER.slashDur * 0.45; SFX.swing(); if (window.__mpSlash) window.__mpSlash(PLAYER.slashDur * 0.45); return; }
@@ -4539,6 +4539,7 @@
     if (ent === ship) {                // yer own guns: raiders and other players' ships
       list = raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       if (window.__mpShips) list = list.concat(window.__mpShips());
+      list = list.concat(serpTargets());
     } else if (ent.remote) {           // another player's broadside, replayed here: it was aimed at us
       list = ship && !ship.sinking && !ship.submerged ? [ship] : [];
     } else return null;                // raiders don't get auto-aim
@@ -4589,6 +4590,7 @@
           break;
         }
       }
+      if (!hit && !b.enemy && serpentBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
       if (!hit && y < waveHeight(x, z, t)) {
         hit = true;
         if (heightAt(x, z) < -1) { SFX.splash({ x, z }, true); puff(x, y + 1.5, z, { color: 0xffffff, size: 4, life: 0.9, grow: 1.2, vy: 9, op: 0.9 }); puff(x, y + 0.5, z, { color: 0xeaf6ff, size: 6, life: 1.4, grow: 1.5, op: 0.6 }); }
@@ -4752,6 +4754,7 @@
           const sw = curSword(); if (d < sw.reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > sw.arc) hitBandit(b, sw.dmg);
         }
         krSwordHit(curSword());
+        serpentSwordHit(curSword());
       }
     }
     PLAYER.hurtT += dt;
@@ -6983,6 +6986,186 @@
   });
   showMenu();
 
+  // ---------- Sea serpents ----------
+  // They nest in the Mistwrack Shoals and hunt any ship that comes near: they circle her, rear up out of the
+  // sea and strike at the hull. Cannonballs and blades drive them off. To one who carries the Sword of the Sea
+  // they bow their heads, and swim alongside as an escort instead.
+  const SERP = [];
+  {
+    const scaleM = new THREE.MeshLambertMaterial({ color: 0x1f6e5e, flatShading: true }), bellyM = new THREE.MeshLambertMaterial({ color: 0x9cc79a });
+    const finM = new THREE.MeshLambertMaterial({ color: 0x8e2a2a, side: THREE.DoubleSide }), hornM = new THREE.MeshLambertMaterial({ color: 0xd9cfb4 });
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xffd23a }), mouthM = new THREE.MeshLambertMaterial({ color: 0x5a1414 }), toothM = new THREE.MeshLambertMaterial({ color: 0xf2ecd8 });
+    const N = 28, SPACING = 4.2;   // about 120 m of serpent
+    const spawnAt = () => { for (let i = 0; i < 60; i++) { const q = mistSpot(); if (heightAt(q.x + 30, q.z) < -6 && heightAt(q.x - 30, q.z) < -6) return q; } return mistSpot(); };
+    for (let n = 0; n < 3; n++) {
+      const g = new THREE.Group(); scene.add(g);
+      const segs = [];
+      for (let k = 0; k < N; k++) {
+        const r = 3.0 * (1 - (k / N) * 0.78), m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), scaleM);
+        m.scale.set(1, 0.9, 1.75); g.add(m);
+        const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.82, 8, 6), bellyM); belly.position.y = -r * 0.32; belly.scale.set(1.05, 0.7, 1.2); m.add(belly);
+        if (k % 2 === 0 && k > 1) { const fin = new THREE.Mesh(new THREE.ConeGeometry(r * 0.35, r * 1.3, 3), finM); fin.position.y = r * 0.95; fin.rotation.x = -0.5; fin.scale.z = 0.35; m.add(fin); }
+        segs.push(m);
+      }
+      // the head: a long snout, horns, a frill, glowing eyes and a jaw that opens to strike
+      const head = new THREE.Group(); head.scale.setScalar(2.8); g.add(head);
+      const skull = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 3.6), scaleM); skull.position.z = 1.0; head.add(skull);
+      const snout = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 1.8), scaleM); snout.position.set(0, -0.2, 3.3); head.add(snout);
+      const jaw = new THREE.Group(); jaw.position.set(0, -0.65, 0.4); head.add(jaw);
+      const jm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.45, 4.2), bellyM); jm.position.z = 2.0; jaw.add(jm);
+      const mouth = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.1, 3.8), mouthM); mouth.position.set(0, 0.25, 2.0); jaw.add(mouth);
+      for (let t = 0; t < 6; t++) [-1, 1].forEach(s => { const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 4), toothM); tooth.position.set(s * 0.62, 0.4, 0.6 + t * 0.6); jaw.add(tooth); const up = tooth.clone(); up.rotation.x = Math.PI; up.position.set(s * 0.68, -0.68, 1.8 + t * 0.42); head.add(up); });
+      [-1, 1].forEach(s => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), eyeM); eye.position.set(s * 0.95, 0.35, 1.9); head.add(eye);
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.9, 6), hornM); horn.position.set(s * 0.75, 1.0, -0.4); horn.rotation.set(-1.0, 0, s * -0.35); head.add(horn);
+        const frill = new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 3), finM); frill.position.set(s * 1.25, 0.2, -0.3); frill.rotation.set(0, 0, s * 1.3); frill.scale.z = 0.25; head.add(frill);
+      });
+      const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = 'Sea serpent<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag);
+      const q = spawnAt();
+      const s = { g, segs, head, jaw, tag, bar: tag.querySelector('.ehp div'), x: q.x, z: q.z, y: -1, heading: Math.random() * 6.28, speed: 8,
+        st: 'roam', hp: 240, max: 240, wp: null, ang: 0, side: n % 2 ? 1 : -1, strikeT: 3, t: 0, deadT: 0, trail: [], ph: n * 2.1, told: false };
+      for (let k = 0; k < N * SPACING / 0.5 + 8; k++) s.trail.push({ x: s.x - Math.sin(s.heading) * k * 0.5, z: s.z - Math.cos(s.heading) * k * 0.5 });
+      s.N = N; s.SPACING = SPACING;
+      SERP.push(s);
+    }
+  }
+  const serpAlive = s => s.st !== 'dying' && s.st !== 'gone';
+  // who it goes for: yer ship, while ye're aboard, unless ye carry the Sword of the Sea
+  const serpPrey = () => ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
+  function serpSteer(s, tx, tz, want, dt, turn = 1.6) {
+    const desired = Math.atan2(tx - s.x, tz - s.z), diff = angDiff(s.heading, desired);
+    let nh = s.heading + Math.max(-turn * dt, Math.min(turn * dt, diff));
+    s.speed += (want - s.speed) * Math.min(1, dt * 1.5);
+    // feel ahead for rocks and shallows, and swing away from them
+    for (let tries = 0; tries < 6; tries++) {
+      const ax = s.x + Math.sin(nh) * 14, az = s.z + Math.cos(nh) * 14;
+      if (heightAt(ax, az) < -4.5) break;
+      nh += (tries % 2 ? -1 : 1) * 0.5 * (tries + 1);
+    }
+    s.heading = nh;
+    const nx = s.x + Math.sin(nh) * s.speed * dt, nz = s.z + Math.cos(nh) * s.speed * dt;
+    if (heightAt(nx, nz) < -4.5) { s.x = nx; s.z = nz; } else s.speed *= 0.5;
+  }
+  function serpentHurt(s, n, at) {
+    if (!serpAlive(s)) return;
+    s.hp -= n; SFX.hit(at || { x: s.x, z: s.z });
+    puff(at ? at.x : s.x, at ? at.y : 2, at ? at.z : s.z, { color: 0x3a6e3a, size: 1.6, life: 0.6, grow: 1.4, vy: 1.5, op: 0.85 });
+    if (s.st === 'roam') s.st = 'hunt';
+    if (s.hp <= 0) {
+      s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none'; SFX.roar();
+      toast('The sea serpent shrieks and sinks beneath the waves!'); addGold(350, 'Slew a sea serpent!'); addMat('pearl', 2);
+    }
+  }
+  // cannonballs: anything of the serpent's above or near the water is a target
+  function serpentBallHit(x, y, z, dmg) {
+    for (const s of SERP) {
+      if (!serpAlive(s) || Math.hypot(x - s.x, z - s.z) > 80) continue;
+      const hp = s.head.getWorldPosition(new THREE.Vector3());
+      if (Math.hypot(x - hp.x, y - hp.y, z - hp.z) < 6) { serpentHurt(s, dmg * 1.5, hp); return true; }   // a hit to the head stings
+      for (let k = 0; k < s.N; k += 2) { const m = s.segs[k]; if (m.position.y < -4) continue; if (Math.hypot(x - m.position.x, y - m.position.y, z - m.position.z) < 4.6 * (1 - k / s.N * 0.6)) { serpentHurt(s, dmg, m.position); return true; } }
+    }
+    return false;
+  }
+  // a blade from the deck: only reaches a serpent that has reared up beside the ship
+  function serpentSwordHit(sw) {
+    for (const s of SERP) {
+      if (!serpAlive(s) || (s.st !== 'strike' && s.st !== 'circle')) continue;
+      const hp = s.head.getWorldPosition(new THREE.Vector3());
+      if (Math.hypot(P.pos.x - hp.x, P.pos.z - hp.z) < sw.reach + 6 && Math.abs(P.pos.y + 1.2 - hp.y) < 8) serpentHurt(s, sw.dmg, hp);
+      else for (let k = 0; k < 10; k++) { const m = s.segs[k]; if (m.position.y > -2 && Math.hypot(P.pos.x - m.position.x, P.pos.z - m.position.z) < sw.reach + 3.5) { serpentHurt(s, sw.dmg * 0.7, m.position); break; } }
+    }
+  }
+  const serpFighting = () => SERP.some(s => s.st === 'circle' || s.st === 'strike');
+  // for the cannons' auto-aim
+  const serpTargets = () => SERP.filter(s => serpAlive(s) && s.st !== 'roam').map(s => ({ x: s.x, z: s.z, heading: s.heading, speed: s.speed, T: { L: 16 }, group: { position: { y: 1.5 } } }));
+  function updateSerpents(dt, t) {
+    const prey = serpPrey(), calm = STATE.sword === 'seasword';
+    const cam = camera.position;
+    for (const s of SERP) {
+      s.t += dt;
+      if (s.st === 'gone') { s.deadT -= dt; s.g.visible = false; if (s.deadT <= 0) { const q = mistSpot(); s.x = q.x; s.z = q.z; s.hp = s.max; s.st = 'roam'; s.y = -1; s.trail.forEach(p => { p.x = s.x; p.z = s.z; }); } continue; }
+      if (s.st === 'dying') { s.deadT += dt; s.y -= dt * 3; if (s.deadT > 5) { s.st = 'gone'; s.deadT = 300; } }
+      const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = Math.hypot(s.x - MIST.x, s.z - MIST.z) < MIST.r + 900;
+      let lift = 0;   // how far the head rears out of the water
+      if (s.st !== 'dying') {
+        // the Sword of the Sea: they bow their heads and escort ye instead
+        if (calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) { s.st = 'escort'; s.jawT = 0; }
+        if (!calm && s.st === 'escort') s.st = 'roam';
+        if (s.st === 'escort') {
+          if (!prey || d > 420) s.st = 'roam';
+          else {
+            if (!s.told && d < 160) { s.told = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
+            const sx = Math.sin(prey.heading), sz = Math.cos(prey.heading), off = 38 * s.side;
+            serpSteer(s, prey.x + sz * off + sx * 25, prey.z - sx * off + sz * 25, Math.max(8, Math.min(40, Math.abs(prey.speed || 0) + d * 0.05)), dt, 2.2);
+          }
+        } else if (s.st === 'roam') {
+          if (prey && d < (calm ? 160 : 380) && leash) s.st = calm ? 'escort' : 'hunt';
+          if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < 40) s.wp = mistSpot();
+          serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
+        } else if (s.st === 'hunt') {
+          if (!prey || d > 700 || !leash) s.st = 'roam';
+          else {
+            if (!s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
+            s.ang = Math.atan2(s.x - prey.x, s.z - prey.z);
+            serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 26, dt, 2.2);
+            if (d < 75) { s.st = 'circle'; s.strikeT = 2 + Math.random() * 2; }
+          }
+        } else if (s.st === 'circle') {
+          if (!prey || d > 170) s.st = prey ? 'hunt' : 'roam';
+          else {
+            s.ang += dt * 0.55 * s.side;
+            serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(14, Math.abs(prey.speed || 0) + 8), dt, 2.6);
+            s.strikeT -= dt;
+            if (s.strikeT <= 0 && d < 62) { s.st = 'strike'; s.sk = 0; s.hit = false; SFX.roar(); }
+          }
+        } else if (s.st === 'strike') {
+          // rear up, hang there a moment, then lunge down at the hull
+          s.sk += dt;
+          if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? 4 : 18, dt, 3);
+          lift = s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6);
+          if (!s.hit && s.sk > 1.15 && prey) {
+            s.hit = true;
+            if (d < 42) {
+              damageShip(prey, 13); prey.krJolt = Math.max(prey.krJolt || 0, 1.2); prey.krRz = (prey.krRz || 0) + s.side * 0.1;
+              SFX.crash({ x: prey.x, z: prey.z }); wSplash(s.x, 0.6, s.z, true);
+              if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(14);
+              toast('A sea serpent slams into the hull!');
+            } else wSplash(s.x, 0.4, s.z, true);
+          }
+          if (s.sk > 1.9) { s.st = 'circle'; s.strikeT = 3.5 + Math.random() * 2.5; }
+        }
+      }
+      // remember where the head has been: the body follows that path
+      const last = s.trail[0];
+      if (Math.hypot(s.x - last.x, s.z - last.z) > 0.5) { s.trail.unshift({ x: s.x, z: s.z }); if (s.trail.length > s.N * s.SPACING / 0.5 + 8) s.trail.pop(); }
+      const near = Math.hypot(s.x - cam.x, s.z - cam.z) < 1600 && !inInterior;
+      s.g.visible = near;
+      if (!near) { s.tag.style.display = 'none'; continue; }
+      // swimming humps that arch out of the sea; deeper and calmer when roaming, high coils when it hunts
+      const hunting = s.st === 'hunt' || s.st === 'circle' || s.st === 'strike', escort = s.st === 'escort';
+      const baseY = s.st === 'dying' ? s.y : hunting ? -1.8 : escort ? -1.4 : -4, amp = hunting ? 4.6 : escort ? 3.4 : 2.4;
+      for (let k = 0; k < s.N; k++) {
+        const idx = Math.min(s.trail.length - 1, Math.round(k * s.SPACING / 0.5)), p = s.trail[idx], q2 = s.trail[Math.min(s.trail.length - 1, idx + 2)];
+        const m = s.segs[k], wave = Math.sin(k * 0.48 - s.t * 2.6 + s.ph);
+        let y = baseY + amp * wave;
+        if (k < 7 && lift > 0) y += lift * (7 - k) * 2.5;                     // the neck rears up behind the head
+        m.position.set(p.x, y + waveHeight(p.x, p.z, t) * 0.6, p.z);
+        m.rotation.set(0, Math.atan2(p.x - q2.x, p.z - q2.z), 0);
+      }
+      // the head leads, a little above the first coil, mouth opening as it rears to strike
+      const hy = (s.st === 'dying' ? s.y : baseY + amp * Math.sin(-s.t * 2.6 + s.ph + 0.5) + (hunting || escort ? 2.6 : 0.6)) + lift * 18 + waveHeight(s.x, s.z, t) * 0.6;
+      s.head.position.set(s.x, hy, s.z);
+      s.head.rotation.set(lift > 0 ? (s.sk < 1.15 ? -0.5 * lift : 0.7 * lift) : escort ? 0.15 : 0, s.heading, 0);
+      s.jaw.rotation.x = s.st === 'strike' ? Math.min(0.9, lift * 1.1) : hunting ? 0.12 + Math.sin(s.t * 3) * 0.08 : 0.04;
+      if (hunting && Math.random() < dt * 1.5) wSplash(s.segs[8].position.x, 0.4, s.segs[8].position.z, false);
+      // name tag with its health while it hunts ye
+      if (hunting && s.hp < s.max || s.st === 'circle' || s.st === 'strike') {
+        tmp2.set(s.x, hy + 7, s.z).project(camera);
+        if (tmp2.z < 1) { s.tag.style.display = 'block'; s.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px, ${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; s.bar.style.width = Math.max(0, s.hp / s.max * 100) + '%'; } else s.tag.style.display = 'none';
+      } else s.tag.style.display = 'none';
+    }
+  }
+
   // ---------- Loop ----------
   // ---------- Multiplayer (room presence) ----------
   const MP = { me: null, room: null, peers: new Map(), names: {}, sendT: 0, user: null, label: null };
@@ -7450,6 +7633,7 @@
     updateCombat(dt, t);
     updateWildlife(dt, t);
     updateKraken(dt, t);
+    updateSerpents(dt, t);
     updateEnvironment(dt);
     // Underwater atmosphere: short blue-green visibility, subdued daylight,
     // and no above-water sky/cloud dome when the camera is below the surface.
