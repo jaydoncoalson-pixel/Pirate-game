@@ -7175,6 +7175,20 @@
     if (Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 700) { SFX.roar(); toast('The sea serpent shrieks and sinks beneath the waves!'); }
     if (mine) { addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2); }
   }
+  // how many of the nest already hunt (or attend) yer ship: up to 3 hunt her, up to 2 come to bow to the Sword of the Sea
+  const serpBusy = calm => SERP.filter(o => calm ? o.st === 'escort' || o.st === 'bow' : o.st === 'hunt' || o.st === 'circle' || o.st === 'strike').length;
+  function serpStartEscort(s) {
+    s.st = 'escort'; s.wait = 0; s.sk = 0; s.jawT = 0;
+    const other = SERP.find(o => o !== s && (o.st === 'escort' || o.st === 'bow'));
+    if (other) s.side = -other.side;   // one on each side of her
+  }
+  const BOW_T = 6.2;
+  let serpSayT = -99; const serpSay = (msg, gap) => { if (clock.elapsedTime - serpSayT > gap) { serpSayT = clock.elapsedTime; toast(msg); } };
+  // the bow, over BOW_T seconds: rise up out of the sea, look down at the ship, lower the head, hold, sink back
+  function bowPose(k) {
+    const rise = sstep(0, 1.6, k) * (1 - sstep(4.8, BOW_T, k)), bow = sstep(2.2, 3.3, k) * (1 - sstep(4.3, 5.2, k));
+    return { lift: rise * (1 - 0.4 * bow), pitch: -0.3 * rise * (1 - bow) + 1.05 * bow, turn: sstep(0.4, 2, k) * (1 - sstep(5, BOW_T, k)) };
+  }
   const serpFighting = () => SERP.some(s => s.st === 'circle' || s.st === 'strike');
   // for the cannons' auto-aim
   const serpTargets = () => SERP.filter(s => serpAlive(s) && s.st !== 'roam').map(s => ({ x: s.x, z: s.z, heading: s.heading, speed: s.speed, T: { L: 16 }, group: { position: { y: 1.5 } } }));
@@ -7192,10 +7206,11 @@
         if (N.st === 'dying' && serpAlive(s)) serpentDied(SERP.indexOf(s), false);
         if (serpAlive(s)) {
           const was = s.st;
-          if (N.st === 'strike' && was !== 'strike') { s.sk = N.sk; SFX.roar(); } else if (N.st === 'strike') s.sk = Math.max(s.sk + dt, N.sk); else s.sk = 0;
+          if (N.st === 'strike' && was !== 'strike') { s.sk = N.sk; SFX.roar(); } else if (N.st === 'strike' || N.st === 'bow') s.sk = was === N.st ? Math.max(s.sk + dt, N.sk) : N.sk; else s.sk = 0;
           s.st = N.st;
           if (N.tg === me && (N.st === 'hunt' || N.st === 'circle') && !s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
-          if (N.tg === me && N.st === 'escort' && !s.toldCalm) { s.toldCalm = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
+          if (N.tg === me && N.st === 'escort' && !s.toldCalm && ship && Math.hypot(s.x - ship.x, s.z - ship.z) < 70) { s.toldCalm = true; serpSay('A sea serpent glides up alongside the ship...', 15); }
+          if (N.tg === me && N.st === 'bow' && was !== 'bow') serpSay('The sea serpent rises from the sea... and bows its head to the Sword of the Sea.', 3);
           if (N.st === 'roam') { if (s.told && (was === 'hunt' || was === 'circle' || was === 'strike') && Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 900) toast('The serpent turns back into the mist.'); s.told = false; s.toldCalm = false; }
         }
         s.hp = N.hp;
@@ -7208,21 +7223,26 @@
       let lift = 0;   // how far the head rears out of the water
       if (s.st !== 'dying' && !N) {
         // the Sword of the Sea: they bow their heads and escort ye instead
-        if (calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) { s.st = 'escort'; s.jawT = 0; }
-        if (!calm && s.st === 'escort') s.st = 'roam';
-        if (s.st === 'escort') {
-          if (!prey || d > 420 || !leash) s.st = 'roam';
+        if (calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) serpStartEscort(s);
+        if (!calm && (s.st === 'escort' || s.st === 'bow')) s.st = 'roam';
+        if (s.st === 'escort' || s.st === 'bow') {
+          if (!prey || !leash) { s.st = 'roam'; s.bowed = false; }
           else {
-            if (!s.told && d < 160) { s.told = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
-            const sx = Math.sin(prey.heading), sz = Math.cos(prey.heading), off = 38 * s.side;
-            serpSteer(s, prey.x + sz * off + sx * 25, prey.z - sx * off + sz * 25, Math.max(8, Math.min(40, Math.abs(prey.speed || 0) + d * 0.05)), dt, 2.2);
+            // swim up alongside her, just off the beam; once there, rise out of the sea and bow; then keep her company
+            const sx = Math.sin(prey.heading), sz = Math.cos(prey.heading), bowing = s.st === 'bow' || !s.bowed, off = (bowing ? 24 : 38) * s.side, ahead = bowing ? 4 : 25;
+            const tx = prey.x + sz * off + sx * ahead, tz = prey.z - sx * off + sz * ahead, ds = Math.hypot(tx - s.x, tz - s.z);
+            serpSteer(s, tx, tz, Math.max(6, Math.min(40, Math.abs(prey.speed || 0) + ds * (bowing ? 0.4 : 0.05))), dt, 2.4);
+            if (!s.told && d < 70) { s.told = true; serpSay('A sea serpent glides up alongside the ship...', 15); }
+            if (s.st === 'escort') { s.wait = (s.wait || 0) + dt; if (!s.bowed && ds < 16 && (Math.abs(angDiff(s.heading, prey.heading)) < 0.7 || s.wait > 12)) { s.st = 'bow'; s.sk = 0; serpSay('The sea serpent rises from the sea... and bows its head to the Sword of the Sea.', 3); } }
+            else { s.sk += dt; if (s.sk > BOW_T) { s.st = 'escort'; s.bowed = true; s.sk = 0; } }
           }
         } else if (s.st === 'roam') {
-          if (prey && d < (calm ? 160 : 520) && inMistAt(prey.x, prey.z)) s.st = calm ? 'escort' : 'hunt';
+          s.bowed = false;
+          if (prey && inMistAt(prey.x, prey.z) && SERP.filter(o => o.st === 'roam' && Math.hypot(o.x - prey.x, o.z - prey.z) < d).length < (calm ? 2 : 3) - serpBusy(calm)) { if (calm) serpStartEscort(s); else s.st = 'hunt'; }
           if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < 40) s.wp = mistSpot();
           serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
         } else if (s.st === 'hunt') {
-          if (!prey || d > 800 || !leash) { if (s.st === 'hunt' && prey && !leash && s.told) toast('The serpent turns back into the mist.'); s.st = 'roam'; s.told = false; }
+          if (!prey || !leash) { if (s.st === 'hunt' && prey && !leash && s.told) toast('The serpent turns back into the mist.'); s.st = 'roam'; s.told = false; }
           else {
             if (!s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
             s.ang = Math.atan2(s.x - prey.x, s.z - prey.z);
@@ -7255,7 +7275,8 @@
           if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
         }
       }
-      if (N) lift = s.st === 'strike' ? (s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6)) : 0;
+      let bp = null; if (s.st === 'bow') { bp = bowPose(s.sk); lift = bp.lift; }
+      if (N && !bp) lift = s.st === 'strike' ? (s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6)) : 0;
       // remember where the head has been: the body follows that path
       const last = s.trail[0];
       if (Math.hypot(s.x - last.x, s.z - last.z) > 0.5) { s.trail.unshift({ x: s.x, z: s.z }); if (s.trail.length > s.N * s.SPACING / 0.5 + 8) s.trail.pop(); }
@@ -7263,7 +7284,7 @@
       s.g.visible = near;
       if (!near) { s.tag.style.display = 'none'; continue; }
       // swimming humps that arch out of the sea; deeper and calmer when roaming, high coils when it hunts
-      const hunting = s.st === 'hunt' || s.st === 'circle' || s.st === 'strike', escort = s.st === 'escort';
+      const hunting = s.st === 'hunt' || s.st === 'circle' || s.st === 'strike', escort = s.st === 'escort' || s.st === 'bow';
       const baseY = s.st === 'dying' ? s.y : hunting ? -1.8 : escort ? -1.4 : -4, amp = hunting ? 4.6 : escort ? 3.4 : 2.4;
       for (let k = 0; k < s.N; k++) {
         const idx = Math.min(s.trail.length - 1, Math.round(k * s.SPACING / 0.5)), p = s.trail[idx], q2 = s.trail[Math.min(s.trail.length - 1, idx + 2)];
@@ -7276,8 +7297,11 @@
       // the head leads, a little above the first coil, mouth opening as it rears to strike
       const hy = (s.st === 'dying' ? s.y : baseY + amp * Math.sin(-s.t * 2.6 + s.ph + 0.5) + (hunting || escort ? 2.6 : 0.6)) + lift * 18 + waveHeight(s.x, s.z, t) * 0.6;
       s.head.position.set(s.x, hy, s.z);
-      s.head.rotation.set(lift > 0 ? (s.sk < 1.15 ? -0.5 * lift : 0.7 * lift) : escort ? 0.15 : 0, s.heading, 0);
-      s.jaw.rotation.x = s.st === 'strike' ? Math.min(0.9, lift * 1.1) : hunting ? 0.12 + Math.sin(s.t * 3) * 0.08 : 0.04;
+      if (bp) {   // turn to face the ship and dip the head to her captain
+        const sh = serpPrey() || ship, toShip = sh ? Math.max(-1.4, Math.min(1.4, angDiff(s.heading, Math.atan2(sh.x - s.x, sh.z - s.z)))) : 0;
+        s.head.rotation.set(bp.pitch, s.heading + toShip * bp.turn, 0, 'YXZ');
+      } else s.head.rotation.set(lift > 0 ? (s.sk < 1.15 ? -0.5 * lift : 0.7 * lift) : escort ? 0.15 : 0, s.heading, 0, 'XYZ');
+      s.jaw.rotation.x = bp ? 0 : s.st === 'strike' ? Math.min(0.9, lift * 1.1) : hunting ? 0.12 + Math.sin(s.t * 3) * 0.08 : 0.04;
       if (hunting && Math.random() < dt * 1.5) wSplash(s.segs[8].position.x, 0.4, s.segs[8].position.z, false);
       // name tag with its health while it hunts ye
       if (hunting && s.hp < s.max || s.st === 'circle' || s.st === 'strike') {
@@ -7459,7 +7483,7 @@
       window.__mpKrAdmin = d => { let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {} MP.lastAdminK = d; MP.room.emit('kadmin', Object.assign({}, d, { key })).catch(() => {}); };
       window.__mpMe = () => MP.me;
       MP.room.on('ksunk', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; const name = peerName(d.id); toast(`Yer kraken drags ${name}'s ship down to the depths!`); addGold(300, `Yer kraken sank ${name}'s ship!`); });
-      MP.room.on('ssnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const sp = SERP[e[0]]; if (sp) sp.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone'][e[5]] || 'roam', sk: e[6], sp: e[7], tg: e[8], t }; } });
+      MP.room.on('ssnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const sp = SERP[e[0]]; if (sp) sp.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'][e[5]] || 'roam', sk: e[6], sp: e[7], tg: e[8], t }; } });
       MP.room.on('sbite', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { serpentBite(d.i | 0, Math.min(30, +d.dmg || 0)); } catch (e) {} });
       MP.room.on('sdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return; try { serpentDied(d.i | 0, d.by === MP.me); } catch (e) {} });
       window.__mpSerpOnline = () => online();

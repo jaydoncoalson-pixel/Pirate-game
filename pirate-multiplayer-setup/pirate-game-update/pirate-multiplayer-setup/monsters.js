@@ -16,7 +16,7 @@ function mistSpot() {
   return { x: M.x, z: M.z - M.r - 100 };
 }
 const KST = ['roam', 'hunt', 'engaged', 'drown', 'leaving', 'dying', 'dead'];
-const SST = ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone'];
+const SST = ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'];
 
 function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
   // ---------------------------------------------------------------- the Kraken
@@ -168,6 +168,11 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     const nx = s.x + Math.sin(nh) * s.speed * dt, nz = s.z + Math.cos(nh) * s.speed * dt;
     if (W.heightAt(nx, nz) < -4.5) { s.x = nx; s.z = nz; } else s.speed *= 0.5;
   }
+  function startEscort(s, prey) {
+    s.st = 'escort'; s.tg = prey.id; s.wait = 0; s.sk = 0;
+    const other = SERP.find(o => o !== s && o.tg === prey.id && (o.st === 'escort' || o.st === 'bow'));
+    if (other) s.side = -other.side;   // one on each side of her
+  }
   function updateSerpents(dt, players) {
     // each crewed ship, with how fast she's going and whether her captain carries the Sword of the Sea
     const ships = [];
@@ -178,26 +183,42 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
       ships.push({ id, x: sh.x, z: sh.z, h: sh.h || 0, sp, calm: q.p.sw === 'seasword' });
     }
     const M = W.MIST;
+    // the whole nest keeps watch: a ship anywhere in the fog is noticed. Up to 3 hunt her, or 2 come to bow to a sword-bearer
+    const busy = (id, calm) => SERP.filter(o => o.tg === id && (calm ? o.st === 'escort' || o.st === 'bow' : o.st === 'hunt' || o.st === 'circle' || o.st === 'strike')).length;
+    const BOW_T = 6.2;
+    // send the nearest idle serpents to each ship in the fog, up to the cap
+    for (const s of SERP) s.want = null;
+    for (const p of ships) {
+      if (!inMist(p.x, p.z)) continue;
+      let room = (p.calm ? 2 : 3) - busy(p.id, p.calm);
+      const idle = SERP.filter(o => o.st === 'roam' && !o.want).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+      for (const o of idle) { if (room-- <= 0) break; o.want = p.id; }
+    }
     for (const s of SERP) {
       if (s.st === 'gone') { s.deadT -= dt; if (s.deadT <= 0) { const q = mistSpot(); Object.assign(s, { x: q.x, z: q.z, hp: s.max, st: 'roam', tg: null }); } continue; }
       if (s.st === 'dying') { s.deadT += dt; if (s.deadT > 5) { s.st = 'gone'; s.deadT = 300; } continue; }
       let prey = s.tg ? ships.find(p => p.id === s.tg) : null;
-      if (!prey || s.st === 'roam') {   // nearest crewed ship
-        let bd = 1e9; prey = null; for (const p of ships) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < bd) { bd = d; prey = p; } }
-      }
+      if (!prey || s.st === 'roam') prey = s.want ? ships.find(p => p.id === s.want) : null;   // the ship this one was sent after
       const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = prey ? inMist(prey.x, prey.z, 30) : false;   // a ship that sails out of the fog is let go
-      if (prey && prey.calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) s.st = 'escort';
-      if (prey && !prey.calm && s.st === 'escort') s.st = 'hunt';
-      if (s.st === 'escort') {
-        if (!prey || d > 420 || !leash) { s.st = 'roam'; s.tg = null; }
-        else { const sx = Math.sin(prey.h), sz = Math.cos(prey.h), off = 38 * s.side; serpSteer(s, prey.x + sz * off + sx * 25, prey.z - sx * off + sz * 25, Math.max(8, Math.min(40, prey.sp + d * 0.05)), dt, 2.2); }
+      if (prey && prey.calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) startEscort(s, prey);
+      if (prey && !prey.calm && (s.st === 'escort' || s.st === 'bow')) s.st = 'hunt';
+      if (s.st === 'escort' || s.st === 'bow') {
+        if (!prey || !leash) { s.st = 'roam'; s.tg = null; s.bowed = null; }
+        else {
+          // swim up alongside her, just off the beam; once there, rise out of the sea and bow; then keep her company
+          const sx = Math.sin(prey.h), sz = Math.cos(prey.h), bowing = s.st === 'bow' || s.bowed !== prey.id, off = (bowing ? 24 : 38) * s.side, ahead = bowing ? 4 : 25;
+          const tx = prey.x + sz * off + sx * ahead, tz = prey.z - sx * off + sz * ahead, ds = Math.hypot(tx - s.x, tz - s.z);
+          serpSteer(s, tx, tz, Math.max(6, Math.min(40, prey.sp + ds * (bowing ? 0.4 : 0.05))), dt, 2.4);
+          if (s.st === 'escort') { s.wait = (s.wait || 0) + dt; if (s.bowed !== prey.id && ds < 16 && (Math.abs(angDiff(s.h, prey.h)) < 0.7 || s.wait > 12)) { s.st = 'bow'; s.sk = 0; } }
+          else { s.sk += dt; if (s.sk > BOW_T) { s.st = 'escort'; s.bowed = prey.id; s.sk = 0; } }
+        }
       } else if (s.st === 'roam') {
-        s.tg = null;
-        if (prey && d < (prey.calm ? 160 : 520) && inMist(prey.x, prey.z)) { s.st = prey.calm ? 'escort' : 'hunt'; s.tg = prey.id; }
+        s.tg = null; s.bowed = null;
+        if (prey) { if (prey.calm) startEscort(s, prey); else { s.st = 'hunt'; s.tg = prey.id; } }
         if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < 40) s.wp = mistSpot();
         serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
       } else if (s.st === 'hunt') {
-        if (!prey || d > 800 || !leash) { s.st = 'roam'; s.tg = null; }
+        if (!prey || !leash) { s.st = 'roam'; s.tg = null; }
         else { s.tg = prey.id; s.ang = Math.atan2(s.x - prey.x, s.z - prey.z); serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 34, dt, 2.6); if (d < 80) { s.st = 'circle'; s.strikeT = 1 + Math.random(); } }
       } else if (s.st === 'circle') {
         if (!prey || !leash) { s.st = 'roam'; s.tg = null; }
