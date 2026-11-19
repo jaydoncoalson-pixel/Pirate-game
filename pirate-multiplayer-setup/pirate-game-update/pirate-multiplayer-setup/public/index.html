@@ -54,6 +54,9 @@
   .ctl button.sw.locked { opacity: .6; }
   .ctl button.ch { padding: 5px 10px; font-size: 13px; }
   .note { font-size: 13px; opacity: .75; margin: 12px 0 0; }
+  #krpickBody button { display: block; width: 100%; text-align: left; margin: 6px 0; padding: 9px 12px; font: inherit; font-size: 16px; border: 2px solid #6b4423; border-radius: 6px; background: #fff6e0; color: #2a1a0c; cursor: pointer; }
+  #krpickBody button b { display: inline-block; width: 22px; color: #8e1f1f; }
+  #krpickBody button span { opacity: .65; font-size: 14px; }
   .q { padding: 10px 12px; border: 2px solid rgba(107,68,35,.25); border-radius: 8px; margin-bottom: 8px; }
   .q.on { border-color: #6b4423; background: #fff6e0; }
   .q.done { opacity: .6; }
@@ -127,6 +130,7 @@
 <textarea id="acctCode" rows="3" spellcheck="false" placeholder="Paste a save code here"></textarea>
 <div class="ctl" style="margin-top:8px"><button id="acctGet">Get save code</button><button id="acctCopy">Copy</button><button id="acctLoad">Load code as new account</button></div>
 <p class="note" id="acctMsg"></p><div class="foot"><button class="close">Close</button></div></div></div>
+<div id="krpick" class="ovl"><div class="box" style="width:min(440px,calc(100vw - 32px))"><h2>Where should the kraken strike?</h2><div id="krpickBody"></div><p class="note">Press a number or click. Press R again while it fights for ye to pick a new target.</p><div class="foot"><button class="close">Cancel</button></div></div></div>
 <div id="admin" class="ovl"><div class="box"><h2>Admin tools</h2><p class="note" style="margin-top:0">Signed in as <b id="adminWho"></b></p><div id="adminBody"></div><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="bigmap" class="ovl"><div class="box mapbox"><h2>Chart of the seas</h2><canvas id="bigc" width="640" height="640"></canvas>
 <div id="routeTools" style="display:none;margin-top:10px;min-width:300px">
@@ -3360,7 +3364,7 @@
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = teleEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = teleEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -4112,6 +4116,7 @@
   }
   function damageShip(tg, n) {
     if (tg === ship && window.__god) return;
+    if (tg.remote) return;   // another player's ship: their own game applies the damage
     if (tg !== ship && window.__mpRaiderDmg && window.__mpRaiderDmg(tg, n)) return;   // online: the server owns raider hull points
     tg.hp -= n; tg.lastHit = 0;
     if (tg === ship) { if (tg.hp <= 0) sinkPlayerShip(); }
@@ -4299,7 +4304,7 @@
     if (k === '1') setWeapon('cutlass');
     if (k === '2') setWeapon('pistol');
     if (k === ' ' && sailing) playerBroadside();
-    if (k === 'r') krCallAlly();
+    if (k === 'r') krRaiseSword();
     if (k === 'b' && sailing && ship && STATE.sword === 'seasword') {
       if (!ship.submerged) {
         ship.submerged = true; ship.speed *= 0.45;
@@ -5755,7 +5760,7 @@
     if (KR.ally > 0 && T.kind !== 'raider' && T.kind !== 'remoteShip') return false;   // it won't harm the one who called it
     if (T.kind === 'swim') return (KR.heldPlayer || krSwimming()) && !STOM.on && PLAYER.hp > 0;
     if (T.kind === 'ship') return ship === T.ent && !ship.sinking;
-    if (T.kind === 'remoteShip') return !!(T.ent && window.__mpKrakenTargetAlive && window.__mpKrakenTargetAlive(T.ent.peer));
+    if (T.kind === 'remoteShip') return !!(T.ent && window.__mpKrakenShip && window.__mpKrakenShip(T.ent.peer) === T.ent);
     return T.ent.state !== 'sinking' && T.ent.state !== 'gone';
   }
   function krSwimming() {
@@ -5764,12 +5769,14 @@
   }
   function krFindTarget() {
     let best = null, bd = 1e9;
-    if (KR.ally > 0) {   // as an ally it goes after raiders and other players' ships
-      for (const r of raiders) if (r.state !== 'sinking' && r.state !== 'gone') { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < 900 && krDeep(r.x, r.z) && d < bd) { bd = d; best = { kind: 'raider', ent: r }; } }
-      if (window.__mpKrakenTargets) for (const q of window.__mpKrakenTargets()) {
-        const d = Math.hypot(q.x - KR.x, q.z - KR.z);
-        if (d < 1000 && d < bd && krDeep(q.x, q.z)) { bd = d; best = { kind: 'remoteShip', ent: q }; }
+    if (KR.ally > 0) {   // as an ally it goes after the target its caller picked: a player's ship, or the nearest raider
+      if (KR.pick && KR.pick.kind === 'player') {
+        const e = window.__mpKrakenShip ? window.__mpKrakenShip(KR.pick.peer) : null;
+        if (e && krDeep(e.x, e.z)) return { kind: 'remoteShip', ent: e };
+        if (!KR.pick.told) { KR.pick.told = true; toast(`${KR.pick.name}'s ship is not out on the open sea. Yer kraken waits for them...`); }
+        return null;
       }
+      for (const r of raiders) if (r.state !== 'sinking' && r.state !== 'gone') { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < 900 && krDeep(r.x, r.z) && d < bd) { bd = d; best = { kind: 'raider', ent: r }; } }
       return best;
     }
     const consider = (kind, ent, x, z, range) => { const d = Math.hypot(x - KR.x, z - KR.z); if (d < range && krDeep(x, z) && d < bd) { bd = d; best = { kind, ent }; } };
@@ -5791,7 +5798,10 @@
   }
 
   // ---- the fight starts: the ship stops dead, the sea turns black, tentacles rise ----
+  // A rival captain's kraken attacking our ship: tell them how it goes ('grip', 'driven', 'released', 'sunk').
+  function krReport(r) { const sb = KR.sentBy; if (!sb) return; if (r !== 'grip') KR.sentBy = null; if (window.__mpKrRes) window.__mpKrRes(sb.peer, r); }
   function krEngage(T) {
+    if (T.kind === 'ship') krReport('grip');
     KR.tgt = T; KR.st = 'grip'; KR.t = 0; KR.atk = 2.5; KR.heldPlayer = false; KR.drop = 0;
     KR.side = Math.random() < 0.5 ? -1 : 1;
     if (T.kind !== 'swim') {
@@ -5800,11 +5810,13 @@
     }
     if (krNearPlayer(T)) {
       SFX.roar();
-      toast(T.kind === 'swim' ? 'The water around ye turns black... something huge rises beneath ye!' : T.kind === 'ship' ? 'The ship lurches to a dead stop! The sea around her turns black as ink...' : 'A raider ship lurches to a dead stop as the sea turns black around her...');
+      toast(T.kind === 'swim' ? 'The water around ye turns black... something huge rises beneath ye!' : T.kind === 'ship' ? 'The ship lurches to a dead stop! The sea around her turns black as ink...' : T.kind === 'remoteShip' ? `${T.ent.pname || 'A rival'}'s ship lurches to a dead stop as yer kraken rises around her!` : 'A raider ship lurches to a dead stop as the sea turns black around her...');
     }
     KR.tents.forEach((q, i) => { q.st = 'under'; q.t = -(0.6 + i * 0.35); q.hp = q.max; q.act = null; q.crew = null; q.mast = null; q.u = 0; q.cool = Math.random() * 2; q.regrow = 0; });
   }
   function krRelease(dead) {
+    krReport(dead ? 'driven' : 'released');
+    if (KR.tgt && KR.tgt.kind === 'remoteShip' && window.__mpKrOff) window.__mpKrOff(KR.tgt.ent.peer);   // our kraken lets go of a player's ship
     const T = KR.tgt;
     if (T && T.kind !== 'swim') {
       const e = T.ent;
@@ -5958,6 +5970,11 @@
     KR.remoteHitCd = Math.max(0, (KR.remoteHitCd || 0) - dt);
     if (KR.ally > 0) {
       KR.ally -= dt; krBar.firstChild.textContent = 'The Kraken (yer ally)';
+      if (KR.ally <= 0 && KR.tgt && KR.tgt.kind === 'remoteShip') {   // time's up: it lets go of the player's ship
+        if (KR.st === 'grip' || KR.st === 'attack') krRelease(false);
+        else { if (window.__mpKrOff) window.__mpKrOff(KR.tgt.ent.peer); KR.st = 'roam'; KR.tgt = null; }
+      }
+      if (KR.ally <= 0) { KR.pick = null; }
       if (KR.ally <= 0) { KR.ally = 0; KR.cd = 120; krBar.firstChild.textContent = 'The Kraken'; toast('Yer kraken sinks back into the deep. The Sword of the Sea needs time before it can call again.'); }
     }
     const show = KR.st === 'attack' || KR.st === 'grip';
@@ -5986,25 +6003,27 @@
           gx = me.x; gz = me.z; sp = d > 120 ? Math.min(110, 24 + d * 0.3) : d > 60 ? 20 : 0;
         }
         KR.scanT = (KR.scanT || 0) - dt;
-        if (KR.cd <= 0 && KR.scanT <= 0) { KR.scanT = 1; const T = krFindTarget(); if (T) { KR.tgt = T; KR.st = 'hunt'; KR.toldHunt = false; if (KR.ally > 0) toast(T.kind === 'remoteShip' ? "Yer kraken is hunting a rival captain\'s ship!" : "Yer kraken surges after a Blackwater raider!"); } }
+        if (KR.cd <= 0 && KR.scanT <= 0) {
+          KR.scanT = 1; const T = krFindTarget();
+          if (T) {
+            KR.tgt = T; KR.st = 'hunt'; KR.toldHunt = false;
+            if (T.kind === 'remoteShip') {
+              // it rushes up from the deep close to their ship, and their game sets its own kraken on them
+              if (Math.hypot(T.ent.x - KR.x, T.ent.z - KR.z) > 500) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, r = 220 + Math.random() * 80, x = T.ent.x + Math.sin(a) * r, z = T.ent.z + Math.cos(a) * r; if (krDeep(x, z)) { KR.x = x; KR.z = z; KR.head = Math.atan2(T.ent.x - x, T.ent.z - z); break; } }
+              if (window.__mpKrSic) window.__mpKrSic(T.ent.peer);
+              toast(`Yer kraken surges after ${T.ent.pname || "a rival captain"}'s ship!`);
+            } else if (KR.ally > 0) toast('Yer kraken surges after a Blackwater raider!');
+          }
+        }
       } else {
         const T = KR.tgt;
         if (!krTargetOK(T)) { KR.tgt = null; KR.st = 'roam'; KR.cd = 10; }
         else {
           const p = krTargetPos(T); gx = p.x; gz = p.z; sp = 76;
           const d = Math.hypot(gx - KR.x, gz - KR.z);
-          if (T.kind === 'remoteShip' && d < 110) {
-            if ((KR.remoteHitCd || 0) <= 0 && window.__mpKrakenStrike) {
-              window.__mpKrakenStrike(T.ent.peer, 20);
-              KR.remoteHitCd = 3.2;
-              wSplash(gx + (Math.random() - 0.5) * 12, waveHeight(gx, gz, t) + 0.5, gz + (Math.random() - 0.5) * 12, true);
-              if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken lashes a rival ship with its tentacles!'); }
-            }
-            KR.st = 'roam'; KR.tgt = null; KR.cd = 1.5; KR.wp = null;
-          }
           if (T.kind !== 'remoteShip' && !KR.toldHunt && (T.kind !== 'raider') && d < 380) { KR.toldHunt = true; toast('Something enormous is movin\' beneath the waves... and it\'s comin\' for ye!'); SFX.roar(); }
-          if (d > 1000) { KR.tgt = null; KR.st = 'roam'; KR.cd = 8; }
-          else if (T.kind !== 'remoteShip' && d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);
+          if (d > 1000 && T.kind !== 'remoteShip') { KR.tgt = null; KR.st = 'roam'; KR.cd = 8; }
+          else if (d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);
         }
       }
       if (KR.st === 'roam' || KR.st === 'hunt') {
@@ -6271,9 +6290,52 @@
     }
   }
   // the Sword of the Sea: raise it and the kraken comes to fight for ye for a while
-  function krCallAlly() {
+  // Raising the Sword of the Sea: online, ye pick who the kraken goes after first.
+  const krPickEl = document.getElementById('krpick'), krPickBody = document.getElementById('krpickBody');
+  let krPickOpts = [];
+  function krCandidates() {
+    const list = window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [];
+    return list.filter(q => krDeep(q.ship.x, q.ship.z)).map(q => ({ kind: 'player', peer: q.peer, name: q.name, d: Math.hypot(q.ship.x - P.pos.x, q.ship.z - P.pos.z) })).sort((a, b) => a.d - b.d);
+  }
+  function krOpenPick() {
+    const players = krCandidates();
+    krPickOpts = [{ kind: 'raider', label: 'The nearest Blackwater raider' }, ...players.map(q => ({ ...q, label: `${q.name}'s ship`, sub: `${Math.round(q.d)} m away` }))];
+    krPickBody.innerHTML = '';
+    krPickOpts.slice(0, 9).forEach((o, i) => {
+      const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b> `; b.appendChild(document.createTextNode(o.label));
+      if (o.sub) { const sp = document.createElement('span'); sp.textContent = ' · ' + o.sub; b.appendChild(sp); }
+      b.onclick = () => krChoose(i); krPickBody.appendChild(b);
+    });
+    if (uiOpen) closeUI();
+    uiOpen = 'krpick'; krPickEl.style.display = 'flex';
+  }
+  function krChoose(i) {
+    const o = krPickOpts[i]; if (!o) return;
+    closeUI();
+    if (KR.ally > 0) krRetarget(o); else krCallAlly(o);
+  }
+  addEventListener('keydown', e => { if (uiOpen !== 'krpick' || e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 9) { e.preventDefault(); krChoose(n - 1); } });
+  // switch targets while the kraken already fights for ye
+  function krRetarget(o) {
+    const old = KR.tgt;
+    if (old && old.kind === 'remoteShip' && o.kind === 'player' && old.ent.peer === o.peer) { toast(`Yer kraken is already after ${o.name}.`); return; }
+    KR.pick = o.kind === 'player' ? { kind: 'player', peer: o.peer, name: o.name } : { kind: 'raider' };
+    if (KR.st === 'grip' || KR.st === 'attack') krRelease(false);
+    else if (KR.st === 'hunt') { if (old && old.kind === 'remoteShip' && window.__mpKrOff) window.__mpKrOff(old.ent.peer); KR.st = 'roam'; KR.tgt = null; }
+    KR.cd = 0; KR.scanT = 0;
+    toast(o.kind === 'player' ? `Ye point the Sword of the Sea at ${o.name}'s ship...` : 'Ye point the Sword of the Sea at the Blackwater raiders...');
+  }
+  function krRaiseSword() {
     if (STATE.sword !== 'seasword') return;
     if (talk || uiOpen || STOM.on || MERM.held) return;
+    if (KR.ally > 0) { if (krCandidates().length) krOpenPick(); else toast('Yer kraken already fights for ye.'); return; }
+    if (KR.callCd > 0) { toast(`The Sword of the Sea is gatherin' its strength... (${Math.ceil(KR.callCd)}s)`); return; }
+    if (krCandidates().length) krOpenPick(); else krCallAlly({ kind: 'raider' });
+  }
+  function krCallAlly(o) {
+    if (STATE.sword !== 'seasword') return;
+    if (talk || uiOpen || STOM.on || MERM.held) return;
+    KR.pick = o && o.kind === 'player' ? { kind: 'player', peer: o.peer, name: o.name } : { kind: 'raider' };
     if (KR.callCd > 0) { toast(`The Sword of the Sea is gatherin' its strength... (${Math.ceil(KR.callCd)}s)`); return; }
     KR.callCd = 120;
     const wasHostile = KR.tgt && KR.tgt.kind !== 'raider' && (KR.st === 'attack' || KR.st === 'grip');
@@ -6291,6 +6353,38 @@
     SFX.mermaid(); setTimeout(() => SFX.roar(), 600);
     toast(wasHostile ? 'Ye raise the Sword of the Sea... the kraken lets go and bows to its call! It fights for ye now.' : krDeep(P.pos.x, P.pos.z) || (ship && krDeep(ship.x, ship.z)) ? 'Ye raise the Sword of the Sea... the kraken answers yer call! It will fight for ye for 90 seconds.' : 'Ye raise the Sword of the Sea... the kraken answers from the deep sea. Sail out to open water and it will fight for ye.');
   }
+  function krSicOnMe(from, name) {
+    const s = krPlayerShip();
+    if (!s || s.submerged || !krDeep(s.x, s.z)) return 'away';
+    if (KR.ally > 0 || KR.st === 'drown') return 'busy';
+    if ((KR.st === 'grip' || KR.st === 'attack') && KR.tgt && KR.tgt.kind === 'ship') { KR.sentBy = { peer: from, name }; return 'grip'; }
+    if (KR.st === 'grip' || KR.st === 'attack') { krRelease(false); KR.tents.forEach(q => { q.st = 'under'; q.g.visible = false; q.crew = null; }); }
+    for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, r = 220 + Math.random() * 80, x = s.x + Math.sin(a) * r, z = s.z + Math.cos(a) * r; if (krDeep(x, z)) { KR.x = x; KR.z = z; KR.head = Math.atan2(s.x - x, s.z - z); break; } }
+    KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: s }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null; KR.lock = null;
+    KR.sentBy = { peer: from, name };
+    SFX.roar(); toast(`${name} raises the Sword of the Sea... their kraken is comin' for yer ship! Fight it off!`);
+    return 'ok';
+  }
+  function krCalledOff(from) {
+    if (!KR.sentBy || KR.sentBy.peer !== from) return;
+    const name = KR.sentBy.name; KR.sentBy = null;
+    if (KR.st === 'grip' || KR.st === 'attack') { krRelease(false); toast(`${name}'s kraken lets go and slips back into the deep.`); }
+    else if (KR.st === 'hunt') { KR.st = 'roam'; KR.tgt = null; KR.cd = 45; }
+  }
+  window.__krSicOnMe = krSicOnMe; window.__krCalledOff = krCalledOff;
+  // replies from the ship we set our kraken on
+  window.__krResult = (from, name, r) => {
+    const mine = KR.tgt && KR.tgt.kind === 'remoteShip' && KR.tgt.ent.peer === from;
+    if (r === 'grip') { toast(`Yer kraken has ${name}'s ship in its grip!`); return; }
+    if (r === 'sunk') { toast(`Yer kraken drags ${name}'s ship down to the depths!`); addGold(300, `Yer kraken sank ${name}'s ship!`); return; }
+    if (r === 'driven') toast(`${name} fought off yer kraken!`);
+    else if (r === 'released') toast(`${name}'s ship slipped free of yer kraken.`);
+    else if (r === 'away') toast(`${name}'s ship isn't out on the open sea.`);
+    else if (r === 'busy') toast(`Another kraken already churns the water around ${name}'s ship.`);
+    else return;
+    if (KR.pick && KR.pick.peer === from) KR.pick = { kind: 'raider' };
+    if (mine) { const off = window.__mpKrOff; window.__mpKrOff = null; if (KR.st === 'grip' || KR.st === 'attack') krRelease(false); else { KR.st = 'roam'; KR.tgt = null; } window.__mpKrOff = off; KR.cd = 2; }
+  };
   // the death grip: from its root, up over the near rail, across the deck, down the far side and under the keel
   function krWrapCtrl(q, e, R, E, t) {
     const lz = q.lz + Math.sin(q.ph) * e.walk.L * 0.04, [hx, hy] = krHalf(e, lz), dy = e.walk.F.deckY(lz), s = q.side, sq = 1 - 0.04 * Math.sin(t * 3 + q.ph);
@@ -6298,6 +6392,7 @@
     return [R, E, L(s * (hx + 2.2), hy * 0.3, lz), L(s * hx * 1.04, hy + 0.7, lz), L(s * hx * 0.35, dy + 1.0, lz + 0.35), L(-s * hx * 0.35, dy + 1.0, lz - 0.35), L(-s * hx * 1.04, hy + 0.6, lz), L(-s * (hx + 0.7), hy * 0.1, lz + 0.3), L(-s * hx * 0.5, -2.4, lz), L(s * hx * 0.2, -2.8, lz - 0.3)];
   }
   function krStartDrown(T) {
+    if (T.kind === 'ship') krReport('sunk');
     KR.st = 'drown'; KR.t = 0; KR.drop = KR.drop || 0;
     KR.tents.forEach(q => {
       if (q.crew) krDropCrew(q);
@@ -6443,9 +6538,18 @@
         const amount = Math.min(30, Math.max(1, +d.dmg || 0));
         try { damageShip(ship, amount); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + (Math.random() - 0.5) * 0.18; SFX.crash({ x: ship.x, z: ship.z }); wSplash(ship.x, waveHeight(ship.x, ship.z, clock.elapsedTime) + 0.6, ship.z, true); toast("A rival captain's Kraken is tearing at yer ship!"); } catch (e) {}
       });
-      window.__mpKrakenTargets = () => [...MP.peers.values()].filter(q => q.tgt && q.tgt.sh && q.ship && !q.ship.sinking).map(q => ({ peer: q.peer, x: q.ship.x, z: q.ship.z }));
-      window.__mpKrakenTargetAlive = peer => { const q = MP.peers.get(peer); return !!(q && q.tgt && q.tgt.sh && q.ship); };
-      window.__mpKrakenStrike = (peer, dmg) => MP.room.emit('kraken', { to: peer, dmg }).catch(() => {});
+      // Sword of the Sea vs players: the target's own game runs its kraken on their ship (full attack, they can fight back);
+      // ours plays the same fight on our copy of their ship, and they tell us how it ends.
+      const tagShip = q => { if (q.ship) { q.ship.remote = true; q.ship.peer = q.peer; q.ship.pname = q.name; } return q.ship; };
+      window.__mpKrakenPlayers = () => [...MP.peers.values()].filter(q => q.tgt && q.tgt.sh && q.ship).map(q => ({ peer: q.peer, name: q.name, ship: tagShip(q) }));
+      window.__mpKrakenShip = peer => { const q = MP.peers.get(peer); return q && q.tgt && q.tgt.sh && q.ship ? tagShip(q) : null; };
+      window.__mpKrSic = peer => MP.room.emit('krsic', { to: peer }).catch(() => {});
+      window.__mpKrOff = peer => MP.room.emit('kroff', { to: peer }).catch(() => {});
+      window.__mpKrRes = (peer, r) => MP.room.emit('krres', { to: peer, r }).catch(() => {});
+      const peerName = id => (MP.peers.get(id)?.name) || 'A rival captain';
+      MP.room.on('krsic', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; let r = 'away'; try { r = window.__krSicOnMe(m.peer, peerName(m.peer)); } catch (e) {} if (r !== 'ok') window.__mpKrRes(m.peer, r); });
+      MP.room.on('kroff', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; try { window.__krCalledOff(m.peer); } catch (e) {} });
+      MP.room.on('krres', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; try { window.__krResult(m.peer, peerName(m.peer), d.r); } catch (e) {} });
       // ---- Server-authoritative world ----
       // The server runs the bandits and the Blackwater raiders for everyone. This browser only
       // sends what its own player did (hits) and draws the snapshots the server sends back.
