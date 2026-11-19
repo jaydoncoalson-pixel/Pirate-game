@@ -98,7 +98,8 @@ function islandHeight(I, x, z) {
 // ---------- The Mistwrack Shoals: a wide field of sea stacks and reefs in the south-west, always shrouded in fog ----------
 // Part of the terrain itself (heightAt), so ships, raiders, cannonballs, the kraken and the autopilot all treat the rocks as solid.
 // The server builds the very same rocks from the same seed (world.js); keep the two in step.
-const MIST = { x: -3300, z: 3300, r: 1350, rocks: [], name: 'The Mistwrack Shoals' };
+const EDGE = 14400;   // keep in step with the game: the edge of the charted sea
+const MIST = { x: -12900, z: 12900, r: 1350, rocks: [], name: 'The Mistwrack Shoals' };
 {
   let s = 917; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const J = ISLANDS[2], jx = J.c.x, jz = J.c.y, jr = J.r * 1.7 + 120;
@@ -106,7 +107,7 @@ const MIST = { x: -3300, z: 3300, r: 1350, rocks: [], name: 'The Mistwrack Shoal
   for (let tries = 0; tries < 8000 && MIST.rocks.length < 52; tries++) {
     const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
     const big = MIST.rocks.length < 14, r = big ? 110 + mr() * 85 : 34 + mr() * 42, hp = big ? 140 + mr() * 150 : 26 + mr() * 60;
-    if (Math.abs(x) > 4700 || Math.abs(z) > 4700 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+    if (Math.abs(x) > EDGE - 120 || Math.abs(z) > EDGE - 120 || Math.hypot(x - jx, z - jz) < jr + r) continue;
     if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 75)) continue;
     MIST.rocks.push({ x, z, r, hp, e: big ? 0.85 : 0.6, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
   }
@@ -178,6 +179,6 @@ function blockedAt(T, cx, cz, h) {
   return [[0, T.L / 2 + 1], [0, -T.L / 2], [T.B / 2, 0], [-T.B / 2, 0], [T.B * 0.35, T.L * 0.3], [-T.B * 0.35, T.L * 0.3]]
     .some(([lx, lz]) => { const wx = cx + lx * c + lz * s, wz = cz - lx * s + lz * c; return heightAt(wx, wz) > -2.2 || onDock(wx, wz); });
 }
-const raidSea = (x, z) => Math.abs(x) < 4800 && Math.abs(z) < 4800 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
+const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
 
-module.exports = { MIST, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
+module.exports = { EDGE, MIST, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };

@@ -8,7 +8,7 @@ const angDiff = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (M
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 const ISL = [[-150, -320, 300], [1900, 500, 128], [-3000, 1100, 420], [-1700, -3500, 400], [2700, -3100, 230], [4200, -700, 340], [900, -1500, 85], [-1300, -1600, 100], [1100, 4200, 270], [-3600, -1900, 170]];
 // open sea, away from islands and rocks (same test as the game's krDeep)
-const krDeep = (x, z) => Math.abs(x) < 4900 && Math.abs(z) < 4900 && W.heightAt(x, z) < -6.5 && ISL.every(([cx, cz, r]) => Math.hypot(x - cx, z - cz) > r * 1.25 + 40);
+const krDeep = (x, z) => Math.abs(x) < W.EDGE - 200 && Math.abs(z) < W.EDGE - 200 && W.heightAt(x, z) < -6.5 && ISL.every(([cx, cz, r]) => Math.hypot(x - cx, z - cz) > r * 1.25 + 40);
 const deepNear = (x, z, r0, r1_) => { for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1_ - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; if (krDeep(px, pz)) return { x: px, z: pz }; } return null; };
 function mistSpot() {
   const M = W.MIST;

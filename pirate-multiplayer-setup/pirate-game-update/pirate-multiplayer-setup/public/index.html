@@ -430,7 +430,9 @@
   // ---------- The Mistwrack Shoals: a wide field of sea stacks and reefs in the south-west, always shrouded in fog ----------
   // Part of the terrain itself (heightAt), so ships, raiders, cannonballs, the kraken and the autopilot all treat the rocks as solid.
   // The server builds the very same rocks from the same seed (world.js); keep the two in step.
-  const MIST = { x: -3300, z: 3300, r: 1350, rocks: [], name: 'The Mistwrack Shoals' };
+  // the charted sea runs 3x as far as the old map: ships can't sail past EDGE in any direction
+  const EDGE = 14400;
+  const MIST = { x: -12900, z: 12900, r: 1350, rocks: [], name: 'The Mistwrack Shoals' };   // tucked into the far south-west corner of the world
   {
     let s = 917; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const J = ISLANDS[2], jx = J.c.x, jz = J.c.y, jr = J.r * 1.7 + 120;
@@ -438,7 +440,7 @@
     for (let tries = 0; tries < 8000 && MIST.rocks.length < 52; tries++) {
       const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
       const big = MIST.rocks.length < 14, r = big ? 110 + mr() * 85 : 34 + mr() * 42, hp = big ? 140 + mr() * 150 : 26 + mr() * 60;
-      if (Math.abs(x) > 4700 || Math.abs(z) > 4700 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+      if (Math.abs(x) > EDGE - 120 || Math.abs(z) > EDGE - 120 || Math.hypot(x - jx, z - jz) < jr + r) continue;
       if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 75)) continue;
       MIST.rocks.push({ x, z, r, hp, e: big ? 0.85 : 0.6, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
     }
@@ -812,7 +814,7 @@
   floraBin = null;
 
   // ---------- World chart: one height sample per cell, for the shallows and the maps ----------
-  const WMAP = { N: 512, min: -5200, size: 10400 };
+  const WMAP = { N: 1536, min: -15600, size: 31200 };
   const wmapH = new Float32Array(WMAP.N * WMAP.N);
   { const N = WMAP.N, cell = WMAP.size / N;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wmapH[j * N + i] = heightAt(WMAP.min + (i + 0.5) * cell, WMAP.min + (j + 0.5) * cell); }
@@ -2309,12 +2311,14 @@
     return pts.some(([lx, lz]) => { const wx = cx + lx * c + lz * s, wz = cz - lx * s + lz * c; return heightAt(wx, wz) > -2.2 || onDock(wx, wz); });
   }
   // ---- autopilot route planning: A* over a grid of open water, so the crew sails round islands and reefs ----
-  const NAV_CELL = 40, NAV_MIN = -5200, NAV_N = Math.ceil(10400 / NAV_CELL);
+  const NAV_CELL = 40, NAV_MIN = -EDGE, NAV_N = Math.ceil(EDGE * 2 / NAV_CELL);
   let navGrid = null;
+  const navOpenSea = (x, z) => ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.9 + 60) && Math.hypot(x - MIST.x, z - MIST.z) > MIST.r + 140 && Math.hypot(x - DOCK_BASE.x, z - DOCK_BASE.y) > 400 && SEA_ROCKS.every(r => Math.hypot(x - r.x, z - r.z) > r.hitRadius + 60);
   function buildNavGrid() {
     navGrid = new Uint8Array(NAV_N * NAV_N);
     for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) {
       const x = NAV_MIN + (i + 0.5) * NAV_CELL, z = NAV_MIN + (j + 0.5) * NAV_CELL;
+      if (navOpenSea(x, z)) { navGrid[j * NAV_N + i] = 1; continue; }   // most of the chart is open ocean: skip the slow checks
       let ok = heightAt(x, z) < -4.5 && !onDock(x, z);
       for (let k = 0; ok && k < 8; k++) { const a = k * Math.PI / 4, px = x + Math.cos(a) * 26, pz = z + Math.sin(a) * 26; if (heightAt(px, pz) > -3 || onDock(px, pz)) ok = false; }
       if (ok && SEA_ROCKS.some(r => Math.hypot(x - r.x, z - r.z) < r.hitRadius + 34)) ok = false;
@@ -2477,7 +2481,11 @@
     const requestedStep = ship.speed * dt;
     const step = autoRoute && autoRoute.active ? Math.min(requestedStep, T.speed * 1.6 * dt) : requestedStep;
     const nx = ship.x + sx * step, nz = ship.z + sz * step;
-    if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; }
+    if (Math.abs(nx) > EDGE || Math.abs(nz) > EDGE) {   // the edge of the chart: the crew won't sail on into nothing
+      ship.x = Math.max(-EDGE, Math.min(EDGE, ship.x)); ship.z = Math.max(-EDGE, Math.min(EDGE, ship.z)); ship.speed *= 0.5;
+      if (clock.elapsedTime - (ship.edgeT ?? -99) > 8) { ship.edgeT = clock.elapsedTime; toast("The edge of the known world. The crew won't sail past it, captain. Turn her about!"); }
+    }
+    else if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; }
     else {
       if (!ship.submerged && Math.abs(ship.speed) > 4 && Math.hypot(ship.x - MIST.x, ship.z - MIST.z) < MIST.r + 80 && clock.elapsedTime - (ship.rockT ?? -9) > 1.5) {
         ship.rockT = clock.elapsedTime;
@@ -3969,7 +3977,8 @@
       const sx = (cx - W / 2 * scale - WMAP.min) * ppu, sy = (cz - H / 2 * scale - WMAP.min) * ppu, sw = W / k, sh = H / k;
       const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(WMAP.N, sx + sw), y1 = Math.min(WMAP.N, sy + sh);
       if (x1 > x0 && y1 > y0) ctx.drawImage(WM, x0, y0, x1 - x0, y1 - y0, (x0 - sx) * k, (y0 - sy) * k, (x1 - x0) * k, (y1 - y0) * k); }
-    if (big) { ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; for (let i = -5000; i <= 5000; i += 1000) { let [a, b] = S(i, 0); ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a, H); ctx.stroke(); [a, b] = S(0, i); ctx.beginPath(); ctx.moveTo(0, b); ctx.lineTo(W, b); ctx.stroke(); } }
+    if (big) { ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; for (let i = -15000; i <= 15000; i += 3000) { let [a, b] = S(i, 0); ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a, H); ctx.stroke(); [a, b] = S(0, i); ctx.beginPath(); ctx.moveTo(0, b); ctx.lineTo(W, b); ctx.stroke(); } }
+    if (big) { const [a, b] = S(-EDGE, -EDGE), [c, d] = S(EDGE, EDGE); ctx.strokeStyle = 'rgba(120,20,10,0.75)'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.strokeRect(a, b, c - a, d - b); ctx.setLineDash([]); }   // the edge of the known world
     ctx.fillStyle = '#d6a868';
     for (const l of loot) if (l.respawn <= 0) { const [x, y] = S(l.x, l.z); if (x > -4 && x < W + 4 && y > -4 && y < H + 4) ctx.fillRect(x - 1.5, y - 1.5, 3, 3); }
     for (const I of ISLANDS) {
@@ -3981,7 +3990,7 @@
       if (x > -r - 80 && x < W + r + 80 && y > -r - 80 && y < H + r + 80) {
         const gr = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.15); gr.addColorStop(0, 'rgba(225,230,233,0.42)'); gr.addColorStop(1, 'rgba(225,230,233,0)');
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r * 1.15, 0, Math.PI * 2); ctx.fill();
-        if (big || r > 30) { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = big ? 'italic 13px Georgia' : 'italic 10px Georgia'; ctx.textAlign = 'center'; ctx.strokeText('Mistwrack Shoals', x, y - r * 0.85); ctx.fillText('Mistwrack Shoals', x, y - r * 0.85); }
+        if (big || r > 30) { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = big ? 'italic 13px Georgia' : 'italic 10px Georgia'; ctx.textAlign = 'center'; const lx = Math.max(70, Math.min(W - 70, x)); ctx.strokeText('Mistwrack Shoals', lx, y - r * 0.85); ctx.fillText('Mistwrack Shoals', lx, y - r * 0.85); }
       } }
     for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') {
       const [x, y] = S(r.x, r.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
@@ -4012,13 +4021,14 @@
     const mp = mapPos(); drawMapTo(mctx, 200, 200, mp.x, mp.z, 18, false);
     if (uiOpen === 'map') drawBigMap();
   }
-  function drawBigMap() { drawMapTo(bctx, 640, 640, 300, 0, 15.5, true); drawRouteOverlay(); }
+  const BIG = { cx: 0, cz: 0, s: 31200 / 640 };   // the whole chart, edge to edge
+  function drawBigMap() { drawMapTo(bctx, 640, 640, BIG.cx, BIG.cz, BIG.s, true); drawRouteOverlay(); }
   function drawRouteOverlay() {
     if (!autoRoute || !bigc) return;
-    const x = 320 + (autoRoute.x - 300) / 15.5, y = 320 + autoRoute.z / 15.5;
+    const x = 320 + (autoRoute.x - BIG.cx) / BIG.s, y = 320 + (autoRoute.z - BIG.cz) / BIG.s;
     bctx.save(); bctx.strokeStyle = '#ffdf69'; bctx.lineWidth = 3; bctx.setLineDash([8, 5]);
-    bctx.beginPath(); bctx.moveTo(320 + (ship.x - 300) / 15.5, 320 + ship.z / 15.5);
-    for (const q of (autoRoute.path || []).slice(autoRoute.wp || 0)) bctx.lineTo(320 + (q.x - 300) / 15.5, 320 + q.z / 15.5);
+    bctx.beginPath(); bctx.moveTo(320 + (ship.x - BIG.cx) / BIG.s, 320 + (ship.z - BIG.cz) / BIG.s);
+    for (const q of (autoRoute.path || []).slice(autoRoute.wp || 0)) bctx.lineTo(320 + (q.x - BIG.cx) / BIG.s, 320 + (q.z - BIG.cz) / BIG.s);
     if (!autoRoute.path) bctx.lineTo(x, y);
     bctx.stroke(); bctx.setLineDash([]);
     bctx.fillStyle = '#d62929'; bctx.beginPath(); bctx.arc(x, y, 7, 0, Math.PI * 2); bctx.fill(); bctx.strokeStyle = '#fff3d6'; bctx.stroke(); bctx.restore();
@@ -4026,7 +4036,7 @@
   bigc.addEventListener('click', e => {
     if (!routePicking || !deskSeated) return;
     const r = bigc.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * 640, py = (e.clientY - r.top) / r.height * 640;
-    const tx = 300 + (px - 320) * 15.5, tz = (py - 320) * 15.5;
+    const tx = BIG.cx + (px - 320) * BIG.s, tz = BIG.cz + (py - 320) * BIG.s;
     const plan = ship ? planRoute(ship.x, ship.z, tx, tz) : null;
     if (!plan) { autoRoute = null; routeStartBtn.disabled = true; routeStatus.textContent = "The navigator can't find a way to sail there. Pick a spot in open water."; drawBigMap(); return; }
     autoRoute = { x: plan.dest.x, z: plan.dest.z, path: plan.pts, wp: 0 };
@@ -4652,7 +4662,7 @@
     return [[0, T.L / 2 + 1], [0, -T.L / 2], [T.B / 2, 0], [-T.B / 2, 0], [T.B * 0.35, T.L * 0.3], [-T.B * 0.35, T.L * 0.3]]
       .some(([lx, lz]) => { const wx = cx + lx * c + lz * s, wz = cz - lx * s + lz * c; return heightAt(wx, wz) > -2.2 || onDock(wx, wz); });
   }
-  const raidSea = (x, z) => Math.abs(x) < 4800 && Math.abs(z) < 4800 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
+  const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
   // pick somewhere new to sail to, anywhere on the open sea
   function raiderWaypoint(r) {
     for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = 600 + Math.random() * 1800, x = r.x + Math.sin(a) * d, z = r.z + Math.cos(a) * d; if (raidSea(x, z)) { r.wpt = { x, z }; return; } }
@@ -4660,7 +4670,8 @@
   }
   function spawnRaider(r) {
     let ok = false;
-    for (let i = 0; i < 60 && !ok; i++) { r.x = (Math.random() - 0.5) * 9000; r.z = (Math.random() - 0.5) * 9000; ok = raidSea(r.x, r.z) && Math.hypot(r.x - P.pos.x, r.z - P.pos.z) > 1000 && !blockedAt(r, r.x, r.z, 0); }
+    // half turn up in the old home waters, half somewhere within a few km of ye, so the wider sea isn't empty of them
+    for (let i = 0; i < 60 && !ok; i++) { if (i % 2) { r.x = (Math.random() - 0.5) * 9000; r.z = (Math.random() - 0.5) * 9000; } else { const a = Math.random() * 6.28, d = 1400 + Math.random() * 3200; r.x = P.pos.x + Math.sin(a) * d; r.z = P.pos.z + Math.cos(a) * d; } ok = raidSea(r.x, r.z) && Math.hypot(r.x - P.pos.x, r.z - P.pos.z) > 1000 && !blockedAt(r, r.x, r.z, 0); }
     if (!ok) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28; r.x = r.home.x + Math.cos(a) * 350; r.z = r.home.z + Math.sin(a) * 350; if (!blockedAt(r, r.x, r.z, 0)) break; }
     raiderWaypoint(r);
     if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; });
@@ -6190,7 +6201,7 @@
   }
   const KR_UP = new THREE.Vector3(0, 1, 0), krV = new THREE.Vector3(), krV2 = new THREE.Vector3(), krQ = new THREE.Quaternion();
   // open sea is anywhere that isn't an island or the water close around one
-  const krDeep = (x, z) => Math.abs(x) < 4900 && Math.abs(z) < 4900 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 40);
+  const krDeep = (x, z) => Math.abs(x) < EDGE - 200 && Math.abs(z) < EDGE - 200 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 40);
   // the head: a great mantle with yellow eyes that surfaces beside the ship it is attacking
   const KRG = new THREE.Group(); KRG.visible = false; scene.add(KRG);
   const KRM = new THREE.Group(); KRM.position.y = 5.5; KRG.add(KRM);

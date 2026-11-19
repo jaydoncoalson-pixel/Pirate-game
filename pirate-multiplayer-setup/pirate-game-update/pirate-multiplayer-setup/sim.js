@@ -100,7 +100,9 @@ function createSim({ sendTo, broadcast, adminOk = () => true }) {
     const pts = [...players.values()].filter(q => q.p && typeof q.p.x === 'number').map(q => q.p);
     let ok = false;
     for (let i = 0; i < 60 && !ok; i++) {
-      r.x = (Math.random() - 0.5) * 9000; r.z = (Math.random() - 0.5) * 9000;
+      // half in the old home waters, half within a few km of a player, so raiders still find ye on the wider sea
+      if (i % 2 || !pts.length) { r.x = (Math.random() - 0.5) * 9000; r.z = (Math.random() - 0.5) * 9000; }
+      else { const p = pts[Math.floor(Math.random() * pts.length)], a = Math.random() * 6.28, d = 1400 + Math.random() * 3200; r.x = p.x + Math.sin(a) * d; r.z = p.z + Math.cos(a) * d; }
       ok = W.raidSea(r.x, r.z) && pts.every(p => Math.hypot(r.x - p.x, r.z - p.z) > 1000) && !W.blockedAt(r.T, r.x, r.z, 0);
     }
     if (!ok) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28; r.x = r.home.x + Math.cos(a) * 350; r.z = r.home.z + Math.sin(a) * 350; if (!W.blockedAt(r.T, r.x, r.z, 0)) break; }
