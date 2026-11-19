@@ -167,7 +167,7 @@
     wanted = { url, name }; let first = true;
     const open = () => {
       try { ws = new WebSocket(url); } catch (e) { banner('Bad server address'); return; }
-      ws.onopen = () => { retry = 0; banner(''); ws.send(JSON.stringify({ t: 'hello', name })); };
+      ws.onopen = () => { retry = 0; banner(''); let acct = ''; try { const A = JSON.parse(localStorage.getItem('gull-island-accounts-v1') || 'null'); const a = A && A.list && (A.list.find(x => x.id === A.active) || A.list[0]); acct = a ? a.name : ''; } catch (e) {} ws.send(JSON.stringify({ t: 'hello', name, acct })); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.t === 'welcome') { me = m.id; names[me] = name; peers.clear(); peers.set(me, { id: me, p: mine }); (m.peers || []).forEach(q => { names[q.id] = q.name; peers.set(q.id, { id: q.id, p: q.p || {} }); }); room.presence({}); firePeers(); if (first) { first = false; resolveRoom(room); } }
@@ -1146,9 +1146,11 @@
   const HORN = { known: false, owner: null, mine: false };
   const hornOnline = () => !!(window.__mpSerpOnline && window.__mpSerpOnline());
   // once the true horn is claimed, anyone else who climbs up takes a lesser horn that calls a common sea serpent
-  const hasHorn = () => hornOnline() ? HORN.mine || !!STATE.smallHorn : !!STATE.horn;
-  const hornIsTrue = () => hornOnline() ? HORN.mine : !!STATE.horn;
-  const hornOnPedestal = () => hornOnline() ? HORN.known && (!HORN.owner || (!HORN.mine && !STATE.smallHorn)) : !STATE.horn;
+  // The true Serpent Horn belongs to the bob3 account: it calls the Elder Serpent, no climb needed.
+  const HORN_ACCOUNT = 'bob3', isHornAccount = () => accCur().name.trim().toLowerCase() === HORN_ACCOUNT;
+  const hasHorn = () => hornOnline() ? HORN.mine || !!STATE.smallHorn : isHornAccount() || !!STATE.horn || !!STATE.smallHorn;
+  const hornIsTrue = () => hornOnline() ? HORN.mine : isHornAccount();
+  const hornOnPedestal = () => hornOnline() ? HORN.known && (!HORN.owner || (!HORN.mine && !STATE.smallHorn)) : !hasHorn();
   const atPedestal = () => !onShip && !sailing && !inInterior && P.pos.y > SPIRE.top - 1 && Math.hypot(P.pos.x - SPIRE.x, P.pos.z - SPIRE.z) < 5;
   const nearHorn = () => atPedestal() && hornOnPedestal() && !hasHorn();
   const nearEmptyPedestal = () => atPedestal() && hornOnline() && HORN.known && HORN.owner && !HORN.mine && STATE.smallHorn;
@@ -1159,8 +1161,8 @@
       toast(`Ye take up a horn... but it's not the true Serpent Horn. Captain ${HORN.owner} claimed that long ago. This one only calls a common sea serpent. Press 3 to sound it.`);
       return;
     }
-    STATE.horn = true; save(); refreshHornSlot();
-    SFX.fanfare(); toast('Ye take up the Serpent Horn! Press 3 to sound it and call the Elder Serpent from the deep.');
+    STATE.smallHorn = true; save(); refreshHornSlot(); SFX.pickup();
+    toast(`Ye take up a horn... but it's not the true Serpent Horn. Captain ${HORN_ACCOUNT} holds that. This one only calls a common sea serpent. Press 3 to sound it.`);
   }
   // the server's word on who owns it
   function hornNews(d) {
@@ -1168,7 +1170,7 @@
     HORN.known = true; HORN.owner = d && d.owner || null; HORN.mine = !!(d && d.mine);
     if (HORN.mine && !STATE.hornOnline) { STATE.hornOnline = true; save(); }
     if (!HORN.mine && HORN.owner && STATE.hornOnline) { STATE.hornOnline = false; save(); }
-    if (HORN.mine && !was) { SFX.fanfare(); toast('Ye take up the Serpent Horn, the first captain ever to claim it! Press 3 to sound it and call the Elder Serpent from the deep.'); }
+    if (HORN.mine && !was) toast('The true Serpent Horn is yers, captain. Press 3 to sound it and call the Elder Serpent from the deep.');
     if (!HORN.mine && hornOnline() && ELD.on && !ELD.leaving && ELD.K.elder) dismissElder();   // no true horn, no Elder Serpent
     refreshHornSlot();
   }

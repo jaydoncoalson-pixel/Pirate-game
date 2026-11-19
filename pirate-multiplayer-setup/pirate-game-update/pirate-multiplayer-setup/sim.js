@@ -11,7 +11,7 @@ const angDiff = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (M
 const angLerp = (a, b, t) => a + angDiff(a, b) * t;
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 
-function createSim({ sendTo, broadcast, adminOk = () => true, hornOwner = () => null }) {
+function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => false }) {
   // ---------- state ----------
   const bandits = W.BANDIT_SPAWNS.map(s => ({
     name: s.name, home: s.home, x: s.x, z: s.z, facing: s.facing,
@@ -151,7 +151,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwner = () => 
     const el = Array.isArray(q.p.el) ? q.p.el : null;   // their Elder Serpent bites too
     if (Math.min(Math.hypot(px - r.x, pz - r.z), Math.hypot(q.p.x - r.x, q.p.z - r.z), el ? Math.hypot(el[0] - r.x, el[1] - r.z) : 1e9) > 1000) return;   // cannon, kraken or serpent range
     // the Elder Serpent sinks any ship in one bite (only the horn's owner has one, and he must be right there)
-    if (elKill && el && q.name && q.name === hornOwner() && Math.hypot(el[0] - r.x, el[1] - r.z) < 300) r.hp = 0;
+    if (elKill && el && hornOwns(q) && Math.hypot(el[0] - r.x, el[1] - r.z) < 300) r.hp = 0;
     else r.hp -= Math.max(0, Math.min(40, +dmg || 0));
     r.lastHitBy = from; r.lastHitKr = !!kr;
     if (r.hp <= 0) sinkRaider(r, from, r.lastHitKr);
