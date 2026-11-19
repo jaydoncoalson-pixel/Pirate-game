@@ -7535,6 +7535,7 @@
     if (T.kind === 'kraken') return KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown' ? KR : null;
     if (T.kind === 'serp') return serpAlive(T.ent) ? T.ent : null;
     if (T.kind === 'player') { const e = window.__mpKrakenShip ? window.__mpKrakenShip(T.peer) : null; return e && !e.sinking ? e : null; }
+    if (T.kind === 'person') return window.__mpPersonPos ? window.__mpPersonPos(T.peer) : null;   // a captain: in the water, ashore, or aboard (then their ship)
     if (T.kind === 'nearestRaider') { let b = null, bd = 1e9; for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') { const d = Math.hypot(r.x - ELD.x, r.z - ELD.z); if (d < bd) { bd = d; b = r; } } if (b) { T.kind = 'raider'; T.ent = b; } return b; }
     return null;
   }
@@ -7545,11 +7546,11 @@
     const krOnMe = (KR.tgt && (KR.tgt.ent === ship || KR.tgt.kind === 'swim') && (KR.st === 'hunt' || KR.st === 'grip' || KR.st === 'attack')) || (ship && KR.lock === ship);
     if (krOnMe && !(KR.ally > 0)) out.push({ kind: 'kraken' });
     for (const s of SERP) if ((s.st === 'hunt' || s.st === 'circle' || s.st === 'strike') && Math.hypot(s.x - H.x, s.z - H.z) < 500 && (!s.net || !me || s.net.tg === me)) out.push({ kind: 'serp', ent: s });
-    for (const [peer, at] of ELD.threats) { if (now - at > 25) { ELD.threats.delete(peer); continue; } if (elderTgPos({ kind: 'player', peer })) out.push({ kind: 'player', peer }); }
+    for (const [peer, at] of ELD.threats) { if (now - at > 25) { ELD.threats.delete(peer); continue; } if (elderTgPos({ kind: 'player', peer })) out.push({ kind: 'player', peer }); else if (elderTgPos({ kind: 'person', peer })) out.push({ kind: 'person', peer }); }
     let best = null, bd = 1e9; for (const T of out) { const e = elderTgPos(T); if (!e) continue; const d = Math.hypot(e.x - ELD.x, e.z - ELD.z); if (d < bd) { bd = d; best = T; } }
     return best;
   }
-  const elderName = T => T.kind === 'kraken' ? 'the Kraken' : T.kind === 'serp' ? 'a sea serpent' : T.kind === 'player' ? `${(window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain'}'s ship` : 'a Blackwater raider';
+  const elderName = T => T.kind === 'person' ? ((window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain') : T.kind === 'kraken' ? 'the Kraken' : T.kind === 'serp' ? 'a sea serpent' : T.kind === 'player' ? `${(window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain'}'s ship` : 'a Blackwater raider';
   function elderBite(T, e) {
     SFX.crash({ x: e.x, z: e.z }); wSplash(e.x, 1, e.z, true); wSplash(ELD.x, 1, ELD.z, true);
     const big = ELD.K.elder;
@@ -7561,6 +7562,11 @@
     }
     else if (T.kind === 'serp') serpentHurt(e, big ? 60 : 20, { x: e.x, y: 2, z: e.z });
     else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer, big);
+    else if (T.kind === 'person' && window.__mpElderBite) {
+      if (e.ship) window.__mpElderBite(T.peer, big);   // they're aboard: he takes the whole ship
+      else { window.__mpElderBitePerson(T.peer, big); if (big) etoast(`The Elder Serpent snatches ${elderName(T)} in its jaws!`); }
+      if (big && ELD.mode === 'attack' && ELD.pick === T) { ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; }
+    }
   }
   // close in at full speed, circle, rear up and strike
   function elderFight(T, e, dt) {
@@ -7629,6 +7635,7 @@
     const K = ELD.K, ax = ELD.x + Math.sin(ELD.h) * K.strikeR * 0.4, az = ELD.z + Math.cos(ELD.h) * K.strikeR * 0.4, out = [];
     for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') out.push({ T: { kind: 'raider', ent: r }, e: r });
     for (const q of (window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [])) if (q.ship && !q.ship.sinking) out.push({ T: { kind: 'player', peer: q.peer }, e: q.ship });
+    for (const q of (window.__mpPeople ? window.__mpPeople() : [])) { const e = window.__mpPersonPos(q.peer); if (e && !e.ship) out.push({ T: { kind: 'person', peer: q.peer }, e }); }
     if (KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown') out.push({ T: { kind: 'kraken' }, e: KR });
     for (const s of SERP) if (serpAlive(s)) out.push({ T: { kind: 'serp', ent: s }, e: s });
     let best = null, bd = K.strikeR; for (const o of out) { const d = Math.hypot(o.e.x - ax, o.e.z - az); if (d < bd) { bd = d; best = o; } }
@@ -7670,10 +7677,12 @@
       { label: 'Guard my ship', sub: 'follows close and attacks anything that attacks ye', on: ELD.mode === 'guard', act: () => { ELD.mode = 'guard'; ELD.pick = null; ELD.tg = null; ELD.st = 'swim'; etoast('The Elder Serpent takes up his guard beside yer ship.'); } },
       { label: 'Let me ride him', sub: 'he stops beside yer ship so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; etoast('The Elder Serpent swims alongside and lowers his head. Walk up to him and press E to climb on.'); } },
     ];
+    elOpts.push({ label: 'Send him back to the deep', act: dismissElder });   // kept up top so a long target list can't push it off the menu
     const tg = [];
     if (raiders.some(r => r.state === 'patrol' || r.state === 'attack')) tg.push({ T: { kind: 'nearestRaider' }, label: 'Attack the nearest Blackwater raider' });
     const list = window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [];
     for (const q of list) tg.push({ T: { kind: 'player', peer: q.peer }, label: `Attack ${q.name}'s ship`, sub: `${dd(q.ship)} m away` });
+    for (const q of (window.__mpPeople ? window.__mpPeople() : [])) tg.push({ T: { kind: 'person', peer: q.peer }, label: `Attack ${q.name}`, sub: `${q.where} · ${dd(q)} m away` });
     if (KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown' && Math.hypot(KR.x - H.x, KR.z - H.z) < 5000) tg.push({ T: { kind: 'kraken' }, label: 'Attack the Kraken', sub: `${dd(KR)} m away` });
     raiders.filter(r => r.state === 'patrol' || r.state === 'attack').map(r => ({ r, d: dd(r) })).filter(o => o.d < 2500).sort((a, b) => a.d - b.d).slice(0, 2)
       .forEach(o => tg.push({ T: { kind: 'raider', ent: o.r }, label: `Attack that Blackwater ${o.r.galleon ? 'galleon' : 'raider'}`, sub: `${o.d} m away` }));
@@ -7681,7 +7690,6 @@
       const cur = ELD.mode === 'attack' && ELD.pick && ELD.pick.kind === o.T.kind && (o.T.kind === 'kraken' || ELD.pick.peer === o.T.peer && ELD.pick.ent === o.T.ent);
       elOpts.push({ label: o.label, sub: (o.sub || '') + (cur ? ' · his prey now' : ''), on: cur, act: () => { ELD.mode = 'attack'; ELD.pick = o.T; ELD.st = 'swim'; if (RIDE.on) elderDismount(); const e = elderTgPos(o.T); toast(e ? `Ye sound the horn and point... the Elder Serpent goes after ${elderName(o.T)}!` : 'There is nothing there for him to hunt.'); } });
     }
-    elOpts.push({ label: 'Send him back to the deep', act: dismissElder });
     elPickBody.innerHTML = '';
     elOpts.slice(0, 9).forEach((o, i) => {
       const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b> `; b.appendChild(document.createTextNode(o.label));
@@ -7797,13 +7805,24 @@
       if (!MP.room) return;
       MP.room.onPeers(mpOnPeers);
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
-      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(d.kill ? `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!` : `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s sea serpent strikes yer hull!`); } catch (e) {} });
+      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return;
+        const who = MP.peers.get(m.peer)?.name || 'A rival captain';
+        if (d.person && !onShip && !sailing && !inInterior) {   // bitten in the water or on the shore
+          try { ELD.threats.set(m.peer, clock.elapsedTime); SFX.crash({ x: P.pos.x, z: P.pos.z }); wSplash(P.pos.x, 1, P.pos.z, true); toast(d.kill ? `${who}'s Elder Serpent snatches ye in its jaws!` : `${who}'s sea serpent bites ye!`); hurtPlayer(d.kill ? PLAYER.hp + 1 : Math.min(40, d.dmg)); } catch (e) {}
+          return;
+        }
+        if (!ship || ship.sinking) return;
+        try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(d.kill ? `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!` : `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s sea serpent strikes yer hull!`); } catch (e) {} });
       window.__mpElderBite = (peer, big) => { MP.room.emit('ebite', big ? { to: peer, kill: 1, dmg: 1 } : { to: peer, dmg: 22 }).catch(() => {}); };
       window.__mpRaiderKill = r => { if (!online()) return false; const i = raiders.indexOf(r); if (i < 0) return false; MP.room.emit('rdmg', { i, dmg: 40, el: 1 }).catch(() => {}); return true; };
       window.__mpHornClaim = re => { MP.room.emit('hclaim', { re: re ? 1 : 0 }).catch(() => {}); };
       MP.room.on('horn', m => { if (m.peer !== 'server') return; hornNews(m.data); });
       if (STATE.hornOnline) setTimeout(() => window.__mpHornClaim(true), 1500);   // after a server restart, the first owner claims it back
       window.__mpPeerName = peer => MP.peers.get(peer)?.name;
+      // other captains as targets for a horn serpent: where they are, and whether they're aboard their ship
+      window.__mpPersonPos = peer => { const p = MP.peers.get(peer); if (!p || !p.tgt || typeof p.tgt.x !== 'number') return null; const d = p.tgt; if (d.sh && d.sh.a === 1 && p.ship && !p.ship.sinking) { tagShip({ peer, name: p.name, ship: p.ship }); return { x: p.ship.x, z: p.ship.z, ship: p.ship }; } return { x: p.pos.x, y: p.pos.y, z: p.pos.z, ship: false }; };
+      window.__mpPeople = () => [...MP.peers.values()].filter(p => p.tgt && typeof p.tgt.x === 'number').map(p => ({ peer: p.peer, name: p.name, x: p.pos.x, z: p.pos.z, where: p.tgt.sh && p.tgt.sh.a === 1 ? 'aboard their ship' : p.tgt.swm ? 'in the water' : 'ashore' }));
+      window.__mpElderBitePerson = (peer, big) => { MP.room.emit('ebite', big ? { to: peer, person: 1, kill: 1, dmg: 1 } : { to: peer, person: 1, dmg: 22 }).catch(() => {}); };
       MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { ELD.threats.set(m.peer, clock.elapsedTime); hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
       // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
       // Sword of the Sea vs players: the target's own game runs its kraken on their ship (full attack, they can fight back);

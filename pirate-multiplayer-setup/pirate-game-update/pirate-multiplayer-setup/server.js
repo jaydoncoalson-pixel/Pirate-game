@@ -65,7 +65,9 @@ function hornClaim(me) { send(me.ws, hornMsg(me)); }   // the game asks who hold
 // the true horn's owner (the Elder Serpent); anyone else's common sea serpent bites for at most 22
 function ebiteOk(me, d) {
   const el = me.p && me.p.el, tq = d && players.get(d.to);
-  if (!Array.isArray(el) || !tq || !tq.p || !tq.p.sh || Math.hypot(el[0] - tq.p.sh.x, el[1] - tq.p.sh.z) > 400) return false;
+  if (!Array.isArray(el) || !tq || !tq.p) return false;
+  const near = (x, z) => typeof x === 'number' && Math.hypot(el[0] - x, el[1] - z) <= 400;
+  if (!(d.person ? near(tq.p.x, tq.p.z) || (tq.p.sh && near(tq.p.sh.x, tq.p.sh.z)) : tq.p.sh && near(tq.p.sh.x, tq.p.sh.z))) return false;   // a captain, or their ship, right beside the serpent
   if (d.kill) return hornOwns(me);
   return (+d.dmg || 0) <= 22;
 }
