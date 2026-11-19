@@ -115,14 +115,13 @@
 <div id="tags"></div>
 <div id="hudR"><div id="clock"></div><div id="gold"><span class="coin"></span><span id="goldN">0</span></div><div id="quest"><div id="qTitle"></div><div id="qObj"></div><div id="qDist"><span id="qArrow"></span><span id="qDistT"></span></div></div></div>
 <canvas id="mini" width="200" height="200"></canvas>
-<div id="btns"><button id="menuBtn">Esc &middot; Menu</button><button data-ui="custom">C &middot; Customize</button><button data-ui="quests">Q &middot; Quests</button><button data-ui="map">M &middot; Map</button><button data-ui="forge">I &middot; Swords</button><button data-ui="tele">T &middot; Teleport</button><button data-ui="acct" id="acctBtn">Account</button><button data-ui="admin" id="adminBtn" style="display:none">Admin</button><button id="sndBtn">N &middot; Sound on</button></div>
+<div id="btns"><button id="menuBtn">Esc &middot; Menu</button><button data-ui="custom">C &middot; Customize</button><button data-ui="quests">Q &middot; Quests</button><button data-ui="map">M &middot; Map</button><button data-ui="forge">I &middot; Swords</button><button data-ui="acct" id="acctBtn">Account</button><button data-ui="admin" id="adminBtn" style="display:none">Admin</button><button id="sndBtn">N &middot; Sound on</button></div>
 <div id="toast"></div>
 <div id="weapons"><div data-w="cutlass">1 &middot; Cutlass</div><div data-w="pistol">2 &middot; Pistol</div></div>
 <div id="hurt"></div><div id="fade"></div>
 <div id="panel" class="ovl"><div class="box"><div class="tabs"><button data-t="pirate">Your pirate</button><button data-t="ship">Your ship</button></div><div id="panelBody"></div><div class="foot"><button class="close">Done</button></div></div></div>
 <div id="qlog" class="ovl"><div class="box"><h2>Quest log</h2><div id="qlist"></div><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="forge" class="ovl"><div class="box"><h2>Swords and the forge</h2><div id="mats"></div><div id="swordList"></div><div class="foot"><button class="close">Close</button></div></div></div>
-<div id="tele" class="ovl"><div class="box"><h2>Teleport</h2><div id="teleList"></div><p class="note">Tip: open the map (M) and click anywhere to jump there. Click land to stand on it, or click water to sail there in your ship.</p><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="acct" class="ovl"><div class="box"><h2>Captain's accounts</h2><div id="acctList"></div>
 <div class="row"><input id="acctName" maxlength="20" placeholder="New captain's name"><button id="acctNew">Create account</button></div>
 <h2 style="margin-top:16px;font-size:18px">Save code</h2>
@@ -140,7 +139,7 @@
 <div id="menu" class="ovl"><div class="box" style="text-align:center;width:min(420px,calc(100vw - 32px))">
 <h2 id="mTitle" style="font-size:30px;margin-bottom:4px"></h2><p class="note" id="mSub" style="margin:0 0 16px"></p>
 <button class="mbtn" id="mPlay"></button><button class="mbtn" id="mSave">Save game</button><button class="mbtn" id="mAcct">Accounts and save codes</button><button class="mbtn" id="mSnd"></button><button class="mbtn" id="mCtl">Controls</button>
-<div id="mCtlBox" class="note" style="display:none;text-align:left;line-height:1.7"><b>WASD</b> walk &middot; <b>Shift</b> run &middot; <b>Space</b> jump &middot; <b>F</b> attack &middot; <b>1 / 2</b> switch weapon &middot; <b>E</b> talk and interact &middot; <b>Drag</b> to look around<br><b>C</b> customize &middot; <b>Q</b> quests &middot; <b>M</b> map &middot; <b>I</b> swords &middot; <b>T</b> teleport &middot; <b>N</b> sound &middot; <b>Esc</b> this menu</div>
+<div id="mCtlBox" class="note" style="display:none;text-align:left;line-height:1.7"><b>WASD</b> walk &middot; <b>Shift</b> run &middot; <b>Space</b> jump &middot; <b>F</b> attack &middot; <b>1 / 2</b> switch weapon &middot; <b>E</b> talk and interact &middot; <b>Drag</b> to look around<br><b>C</b> customize &middot; <b>Q</b> quests &middot; <b>M</b> map &middot; <b>I</b> swords &middot; <b>N</b> sound &middot; <b>Esc</b> this menu</div>
 </div></div>
 <div id="prompt"></div>
 <div id="dialog"><div id="dname"></div><div id="dtext"></div><div id="dopts"></div><div id="dhint">E or click to continue</div></div>
@@ -2207,6 +2206,78 @@
     const pts = [[0, T.L / 2 + 1], [0, -T.L / 2], [T.B / 2, 0], [-T.B / 2, 0], [T.B * 0.35, T.L * 0.3], [-T.B * 0.35, T.L * 0.3], [T.B * 0.4, -T.L * 0.4], [-T.B * 0.4, -T.L * 0.4]];
     return pts.some(([lx, lz]) => { const wx = cx + lx * c + lz * s, wz = cz - lx * s + lz * c; return heightAt(wx, wz) > -2.2 || onDock(wx, wz); });
   }
+  // ---- autopilot route planning: A* over a grid of open water, so the crew sails round islands and reefs ----
+  const NAV_CELL = 40, NAV_MIN = -5200, NAV_N = Math.ceil(10400 / NAV_CELL);
+  let navGrid = null;
+  function buildNavGrid() {
+    navGrid = new Uint8Array(NAV_N * NAV_N);
+    for (let j = 0; j < NAV_N; j++) for (let i = 0; i < NAV_N; i++) {
+      const x = NAV_MIN + (i + 0.5) * NAV_CELL, z = NAV_MIN + (j + 0.5) * NAV_CELL;
+      let ok = heightAt(x, z) < -4.5 && !onDock(x, z);
+      for (let k = 0; ok && k < 8; k++) { const a = k * Math.PI / 4, px = x + Math.cos(a) * 26, pz = z + Math.sin(a) * 26; if (heightAt(px, pz) > -3 || onDock(px, pz)) ok = false; }
+      if (ok && SEA_ROCKS.some(r => Math.hypot(x - r.x, z - r.z) < r.hitRadius + 34)) ok = false;
+      navGrid[j * NAV_N + i] = ok ? 1 : 0;
+    }
+  }
+  const navIdx = (x, z) => { const i = Math.floor((x - NAV_MIN) / NAV_CELL), j = Math.floor((z - NAV_MIN) / NAV_CELL); return i < 0 || j < 0 || i >= NAV_N || j >= NAV_N ? -1 : j * NAV_N + i; };
+  const navOpen = c => c >= 0 && navGrid[c] === 1;
+  const navPos = c => ({ x: NAV_MIN + (c % NAV_N + 0.5) * NAV_CELL, z: NAV_MIN + (Math.floor(c / NAV_N) + 0.5) * NAV_CELL });
+  function navNearestOpen(x, z) {
+    const c0 = navIdx(Math.max(NAV_MIN, Math.min(-NAV_MIN - 1, x)), Math.max(NAV_MIN, Math.min(-NAV_MIN - 1, z)));
+    if (navOpen(c0)) return c0;
+    const i0 = c0 % NAV_N, j0 = Math.floor(c0 / NAV_N);
+    for (let r = 1; r < 60; r++) {
+      let best = -1, bd = 1e9;
+      for (let j = j0 - r; j <= j0 + r; j++) for (let i = i0 - r; i <= i0 + r; i++) {
+        if (Math.max(Math.abs(i - i0), Math.abs(j - j0)) !== r || i < 0 || j < 0 || i >= NAV_N || j >= NAV_N) continue;
+        const c = j * NAV_N + i; if (!navGrid[c]) continue;
+        const p = navPos(c), d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = c; }
+      }
+      if (best >= 0) return best;
+    }
+    return -1;
+  }
+  // is the straight line between two points clear water?
+  function navClear(a, b) {
+    const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.ceil(d / 15);
+    for (let k = 1; k < n; k++) { const t = k / n; if (!navOpen(navIdx(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t))) return false; }
+    return true;
+  }
+  function planRoute(fx, fz, tx, tz) {
+    if (!navGrid) buildNavGrid();
+    const s0 = navNearestOpen(fx, fz), g0 = navNearestOpen(tx, tz);
+    if (s0 < 0 || g0 < 0) return null;
+    const N = NAV_N * NAV_N, gs = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+    const gp = navPos(g0), h = c => { const p = navPos(c), dx = Math.abs(p.x - gp.x), dz = Math.abs(p.z - gp.z); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
+    const heap = [];   // binary heap of [f, cell]
+    const push = (f, c) => { heap.push([f, c]); let i = heap.length - 1; while (i > 0) { const pi = (i - 1) >> 1; if (heap[pi][0] <= heap[i][0]) break; [heap[pi], heap[i]] = [heap[i], heap[pi]]; i = pi; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    gs[s0] = 0; push(h(s0), s0);
+    let found = false;
+    while (heap.length) {
+      const [, c] = pop(); if (closed[c]) continue; closed[c] = 1;
+      if (c === g0) { found = true; break; }
+      const ci = c % NAV_N, cj = Math.floor(c / NAV_N);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= NAV_N || nj >= NAV_N) continue;
+        const nc = nj * NAV_N + ni; if (!navGrid[nc] || closed[nc]) continue;
+        if (di && dj && (!navGrid[cj * NAV_N + ni] || !navGrid[nj * NAV_N + ci])) continue;   // no cutting corners past land
+        const ng = gs[c] + (di && dj ? 1.414 : 1) * NAV_CELL;
+        if (ng < gs[nc]) { gs[nc] = ng; from[nc] = c; push(ng + h(nc), nc); }
+      }
+    }
+    if (!found) return null;
+    const cells = []; for (let c = g0; c >= 0; c = from[c]) cells.push(navPos(c)); cells.reverse();
+    // pull the string: keep only the turns the ship really needs
+    const pts = [{ x: fx, z: fz }, ...cells];
+    const out = [pts[0]]; let i = 0;
+    while (i < pts.length - 1) { let j = pts.length - 1; while (j > i + 1 && !navClear(pts[i], pts[j])) j--; out.push(pts[j]); i = j; }
+    out.shift();
+    const dest = navPos(g0), exact = navOpen(navIdx(tx, tz));
+    if (exact && navClear(out[out.length - 1] || dest, { x: tx, z: tz })) out.push({ x: tx, z: tz });
+    return { pts: out, dest: out[out.length - 1], snapped: !exact };
+  }
   function updateShip(dt, t) {
     if (!ship) return;
     const T = ship.T;
@@ -2228,8 +2299,37 @@
       // Autopilot is ordinary ship navigation: turn toward the plotted point,
       // build speed under sail, and let the shared movement step advance the hull.
       // Never assign the destination directly to ship.x/ship.z.
-      const dx = autoRoute.x - ship.x, dz = autoRoute.z - ship.z, d = Math.hypot(dx, dz);
-      if (d < 22) {
+      // steer for the next turn on the planned route; skip ahead as soon as the way to a later one is clear
+      const path = autoRoute.path || [{ x: autoRoute.x, z: autoRoute.z }];
+      autoRoute.wp = autoRoute.wp || 0;
+      while (autoRoute.wp < path.length - 1 && (Math.hypot(path[autoRoute.wp].x - ship.x, path[autoRoute.wp].z - ship.z) < 45 || (navGrid && navClear({ x: ship.x, z: ship.z }, path[autoRoute.wp + 1])))) autoRoute.wp++;
+      const wp = path[autoRoute.wp], last = autoRoute.wp === path.length - 1;
+      const dx = wp.x - ship.x, dz = wp.z - ship.z, d = Math.hypot(dx, dz);
+      // stuck against the dock, a reef or the shore (or moored with no room to turn): work her clear first,
+      // ahead or astern, whichever way is open and leads toward the course; after a few tries, plot afresh
+      autoRoute.stuckT = !autoRoute.escape && Math.abs(ship.speed) < 1.5 && ship.sailSet > 0.5 ? (autoRoute.stuckT || 0) + dt : 0;
+      if (autoRoute.stuckT > 1.2) {
+        autoRoute.stuckT = 0; autoRoute.tries = (autoRoute.tries || 0) + 1;
+        if (autoRoute.tries % 4 === 0) { const r = planRoute(ship.x, ship.z, autoRoute.x, autoRoute.z); if (r) { autoRoute.path = r.pts; autoRoute.wp = 0; } }
+        let best = null, bs = 1e9;
+        for (const dh of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) for (const dir of [1, -1]) {
+          const h = ship.heading + dh; if (shipBlocked(ship.x, ship.z, h)) continue;
+          let ok = true; for (let k = 1; k <= 6 && ok; k++) ok = !shipBlocked(ship.x + dir * Math.sin(h) * 4 * k, ship.z + dir * Math.cos(h) * 4 * k, h);
+          if (!ok) continue;
+          const ex = ship.x + dir * Math.sin(h) * 24, ez = ship.z + dir * Math.cos(h) * 24, sc = Math.hypot(wp.x - ex, wp.z - ez) + Math.abs(dh) * 30 + (dir < 0 ? 15 : 0);
+          if (sc < bs) { bs = sc; best = { h, dir }; }
+        }
+        if (best) autoRoute.escape = { h: best.h, dir: best.dir, x: ship.x, z: ship.z, t: 0 };
+      }
+      if (autoRoute.escape) {
+        const E = autoRoute.escape; E.t += dt;
+        ship.sailTarget = E.dir > 0 ? 0.6 : 0.3;
+        ship.speed += (E.dir * T.speed * 0.35 - ship.speed) * Math.min(1, dt * 0.8);
+        const err = angDiff(ship.heading, E.h), nh = ship.heading + Math.max(-T.turn * dt, Math.min(T.turn * dt, err));
+        if (!shipBlocked(ship.x, ship.z, nh)) ship.heading = nh;
+        ship.steer += (Math.sign(err) * Math.min(1, Math.abs(err) * 4) - ship.steer) * Math.min(1, dt * 1.5);
+        if (Math.hypot(ship.x - E.x, ship.z - E.z) > 26 || E.t > 9) autoRoute.escape = null;
+      } else if (last && d < 22) {
         const finishedRoute = autoRoute;
         autoRoute.active = false; autoRoute = null; ship.speed = 0; ship.sailTarget = 0.12;
         restoreAutopilotCrew(finishedRoute);
@@ -2238,9 +2338,10 @@
         const desired = Math.atan2(dx, dz), err = angDiff(ship.heading, desired);
         const steer = Math.abs(err) < 0.025 ? 0 : Math.sign(err);
         ship.sailTarget = 1;
-        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.15 : 1;
-        const cruiseSpeed = Math.min(14, T.speed * seaBuff);
-        ship.speed += (cruiseSpeed * Math.max(0.2, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.32);
+        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.35 : 1;
+        // full sail on a straight run; ease off for sharp turns and when closing on the last mark
+        const cruiseSpeed = T.speed * seaBuff * 0.9 * Math.max(0.35, Math.cos(Math.min(Math.PI / 2, Math.abs(err)))) * (last ? Math.min(1, 0.25 + d / 160) : 1);
+        ship.speed += (cruiseSpeed * Math.max(0.2, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.4);
         const turnRate = T.turn * Math.min(1, 0.25 + Math.abs(ship.speed) / Math.max(1, T.speed));
         const turnStep = Math.max(-turnRate * dt, Math.min(turnRate * dt, err));
         const nh = ship.heading + turnStep;
@@ -2271,7 +2372,7 @@
     // Cap autopilot displacement per simulation step so even unusual ship
     // stats or a long frame can never make the vessel jump to its destination.
     const requestedStep = ship.speed * dt;
-    const step = autoRoute && autoRoute.active ? Math.min(requestedStep, 14 * dt) : requestedStep;
+    const step = autoRoute && autoRoute.active ? Math.min(requestedStep, T.speed * 1.6 * dt) : requestedStep;
     const nx = ship.x + sx * step, nz = ship.z + sz * step;
     if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; } else ship.speed *= -0.18;
     // A collision with an offshore reef damages the hull and knocks the ship back.
@@ -3502,19 +3603,17 @@
     bigmap.style.display = which === 'map' ? 'flex' : 'none';
     if (which !== 'map') routeTools.style.display = 'none';
     forgeEl.style.display = which === 'forge' ? 'flex' : 'none';
-    teleEl.style.display = which === 'tele' ? 'flex' : 'none';
     acctEl.style.display = which === 'acct' ? 'flex' : 'none';
     if (which === 'acct') { acctMsg.textContent = ''; renderAcct(); }
     adminEl.style.display = which === 'admin' && isAdmin ? 'flex' : 'none';
     if (which === 'admin' && isAdmin) renderAdmin();
-    if (which === 'tele') renderTele();
     if (which === 'custom') renderCustom();
     if (which === 'quests') renderQuests();
     if (which === 'map') drawBigMap();
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = teleEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -3647,21 +3746,29 @@
     if (!autoRoute || !bigc) return;
     const x = 320 + (autoRoute.x - 300) / 15.5, y = 320 + autoRoute.z / 15.5;
     bctx.save(); bctx.strokeStyle = '#ffdf69'; bctx.lineWidth = 3; bctx.setLineDash([8, 5]);
-    bctx.beginPath(); bctx.moveTo(320 + (ship.x - 300) / 15.5, 320 + ship.z / 15.5); bctx.lineTo(x, y); bctx.stroke(); bctx.setLineDash([]);
+    bctx.beginPath(); bctx.moveTo(320 + (ship.x - 300) / 15.5, 320 + ship.z / 15.5);
+    for (const q of (autoRoute.path || []).slice(autoRoute.wp || 0)) bctx.lineTo(320 + (q.x - 300) / 15.5, 320 + q.z / 15.5);
+    if (!autoRoute.path) bctx.lineTo(x, y);
+    bctx.stroke(); bctx.setLineDash([]);
     bctx.fillStyle = '#d62929'; bctx.beginPath(); bctx.arc(x, y, 7, 0, Math.PI * 2); bctx.fill(); bctx.strokeStyle = '#fff3d6'; bctx.stroke(); bctx.restore();
   }
   bigc.addEventListener('click', e => {
     if (!routePicking || !deskSeated) return;
     const r = bigc.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * 640, py = (e.clientY - r.top) / r.height * 640;
-    autoRoute = { x: 300 + (px - 320) * 15.5, z: (py - 320) * 15.5 };
+    const tx = 300 + (px - 320) * 15.5, tz = (py - 320) * 15.5;
+    const plan = ship ? planRoute(ship.x, ship.z, tx, tz) : null;
+    if (!plan) { autoRoute = null; routeStartBtn.disabled = true; routeStatus.textContent = "The navigator can't find a way to sail there. Pick a spot in open water."; drawBigMap(); return; }
+    autoRoute = { x: plan.dest.x, z: plan.dest.z, path: plan.pts, wp: 0 };
+    let len = 0, a = { x: ship.x, z: ship.z }; for (const q of plan.pts) { len += Math.hypot(q.x - a.x, q.z - a.z); a = q; }
     routeStartBtn.disabled = false;
-    routeStatus.textContent = `Destination plotted: ${Math.round(autoRoute.x)}, ${Math.round(autoRoute.z)}. Assign a crew member to take the wheel.`;
+    routeStatus.textContent = `${plan.snapped ? "That's land or shallows, so the course ends in the nearest open water. " : ''}Course plotted: about ${Math.round(len).toLocaleString()} m${plan.pts.length > 1 ? ` with ${plan.pts.length - 1} turn${plan.pts.length > 2 ? 's' : ''} round the islands` : ''}. Assign a crew member to take the wheel.`;
     drawBigMap(); drawRouteOverlay();
   });
   document.getElementById('routePick').addEventListener('click', () => { routePicking = true; routeStatus.textContent = 'Click the chart to plot a destination.'; });
   routeStartBtn.addEventListener('click', () => {
     if (!autoRoute || !ship) return;
-    routePicking = false; autoRoute.active = true; autoRoute.firing = true;
+    routePicking = false; autoRoute.active = true; autoRoute.firing = true; autoRoute.wp = 0;
+    { const r = planRoute(ship.x, ship.z, autoRoute.x, autoRoute.z); if (r) autoRoute.path = r.pts; }   // the ship may have drifted since plotting
     autoRoute.startedAt = clock.elapsedTime; autoRoute.startX = ship.x; autoRoute.startZ = ship.z;
     ship.speed = 0; ship.sailTarget = 0.12;
     autoRoute.crewAssignment = assignAutopilotCrew();
@@ -3741,97 +3848,13 @@
     const k = e.key.toLowerCase();
     if ((k === 'e' || k === 'enter') && !e.repeat) interact();
     if (talk && talk.options && k >= '1' && k <= '5') chooseShip(+k - 1);
-    if (!talk && !(sailing && ship && ship.submerged) && !e.repeat && (k === 'c' || k === 'q' || k === 'm' || k === 'i' || k === 't')) toggleUI({ c: 'custom', q: 'quests', m: 'map', i: 'forge', t: 'tele' }[k]);
+    if (!talk && !(sailing && ship && ship.submerged) && !e.repeat && (k === 'c' || k === 'q' || k === 'm' || k === 'i')) toggleUI({ c: 'custom', q: 'quests', m: 'map', i: 'forge' }[k]);
     if (k === 'escape') { if (talk) closeDialog(); else if (uiOpen) closeUI(); }
     if (k === ' ') e.preventDefault();
   });
   dlg.addEventListener('click', interact);
   promptEl.addEventListener('click', interact);
 
-
-  // ---------- Teleport (for testing) ----------
-  const teleEl = document.getElementById('tele'), teleList = document.getElementById('teleList');
-  // a dry spot on an island's shore, tried from the side facing Gull Island and working round
-  function landSpot(I) {
-    for (const turn of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, 3.14]) {
-      const dir = I.toHome.clone().rotateAround(new THREE.Vector2(0, 0), turn);
-      for (let t = 1.6; t > 0.05; t -= 0.01) { const q = I.c.clone().addScaledVector(dir, I.r * t), h = heightAt(q.x, q.y); if (h >= 0.8 && h <= 6) return q.addScaledVector(dir, -2); }
-    }
-    return I.c.clone();
-  }
-  // open water off an island's shore, deep enough for a ship
-  function seaSpot(I) {
-    const dir = I.toHome;
-    for (let t = 0.5; t < 6; t += 0.02) { const q = I.c.clone().addScaledVector(dir, I.r * t); if (heightAt(q.x, q.y) < -6.8) return q.addScaledVector(dir, 40); }
-    return I.c.clone().addScaledVector(dir, I.r * 2);
-  }
-  function afterTeleport() { for (const k in keys) keys[k] = false; snapCam = true; closeUI(); SFX.splash && SFX.splash(null, true); }
-  function teleportOnFoot(x, z, facing) {
-    if (talk) closeDialog();
-    if (inInterior) goUp();
-    if (ship && (onShip || sailing)) detach();
-    P.pos.set(x, groundAt(x, z) + 0.05, z); P.vy = 0; P.grounded = true; P.speed = 0;
-    if (facing !== undefined) { P.facing = facing; yaw = facing + Math.PI; }
-    player.root.position.copy(P.pos);
-    afterTeleport();
-  }
-  function teleportShip(x, z, heading) {
-    if (!ship) { toast('Ye have no ship yet. Ask Harbormaster Hal at the dock.'); return; }
-    if (talk) closeDialog();
-    if (inInterior) goUp();
-    if (ship.sinking) return;
-    ship.x = x; ship.z = z; ship.heading = heading; ship.speed = 0; ship.steer = 0;
-    if (!onShip && !sailing) attachToShip(ship.helm.x, ship.helm.y, ship.helm.z, 0);
-    if (!sailing) takeWheel();
-    updateShip(0, clock.elapsedTime);
-    P.pos.set(x, 0, z); yaw = heading + Math.PI;
-    afterTeleport();
-  }
-  const faceToward = (from, to) => Math.atan2(to.x - from.x, to.y - from.y);
-  function teleIsland(i) {
-    const I = ISLANDS[i];
-    if (i === 0) { teleportOnFoot(startP.x, startP.y, Math.atan2(-DOCK_DIR.x, -DOCK_DIR.y)); return; }
-    const q = landSpot(I); teleportOnFoot(q.x, q.y, faceToward(q, I.c));
-  }
-  function teleIslandBySea(i) {
-    const I = ISLANDS[i], q = i === 0 ? dockWorld(0, DOCK_LEN + 60) : seaSpot(I);
-    teleportShip(q.x, q.y, faceToward(q, I.c));
-  }
-  function teleStone() {
-    const st = new THREE.Vector2(STONE_POS.x, STONE_POS.z), c = ISLANDS[8].c, back = st.clone().sub(c).normalize();
-    const q = st.clone().addScaledVector(back, 4); teleportOnFoot(q.x, q.y, faceToward(q, st));
-  }
-  function bringShip() {
-    if (!ship) { toast('Ye have no ship yet. Ask Harbormaster Hal at the dock.'); return; }
-    if (onShip || sailing || inInterior) { toast("Ye're already aboard!"); return; }
-    // find the nearest open water around you and put the ship there, with you at the wheel
-    let best = null;
-    for (let r = 20; r < 900 && !best; r += 10) for (let a = 0; a < Math.PI * 2; a += 0.2) { const x = P.pos.x + Math.sin(a) * r, z = P.pos.z + Math.cos(a) * r; if (heightAt(x, z) < -6.8) { best = { x, z, h: a }; break; } }
-    if (!best) { toast("Couldn't find open water nearby."); return; }
-    teleportShip(best.x, best.z, best.h);
-  }
-  function renderTele() {
-    const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; teleList.appendChild(b); };
-    const head = t => { const h = document.createElement('h3'); h.textContent = t; teleList.appendChild(h); };
-    teleList.innerHTML = '';
-    head('Walk on shore');
-    ISLANDS.forEach((I, i) => btn(i === 0 ? 'Gull Island dock' : I.name, () => teleIsland(i)));
-    btn('Sword in the stone', teleStone);
-    btn('Near the mermaid statue (danger!)', () => { const d = new THREE.Vector2(STATUE_POS.x - STONE_POS.x, STATUE_POS.z - STONE_POS.z).normalize(); teleportOnFoot(STATUE_POS.x - d.x * 60, STATUE_POS.z - d.y * 60, Math.atan2(d.x, d.y)); });
-    head('Sail there in your ship');
-    ISLANDS.forEach((I, i) => btn(I.name, () => teleIslandBySea(i)));
-    head('Your ship');
-    btn('Bring my ship to me', bringShip);
-  }
-  bigc.addEventListener('click', e => {
-    const r = bigc.getBoundingClientRect();
-    const x = ((e.clientX - r.left) * 640 / r.width - 320) * 15.5, z = ((e.clientY - r.top) * 640 / r.height - 320) * 15.5;
-    if (Math.abs(x) > 5150 || Math.abs(z) > 5150) return;
-    const h = heightAt(x, z);
-    if (h > 0.3) teleportOnFoot(x, z);
-    else if (h < -6.8 && ship) teleportShip(x, z, ship.heading);
-    else teleportOnFoot(x, z);   // shallows: wade in
-  });
 
   // ---------- Combat ----------
   // ---------- Crafting: materials, swords and the forge ----------
