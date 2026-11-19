@@ -21,7 +21,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
-const RELAY_TOPICS = new Set(['fire', 'pvp']);
+const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite']);
 
 // ---------- static files ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };

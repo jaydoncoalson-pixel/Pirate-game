@@ -114,7 +114,7 @@
 <canvas id="mini" width="200" height="200"></canvas>
 <div id="btns"><button id="menuBtn">Esc &middot; Menu</button><button data-ui="custom">C &middot; Customize</button><button data-ui="quests">Q &middot; Quests</button><button data-ui="map">M &middot; Map</button><button data-ui="forge">I &middot; Swords</button><button data-ui="acct" id="acctBtn">Account</button><button data-ui="admin" id="adminBtn" style="display:none">Admin</button><button id="sndBtn">N &middot; Sound on</button></div>
 <div id="toast"></div>
-<div id="weapons"><div data-w="cutlass">1 &middot; Cutlass</div><div data-w="pistol">2 &middot; Pistol</div></div>
+<div id="weapons"><div data-w="cutlass">1 &middot; Cutlass</div><div data-w="pistol">2 &middot; Pistol</div><div id="hornSlot" style="display:none">3 &middot; Serpent Horn</div></div>
 <div id="hurt"></div><div id="fade"></div>
 <div id="panel" class="ovl"><div class="box"><div class="tabs"><button data-t="pirate">Your pirate</button><button data-t="ship">Your ship</button></div><div id="panelBody"></div><div class="foot"><button class="close">Done</button></div></div></div>
 <div id="qlog" class="ovl"><div class="box"><h2>Quest log</h2><div id="qlist"></div><div class="foot"><button class="close">Close</button></div></div></div>
@@ -126,6 +126,7 @@
 <textarea id="acctCode" rows="3" spellcheck="false" placeholder="Paste a save code here"></textarea>
 <div class="ctl" style="margin-top:8px"><button id="acctGet">Get save code</button><button id="acctCopy">Copy</button><button id="acctLoad">Load code as new account</button></div>
 <p class="note" id="acctMsg"></p><div class="foot"><button class="close">Close</button></div></div></div>
+<div id="elpick" class="ovl"><div class="box" style="width:min(460px,calc(100vw - 32px))"><h2>The Elder Serpent awaits yer command</h2><div id="elpickBody"></div><p class="note">Press a number or click. Sound the horn (3) again any time to change his orders.</p><div class="foot"><button class="close">Cancel</button></div></div></div>
 <div id="krpick" class="ovl"><div class="box" style="width:min(440px,calc(100vw - 32px))"><h2>Where should the kraken strike?</h2><div id="krpickBody"></div><p class="note">Press a number or click. Press R again any time while it fights for ye to send it after another target.</p><div class="foot"><button class="close">Cancel</button></div></div></div>
 <div id="admin" class="ovl"><div class="box"><h2>Admin tools</h2><p class="note" style="margin-top:0">Signed in as <b id="adminWho"></b></p><div id="adminBody"></div><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="bigmap" class="ovl"><div class="box mapbox"><h2>Chart of the seas</h2><canvas id="bigc" width="640" height="640"></canvas>
@@ -441,6 +442,7 @@
       const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
       const big = MIST.rocks.length < 14, r = big ? 110 + mr() * 85 : 34 + mr() * 42, hp = big ? 140 + mr() * 150 : 26 + mr() * 60;
       if (Math.abs(x) > EDGE - 120 || Math.abs(z) > EDGE - 120 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+      if (Math.hypot(x - MIST.x, z - MIST.z) < r + 150) continue;   // keep clear water round the Serpent Spire
       if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 75)) continue;
       MIST.rocks.push({ x, z, r, hp, e: big ? 0.85 : 0.6, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
     }
@@ -458,7 +460,13 @@
     }
     return h;
   }
-  function heightAt(x, z) { let h = mistRockH(x, z); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
+  // the Serpent Spire stands in the heart of the shoals on a round stone skerry: flat on top, sloping into the sea like a beach
+  const TOWER = { x: MIST.x, z: MIST.z, flat: 46, foot: 80, top: 3.2 };
+  function towerH(x, z) {
+    const d = Math.hypot(x - TOWER.x, z - TOWER.z); if (d > TOWER.foot) return -100;
+    return -7 + (TOWER.top + 7) * sstep(TOWER.foot, TOWER.flat, d);
+  }
+  function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
   const PALETTES = {
     home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 22 },
@@ -1058,6 +1066,87 @@
       const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 14, 6), hullM); mast.position.set(0, 4, 2); mast.rotation.z = 0.5; w.add(mast);
     });
   }
+  // ---------- The Serpent Spire: a stone tower 300 m tall in the heart of the shoals ----------
+  // A spiral stair winds up the outside to a platform at the top, where the Serpent Horn rests on a pedestal.
+  const SPIRE = { x: TOWER.x, z: TOWER.z, Rc: 16, Ro: 25, y0: TOWER.top, H: 300, P: 36 };
+  SPIRE.top = SPIRE.y0 + SPIRE.H; SPIRE.turns = SPIRE.H / SPIRE.P;
+  const spireGroup = new THREE.Group(); scene.add(spireGroup);
+  const hornGroup = new THREE.Group();
+  {
+    const stoneTex = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#6f6b63'; g.fillRect(0, 0, w, h);
+      for (let row = 0; row < 8; row++) for (let col = 0; col < 4; col++) {
+        const x = col * 64 + (row % 2) * 32, y = row * 32, v = 95 + Math.floor(Math.random() * 30);
+        g.fillStyle = `rgb(${v + 8},${v + 4},${v - 4})`; g.fillRect(x + 2, y + 2, 60, 28); g.fillRect(x - 254, y + 2, 60, 28);
+      }
+      g.fillStyle = 'rgba(40,60,40,0.25)'; for (let i = 0; i < 40; i++) g.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 10, 2 + Math.random() * 6);   // moss and sea-stain
+    });
+    stoneTex.wrapS = stoneTex.wrapT = THREE.RepeatWrapping;
+    const coreTex = stoneTex.clone(); coreTex.needsUpdate = true; coreTex.repeat.set(10, 75);
+    const stone = new THREE.MeshLambertMaterial({ color: 0xcfc8bb, map: stoneTex }), dark = new THREE.MeshLambertMaterial({ color: 0x55524c });
+    const S = SPIRE, add = (m, x, y, z) => { m.position.set(S.x + x, y, S.z + z); spireGroup.add(m); return m; };
+    // the skerry's paving, the plinth and the great round core
+    add(new THREE.Mesh(new THREE.CylinderGeometry(TOWER.flat - 2, TOWER.flat + 2, 1.2, 40), dark), 0, S.y0 - 0.55, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(S.Rc + 3, S.Rc + 4.5, 7, 32), stone), 0, S.y0 + 3, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(S.Rc, S.Rc * 1.06, S.H, 32, 1, true), new THREE.MeshLambertMaterial({ color: 0xcfc8bb, map: coreTex })), 0, S.y0 + S.H / 2, 0);
+    // rings of darker stone every turn, and narrow lit windows climbing the core
+    for (let k = 1; k < S.turns; k++) add(new THREE.Mesh(new THREE.CylinderGeometry(S.Rc + 0.6, S.Rc + 0.6, 1.4, 32), dark), 0, S.y0 + k * S.P - 4, 0);
+    const winM = new THREE.MeshBasicMaterial({ color: 0xffc46a });
+    for (let k = 0; k < 18; k++) { const a = k * 2.2, y = S.y0 + 20 + k * 15.5, w = add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 4, 0.4), winM), Math.cos(a) * (S.Rc + 0.05), y, Math.sin(a) * (S.Rc + 0.05)); w.rotation.y = -a + Math.PI / 2; }
+    // the spiral stair: one stone slab per step, with a low wall along the outer edge
+    const STEP = 0.6, nSteps = Math.round(S.H / STEP), dA = Math.PI * 2 * STEP / S.P, rm = (S.Rc + S.Ro) / 2;
+    const slabs = new THREE.InstancedMesh(new THREE.BoxGeometry(S.Ro - S.Rc + 0.6, 1.4, dA * rm * 1.15), stone, nSteps);
+    const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 1.6, dA * S.Ro * 1.1), dark, nSteps);
+    const o = new THREE.Object3D();
+    for (let i = 0; i < nSteps; i++) {
+      const a = (i + 0.5) * dA, y = S.y0 + STEP * (i + 0.5);
+      o.position.set(S.x + Math.cos(a) * rm, y - 0.7, S.z + Math.sin(a) * rm); o.rotation.set(0, -a, 0); o.updateMatrix(); slabs.setMatrixAt(i, o.matrix);
+      o.position.set(S.x + Math.cos(a) * (S.Ro - 0.2), y + 0.8, S.z + Math.sin(a) * (S.Ro - 0.2)); o.updateMatrix(); walls.setMatrixAt(i, o.matrix);
+    }
+    spireGroup.add(slabs, walls);
+    // the platform on top: battlements, braziers and the pedestal
+    add(new THREE.Mesh(new THREE.CylinderGeometry(S.Ro + 1, S.Rc, 6, 32), stone), 0, S.top - 3, 0);
+    for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2, b = add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 1.4), stone), Math.cos(a) * S.Ro, S.top + 1.2, Math.sin(a) * S.Ro); b.rotation.y = -a + Math.PI / 2; }
+    const fireM = new THREE.MeshBasicMaterial({ color: 0x5ad8ff });
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; add(new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.7, 2.2, 10), dark), Math.cos(a) * 15, S.top + 1.1, Math.sin(a) * 15); add(new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 8), fireM), Math.cos(a) * 15, S.top + 3.2, Math.sin(a) * 15); }
+    add(new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 1.6, 12), stone), 0, S.top + 0.8, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 1.4, 12), stone), 0, S.top + 2.2, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 0.5, 12), stone), 0, S.top + 3.1, 0);
+    // the Serpent Horn: a great curled horn, bone-white, banded in sea-green and gold
+    const boneM = new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }), bandM = new THREE.MeshLambertMaterial({ color: 0x1f8a74, emissive: 0x0a3a30 }), goldM = new THREE.MeshLambertMaterial({ color: 0xd4af37 });
+    for (let i = 0; i < 9; i++) {
+      const u = i / 8, a = u * 2.4, r0 = 0.42 - u * 0.33, seg = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 0.88, r0, 0.5, 10), i % 3 === 1 ? bandM : boneM);
+      seg.position.set(Math.sin(a) * 0.9 - 0.4, 0.35 + (1 - Math.cos(a)) * 0.55, 0); seg.rotation.z = -a; hornGroup.add(seg);
+    }
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.42, 0.35, 12), goldM); bell.position.set(-0.4, 0.15, 0); hornGroup.add(bell);
+    hornGroup.position.set(S.x, S.top + 3.4, S.z); hornGroup.rotation.z = Math.PI / 2 * 0.2; spireGroup.add(hornGroup);
+  }
+  // where yer feet land near the spire: the stair's slab at the turn just under ye, or the platform on top
+  function spireFloor(x, z, y) {
+    const S = SPIRE, dx = x - S.x, dz = z - S.z, r = Math.hypot(dx, dz);
+    if (r > S.Ro + 0.6) return -1e9;
+    if (y > S.top - 1.6) return S.top;
+    if (r < S.Rc) return -1e9;
+    let a = Math.atan2(dz, dx); if (a < 0) a += Math.PI * 2;
+    const f = a / (Math.PI * 2); let best = -1e9;
+    for (let k = 0; k <= S.turns; k++) { const yy = S.y0 + S.P * (f + k); if (yy > S.top) break; if (yy <= y + 1.0 && yy > best) best = yy; }
+    return best;
+  }
+  // walls: ye can't walk into the core, off the outer edge of the stair, or over the battlements
+  function spireClamp(pos) {
+    const S = SPIRE, dx = pos.x - S.x, dz = pos.z - S.z, r = Math.hypot(dx, dz);
+    if (r > S.Ro + 4 || r < 1e-3) return;
+    let lo = 0, hi = 1e9;
+    if (pos.y > S.top - 1.6) { lo = 2.2; hi = S.Ro - 1.2; }          // on top: round the pedestal, inside the battlements
+    else if (pos.y > S.y0 + 1.5) { lo = S.Rc + 0.5; hi = S.Ro - 0.9; }   // on the stair
+    else lo = S.Rc + 4.6;                                                // the plinth at the foot
+    const nr = Math.max(lo, Math.min(hi, r)); if (nr !== r) { pos.x = S.x + dx / r * nr; pos.z = S.z + dz / r * nr; }
+  }
+  const nearHorn = () => !STATE.horn && !onShip && !sailing && !inInterior && P.pos.y > SPIRE.top - 1 && Math.hypot(P.pos.x - SPIRE.x, P.pos.z - SPIRE.z) < 5;
+  function takeHorn() {
+    STATE.horn = true; save(); hornGroup.visible = false; refreshHornSlot();
+    SFX.fanfare(); toast('Ye take up the Serpent Horn! Press 3 to sound it and call the Elder Serpent from the deep.');
+  }
   // low banks of mist that drift around ye inside the shoals
   const mistBanks = [];
   { const mm = () => new THREE.SpriteMaterial({ map: cloudTex, color: 0xdfe5e8, transparent: true, depthWrite: false, opacity: 0 });
@@ -1065,6 +1154,7 @@
   function updateMist(dt, f, day) {
     const c = camera.position, part = MIST.part || 0, clearR = 260 * part;   // the Sword of the Sea pushes the banks back into a wall around ye
     mistGroup.visible = Math.hypot(c.x - MIST.x, c.z - MIST.z) < MIST.r + 6000 && !inInterior;
+    spireGroup.visible = mistGroup.visible;
     for (const sp of mistBanks) {
       sp.visible = f > 0.02 && !inInterior;
       if (!sp.visible) continue;
@@ -3886,7 +3976,7 @@
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -4106,6 +4196,8 @@
       if (talk.line >= lines.length) { const fin = talk.end; closeDialog(); if (fin) fin(); } else showLine();
       return;
     }
+    if (RIDE.on) { elderDismount(); return; }
+    if (canMount()) { elderMount(); return; }
     if (sailing) { leaveWheel(); return; }
     if (inInterior) { if (deskSeated) { if (uiOpen === 'map') closeUI(); else openCaptainChart(); return; }
       if (Math.hypot(IP.x, IP.z + 4.7) < 1.7) { openCaptainChart(); return; }
@@ -4113,6 +4205,7 @@
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
     if (nearWheel()) { takeWheel(); return; }
+    if (nearHorn()) { takeHorn(); return; }
     const qs = nearQSpot(); if (qs) { qs.act(); return; }
     const nd = nearNode(); if (nd) { gather(nd); return; }
     if (nearSwordStone()) { summonMermaid(); return; }
@@ -4416,7 +4509,7 @@
   }
   makeCamp(ISLANDS[9], { x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }, 4, 'Bandit');
   makeCamp(ISLANDS[4], { x: SPOT_X.x + 14, z: SPOT_X.z + 10 }, 3, 'Blackwater thug');
-  const playerTargetable = () => !onShip && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
+  const playerTargetable = () => !RIDE.on && !onShip && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
   function updateBandits(dt) {
     let can = playerTargetable();
     for (const b of bandits) {
@@ -4539,7 +4632,7 @@
     const x = ent.x + lx * c + lz * s, z = ent.z - lx * s + lz * c, y = ent.group.position.y + T.H * 0.38;
     const rx = p.side * c, rz = -p.side * s, spd = 115 + Math.random() * 15;
     const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
-    const b = { m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, life: 6, dmg: shotDamage(ent, p.enemy) };
+    const b = { m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, from: ent, life: 6, dmg: shotDamage(ent, p.enemy) };
     const tg = aimTarget(ent, p.side, x, z, rx, rz);
     if (tg) aimShot(b, x, y, z, tg, p.lz / T.L);
     balls.push(b);
@@ -4599,6 +4692,7 @@
         const lx = dx * Math.cos(hh) - dz * Math.sin(hh), lz = dx * Math.sin(hh) + dz * Math.cos(hh), gy = tg.group.position.y;
         if (Math.abs(lx) < tg.T.B / 2 + 0.6 && Math.abs(lz) < tg.T.L / 2 && y < gy + tg.T.H && y > gy - 3) {
           hit = true; damageShip(tg, b.dmg || (b.enemy ? 6 : 11)); SFX.crash({ x, z });
+          if (tg === ship && b.from && b.from.remote && b.from.peer) ELD.threats.set(b.from.peer, clock.elapsedTime);   // the Elder Serpent remembers who fired on ye
           puff(x, y, z, { color: 0x6b4423, size: 3, life: 0.8, grow: 1.5, vy: 3, op: 0.9 });
           puff(x, y + 1, z, { color: 0x888888, size: 4, life: 2, grow: 2, vy: 2, op: 0.6 });
           break;
@@ -5110,6 +5204,7 @@
       pickup() { tone({ f0: 880, f1: 1320, dur: 0.15, vol: 0.1 }); tone({ f0: 1320, dur: 0.2, vol: 0.07, delay: 0.08 }); },
       fanfare() { [523, 659, 784, 1046].forEach((f, i) => tone({ type: 'triangle', f0: f, dur: i === 3 ? 0.6 : 0.16, vol: 0.14, delay: 0.25 + i * 0.13 })); },
       quest() { [392, 523].forEach((f, i) => tone({ type: 'triangle', f0: f, dur: 0.25, vol: 0.12, delay: i * 0.15 })); },
+      horn() { tone({ type: 'sawtooth', f0: 98, f1: 104, dur: 2.6, vol: 0.22, attack: 0.5 }); tone({ type: 'triangle', f0: 147, f1: 156, dur: 2.6, vol: 0.18, attack: 0.5 }); tone({ type: 'sawtooth', f0: 196, f1: 185, dur: 1.4, vol: 0.08, attack: 0.3, delay: 1.2 }); },
       roar() { tone({ type: 'sawtooth', f0: 90, f1: 38, dur: 2.2, vol: 0.3, attack: 0.1 }); tone({ type: 'square', f0: 62, f1: 30, dur: 2.4, vol: 0.18, attack: 0.2 }); noise({ dur: 2, type: 'lowpass', f0: 500, vol: 0.3 }); },
       blip() { tone({ type: 'square', f0: 520 + Math.random() * 80, dur: 0.05, vol: 0.03 }); },
       click() { tone({ type: 'triangle', f0: 900, f1: 700, dur: 0.05, vol: 0.05 }); },
@@ -5945,7 +6040,7 @@
   });
   const end = () => { drag = null; cv.classList.remove('dragging'); };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
-  cv.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(260, Math.max(4, dist * (1 + Math.sign(e.deltaY) * 0.12)));
+  cv.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(RIDE.on ? 600 : 260, Math.max(4, dist * (1 + Math.sign(e.deltaY) * 0.12)));
     userOrbitUntil = performance.now() + 9000; }, { passive: false });
 
   addEventListener('resize', () => {
@@ -7311,6 +7406,266 @@
     }
   }
 
+  // ---------- The Elder Serpent ----------
+  // Sound the Serpent Horn (3) and he rises from the deep: ten times the size of the shoal serpents and three times as fast.
+  // Guard: he keeps by yer ship and falls on anything that attacks ye (raiders, rival captains, serpents, even the Kraken).
+  // Attack: sound the horn again to pick a ship (or the Kraken) for him to hunt. Mount: he waits beside yer ship and ye ride him.
+  // He belongs to whoever sounded the horn: their game moves him, everyone else sees him through their presence.
+  const ELD_MAX = 102, ELD_SCALE = 10;   // 3x a shoal serpent's 34; 10x its size
+  const ELD = { on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
+  const RIDE = { on: false };
+  const ELD_MATS = {
+    scale: new THREE.MeshLambertMaterial({ color: 0x14231f, flatShading: true }), belly: new THREE.MeshLambertMaterial({ color: 0x4f5f46 }),
+    fin: new THREE.MeshLambertMaterial({ color: 0x7a0f14, side: THREE.DoubleSide }), horn: new THREE.MeshLambertMaterial({ color: 0x2a2420 }),
+    eye: new THREE.MeshBasicMaterial({ color: 0xff3418 }), mouth: new THREE.MeshLambertMaterial({ color: 0x3a0606 }), tooth: new THREE.MeshLambertMaterial({ color: 0xe8dfc4 }),
+    glow: new THREE.MeshBasicMaterial({ color: 0xff5a1e, transparent: true, opacity: 0.55 }),
+  };
+  function makeElderMesh() {
+    const M = ELD_MATS, g = new THREE.Group(), N = 30, SPACING = 4.2 * ELD_SCALE, segs = [];
+    scene.add(g);
+    for (let k = 0; k < N; k++) {
+      const r = 3.0 * ELD_SCALE * (1 - (k / N) * 0.8), m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), M.scale);
+      m.scale.set(1, 0.9, 1.75); g.add(m);
+      const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.82, 10, 6), M.belly); belly.position.y = -r * 0.32; belly.scale.set(1.05, 0.7, 1.2); m.add(belly);
+      // a ridge of blood-red blades all down the back, and bony spines between them
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, r * 1.6, 3), k % 2 ? M.horn : M.fin); fin.position.y = r * 0.95; fin.rotation.x = -0.55; fin.scale.z = 0.35; m.add(fin);
+      segs.push(m);
+    }
+    const head = new THREE.Group(); head.scale.setScalar(2.8 * ELD_SCALE); g.add(head);
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 3.6), M.scale); skull.position.z = 1.0; head.add(skull);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.35, 1.2), M.horn); brow.position.set(0, 0.75, 1.6); brow.rotation.x = 0.25; head.add(brow);
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 2.0), M.scale); snout.position.set(0, -0.2, 3.4); head.add(snout);
+    const jaw = new THREE.Group(); jaw.position.set(0, -0.68, 0.4); head.add(jaw);
+    const jm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.48, 4.4), M.belly); jm.position.z = 2.1; jaw.add(jm);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 4.0), M.mouth); mouth.position.set(0, 0.26, 2.1); jaw.add(mouth);
+    const throat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 2.4), M.glow); throat.position.set(0, 0.33, 1.4); jaw.add(throat);   // a furnace glow down its throat
+    for (let t = 0; t < 7; t++) [-1, 1].forEach(s => { const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 4), M.tooth); tooth.position.set(s * 0.66, 0.45, 0.5 + t * 0.58); jaw.add(tooth); const up = tooth.clone(); up.rotation.x = Math.PI; up.position.set(s * 0.72, -0.72, 1.7 + t * 0.44); head.add(up); });
+    [-1, 1].forEach(s => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), M.eye); eye.position.set(s * 1.05, 0.38, 1.9); eye.scale.set(1, 0.6, 1.3); head.add(eye);
+      // a crown of horns: two great sweeping ones and a row of smaller spikes behind
+      const big = new THREE.Mesh(new THREE.ConeGeometry(0.3, 3.2, 6), M.horn); big.position.set(s * 0.8, 1.2, -0.8); big.rotation.set(-1.15, 0, s * -0.4); head.add(big);
+      for (let i = 0; i < 3; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.4 - i * 0.25, 5), M.horn); sp.position.set(s * (1.1 + i * 0.12), 0.5 - i * 0.2, -0.2 - i * 0.6); sp.rotation.set(-1.3, 0, s * -1.0); head.add(sp); }
+      const frill = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.0, 3), M.fin); frill.position.set(s * 1.45, 0.1, -0.5); frill.rotation.set(0, 0, s * 1.3); frill.scale.z = 0.22; head.add(frill);
+    });
+    return { g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10 };
+  }
+  const ELD_TRAIL = 2;   // metres between remembered points of the path his body follows
+  function elderResetTrail(m, x, z, h) { m.trail.length = 0; for (let k = 0; k < m.N * m.SPACING / ELD_TRAIL + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * ELD_TRAIL, z: z - Math.cos(h) * k * ELD_TRAIL }); }
+  // lay the body along its path; lift rears the head up (to strike), emerge lowers the whole beast below the waves
+  function poseElder(m, x, z, h, lift, emerge, dt, t, opts = {}) {
+    m.t += dt;
+    const last = m.trail[0];
+    if (Math.hypot(x - last.x, z - last.z) > ELD_TRAIL) { m.trail.unshift({ x, z }); if (m.trail.length > m.N * m.SPACING / ELD_TRAIL + 8) m.trail.pop(); }
+    const sink = (1 - emerge) * 90, still = opts.still ? 0.35 : 1;
+    const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
+    m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
+    for (let k = 0; k < m.N; k++) {
+      const idx = Math.min(m.trail.length - 1, Math.round(k * m.SPACING / ELD_TRAIL)), p = m.trail[idx], q = m.trail[Math.min(m.trail.length - 1, idx + 3)];
+      let y = -9 + 20 * still * Math.sin(k * 0.42 - m.t * 1.5) - sink;
+      if (k < 7 && lift > 0) y += lift * (7 - k) * 16;
+      m.segs[k].position.set(p.x, y + waveHeight(p.x, p.z, t) * 0.5, p.z);
+      m.segs[k].rotation.set(0, Math.atan2(p.x - q.x, p.z - q.z), 0);
+    }
+    const hy = 16 + 8 * still * Math.sin(-m.t * 1.5 + 0.5) + lift * 130 - sink + waveHeight(x, z, t) * 0.5;
+    m.head.position.set(x, hy, z);
+    m.head.rotation.set(lift > 0 ? (opts.sk < 1.15 ? -0.5 * lift : 0.7 * lift) : -0.05, h, 0);
+    m.jaw.rotation.x = lift > 0 ? Math.min(0.9, lift * 1.1) : opts.angry ? 0.18 + Math.sin(m.t * 2.5) * 0.08 : 0.05;
+  }
+  const elderLift = sk => sk < 0.9 ? sk / 0.9 : sk < 1.15 ? 1 : Math.max(0, 1 - (sk - 1.15) / 0.6);
+  // steer for a point, feeling ahead for land: he's too big for the shallows
+  function elderSteer(tx, tz, want, dt, turn = 1.3) {
+    const desired = Math.atan2(tx - ELD.x, tz - ELD.z);
+    let nh = ELD.h + Math.max(-turn * dt, Math.min(turn * dt, angDiff(ELD.h, desired)));
+    for (let tries = 0; tries < 8; tries++) { const ax = ELD.x + Math.sin(nh) * 90, az = ELD.z + Math.cos(nh) * 90; if (heightAt(ax, az) < -4.5) break; nh += (tries % 2 ? -1 : 1) * 0.45 * (tries + 1); }
+    ELD.h = nh; ELD.speed += (want - ELD.speed) * Math.min(1, dt * 1.2);
+    elderMove(dt);
+  }
+  function elderMove(dt) {
+    const nx = ELD.x + Math.sin(ELD.h) * ELD.speed * dt, nz = ELD.z + Math.cos(ELD.h) * ELD.speed * dt;
+    if (heightAt(nx, nz) < -4.5 && Math.abs(nx) < EDGE && Math.abs(nz) < EDGE) { ELD.x = nx; ELD.z = nz; return true; }
+    ELD.speed *= 0.4; return false;
+  }
+  // what he's guarding: yer ship if ye have one afloat, otherwise yerself
+  const elderHome = () => ship && !ship.sinking ? { x: ship.x, z: ship.z, h: ship.heading, sp: Math.abs(ship.speed || 0), ship: true } : { x: P.pos.x, z: P.pos.z, h: P.facing, sp: 0, ship: false };
+  // targets: a raider, the Kraken, a shoal serpent, or another captain's ship
+  function elderTgPos(T) {
+    if (!T) return null;
+    if (T.kind === 'raider') return T.ent && (T.ent.state === 'patrol' || T.ent.state === 'attack') ? T.ent : null;
+    if (T.kind === 'kraken') return KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown' ? KR : null;
+    if (T.kind === 'serp') return serpAlive(T.ent) ? T.ent : null;
+    if (T.kind === 'player') { const e = window.__mpKrakenShip ? window.__mpKrakenShip(T.peer) : null; return e && !e.sinking ? e : null; }
+    if (T.kind === 'nearestRaider') { let b = null, bd = 1e9; for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') { const d = Math.hypot(r.x - ELD.x, r.z - ELD.z); if (d < bd) { bd = d; b = r; } } if (b) { T.kind = 'raider'; T.ent = b; } return b; }
+    return null;
+  }
+  // in guard mode: whatever is attacking ye right now, nearest first
+  function elderThreat() {
+    const H = elderHome(), now = clock.elapsedTime, me = window.__mpMe ? window.__mpMe() : null, out = [];
+    for (const r of raiders) if (r.state === 'attack' && Math.hypot(r.x - H.x, r.z - H.z) < 900) out.push({ kind: 'raider', ent: r });
+    const krOnMe = (KR.tgt && (KR.tgt.ent === ship || KR.tgt.kind === 'swim') && (KR.st === 'hunt' || KR.st === 'grip' || KR.st === 'attack')) || (ship && KR.lock === ship);
+    if (krOnMe && !(KR.ally > 0)) out.push({ kind: 'kraken' });
+    for (const s of SERP) if ((s.st === 'hunt' || s.st === 'circle' || s.st === 'strike') && Math.hypot(s.x - H.x, s.z - H.z) < 500 && (!s.net || !me || s.net.tg === me)) out.push({ kind: 'serp', ent: s });
+    for (const [peer, at] of ELD.threats) { if (now - at > 25) { ELD.threats.delete(peer); continue; } if (elderTgPos({ kind: 'player', peer })) out.push({ kind: 'player', peer }); }
+    let best = null, bd = 1e9; for (const T of out) { const e = elderTgPos(T); if (!e) continue; const d = Math.hypot(e.x - ELD.x, e.z - ELD.z); if (d < bd) { bd = d; best = T; } }
+    return best;
+  }
+  const elderName = T => T.kind === 'kraken' ? 'the Kraken' : T.kind === 'serp' ? 'a sea serpent' : T.kind === 'player' ? `${(window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain'}'s ship` : 'a Blackwater raider';
+  function elderBite(T, e) {
+    SFX.crash({ x: e.x, z: e.z }); wSplash(e.x, 1, e.z, true); wSplash(ELD.x, 1, ELD.z, true);
+    if (T.kind === 'raider') damageShip(e, 40);
+    else if (T.kind === 'kraken') {
+      if (krNet()) window.__mpKrSend('kdmg', { dmg: 45, el: 1 });
+      else { KR.hp -= 45; if (KR.hp <= 0 && KR.st !== 'grip' && KR.st !== 'attack') { KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; SFX.roar(); toast('The Elder Serpent drives the Kraken down into the abyss!'); } }
+    }
+    else if (T.kind === 'serp') serpentHurt(e, 60, { x: e.x, y: 2, z: e.z });
+    else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer, 30);
+  }
+  // close in at full speed, circle, rear up and strike
+  function elderFight(T, e, dt) {
+    const d = Math.hypot(e.x - ELD.x, e.z - ELD.z);
+    if (ELD.st === 'strike') {
+      ELD.sk += dt; elderSteer(e.x, e.z, ELD.sk < 0.9 ? 8 : 40, dt, 2.2);
+      if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; if (d < 140) elderBite(T, e); }
+      if (ELD.sk > 1.9) { ELD.st = 'swim'; ELD.strikeT = 1.4 + Math.random(); }
+      return;
+    }
+    if (d > 110) { elderSteer(e.x, e.z, Math.min(ELD_MAX, 30 + d * 0.5), dt, 1.6); return; }
+    ELD.ang = (ELD.ang ?? Math.atan2(ELD.x - e.x, ELD.z - e.z)) + dt * 0.5 * ELD.side;
+    elderSteer(e.x + Math.sin(ELD.ang) * 80, e.z + Math.cos(ELD.ang) * 80, 45, dt, 2.2);
+    ELD.strikeT -= dt; if (ELD.strikeT <= 0) { ELD.st = 'strike'; ELD.sk = 0; ELD.hit = false; SFX.roar(); }
+  }
+  function updateElder(dt, t) {
+    if (!ELD.on) return;
+    if (ELD.leaving) { ELD.emerge = Math.max(0, ELD.emerge - dt / 2.5); if (ELD.emerge <= 0) { ELD.on = false; ELD.leaving = false; if (ELD.mesh) ELD.mesh.g.visible = false; } }
+    else ELD.emerge = Math.min(1, ELD.emerge + dt / 3);
+    const H = elderHome();
+    let fighting = false;
+    if (RIDE.on) {
+      // ye hold the reins: W/S for pace, A/D to turn
+      if (!talk && !uiOpen) {
+        const f = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0), s = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0);
+        ELD.thr = Math.max(0, Math.min(1, ELD.thr + f * dt * 0.7));
+        ELD.h -= s * dt * (0.5 + 0.6 * (1 - ELD.thr * 0.5));
+      }
+      ELD.speed += (ELD.thr * ELD_MAX - ELD.speed) * Math.min(1, dt * 0.9);
+      if (!elderMove(dt)) { ELD.thr = 0; if (t - ELD.landT > 4) { ELD.landT = t; toast("He won't swim into the shallows. Turn him about!"); } }
+      ELD.st = 'swim';
+    } else if (ELD.mode === 'mount') {
+      // come alongside, a good way off the beam, and lie still
+      const sx = Math.sin(H.h), sz = Math.cos(H.h), off = (H.ship ? 70 : 60) * ELD.side, tx = H.x + sz * off, tz = H.z - sx * off, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
+      ELD.waiting = ds < 45;
+      if (ELD.waiting) { ELD.speed *= Math.max(0, 1 - dt * 1.5); ELD.h += angDiff(ELD.h, H.h) * Math.min(1, dt * 0.8); elderMove(dt); }
+      else elderSteer(tx, tz, Math.min(ELD_MAX, H.sp + ds * 0.4), dt, 1.4);
+      ELD.st = 'swim';
+    } else {
+      ELD.scanT -= dt;
+      if (ELD.mode === 'guard' && ELD.scanT <= 0) { ELD.scanT = 0.5; const T = elderThreat(); if (T && (!ELD.tg || !elderTgPos(ELD.tg))) { ELD.tg = T; toast(`The Elder Serpent turns on ${elderName(T)}!`); SFX.roar(); } else if (!T && ELD.tg && !elderTgPos(ELD.tg)) ELD.tg = null; }
+      const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg, e = elderTgPos(T);
+      if (ELD.mode === 'attack' && !e) { ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; toast('The Elder Serpent has no prey left. He returns to guard yer ship.'); }
+      else if (ELD.mode === 'guard' && ELD.tg && (!e || Math.hypot(e.x - H.x, e.z - H.z) > 1600)) { ELD.tg = null; ELD.st = 'swim'; }
+      if (e && (ELD.mode === 'attack' || ELD.tg)) { elderFight(T, e, dt); fighting = true; }
+      else {
+        // keep station off yer quarter, matching yer pace
+        ELD.st = 'swim';
+        const sx = Math.sin(H.h), sz = Math.cos(H.h), off = 120 * ELD.side, tx = H.x + sz * off - sx * 60, tz = H.z - sx * off - sz * 60, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
+        elderSteer(tx, tz, Math.min(ELD_MAX, H.sp + ds * 0.25), dt, 1.2);
+      }
+    }
+    const lift = ELD.st === 'strike' ? elderLift(ELD.sk) : 0;
+    ELD.lift = ELD.st === 'strike' && ELD.sk >= 1.15 ? -lift : lift; ELD.fighting = fighting;
+    poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.sk, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting });
+  }
+  function deepSpotNear(x, z, r0, r1) {
+    for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1 - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; let ok = Math.abs(px) < EDGE - 100 && Math.abs(pz) < EDGE - 100; for (let k = 0; k < 8 && ok; k++) ok = heightAt(px + Math.cos(k) * 70, pz + Math.sin(k) * 70) < -6; if (ok) return { x: px, z: pz }; }
+    return null;
+  }
+  function summonElder() {
+    const H = elderHome(), q = deepSpotNear(H.x, H.z, 180, 420);
+    if (!q) { toast("The horn's call rolls out... but there's no deep water near enough for him to rise. Try it at sea."); return; }
+    if (!ELD.mesh) ELD.mesh = makeElderMesh();
+    Object.assign(ELD, { on: true, mode: 'guard', x: q.x, z: q.z, h: Math.atan2(H.x - q.x, H.z - q.z), speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, tg: null, pick: null, emerge: 0, leaving: false, side: Math.random() < 0.5 ? 1 : -1, waiting: false });
+    elderResetTrail(ELD.mesh, ELD.x, ELD.z, ELD.h);
+    SFX.roar(); wSplash(q.x, 2, q.z, true);
+    toast('The sea boils... and the Elder Serpent rises from the deep! He guards yer ship. Sound the horn again (3) to command him.');
+  }
+  function dismissElder() { if (RIDE.on) elderDismount(); ELD.leaving = true; ELD.mode = 'guard'; toast('The Elder Serpent sinks back into the deep.'); }
+  function soundHorn() {
+    if (!STATE.horn || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
+    SFX.horn();
+    if (!ELD.on || ELD.leaving) summonElder(); else elderOpenMenu();
+  }
+  // ---- the horn's menu: his modes, and who to hunt ----
+  const elPickEl = document.getElementById('elpick'), elPickBody = document.getElementById('elpickBody');
+  let elOpts = [];
+  function elderOpenMenu() {
+    const H = elderHome(), dd = e => Math.round(Math.hypot(e.x - H.x, e.z - H.z));
+    elOpts = [
+      { label: 'Guard my ship', sub: 'follows close and attacks anything that attacks ye', on: ELD.mode === 'guard', act: () => { ELD.mode = 'guard'; ELD.pick = null; ELD.tg = null; ELD.st = 'swim'; toast('The Elder Serpent takes up his guard beside yer ship.'); } },
+      { label: 'Let me ride him', sub: 'he stops beside yer ship so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; toast('The Elder Serpent swims alongside and lowers his head. Walk up to him and press E to climb on.'); } },
+    ];
+    const tg = [];
+    if (raiders.some(r => r.state === 'patrol' || r.state === 'attack')) tg.push({ T: { kind: 'nearestRaider' }, label: 'Attack the nearest Blackwater raider' });
+    const list = window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [];
+    for (const q of list) tg.push({ T: { kind: 'player', peer: q.peer }, label: `Attack ${q.name}'s ship`, sub: `${dd(q.ship)} m away` });
+    if (KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown' && Math.hypot(KR.x - H.x, KR.z - H.z) < 5000) tg.push({ T: { kind: 'kraken' }, label: 'Attack the Kraken', sub: `${dd(KR)} m away` });
+    raiders.filter(r => r.state === 'patrol' || r.state === 'attack').map(r => ({ r, d: dd(r) })).filter(o => o.d < 2500).sort((a, b) => a.d - b.d).slice(0, 2)
+      .forEach(o => tg.push({ T: { kind: 'raider', ent: o.r }, label: `Attack that Blackwater ${o.r.galleon ? 'galleon' : 'raider'}`, sub: `${o.d} m away` }));
+    for (const o of tg) {
+      const cur = ELD.mode === 'attack' && ELD.pick && ELD.pick.kind === o.T.kind && (o.T.kind === 'kraken' || ELD.pick.peer === o.T.peer && ELD.pick.ent === o.T.ent);
+      elOpts.push({ label: o.label, sub: (o.sub || '') + (cur ? ' · his prey now' : ''), on: cur, act: () => { ELD.mode = 'attack'; ELD.pick = o.T; ELD.st = 'swim'; if (RIDE.on) elderDismount(); const e = elderTgPos(o.T); toast(e ? `Ye sound the horn and point... the Elder Serpent goes after ${elderName(o.T)}!` : 'There is nothing there for him to hunt.'); } });
+    }
+    elOpts.push({ label: 'Send him back to the deep', act: dismissElder });
+    elPickBody.innerHTML = '';
+    elOpts.slice(0, 9).forEach((o, i) => {
+      const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b> `; b.appendChild(document.createTextNode(o.label));
+      if (o.sub) { const sp = document.createElement('span'); sp.textContent = ' · ' + o.sub.replace(/^ · /, ''); b.appendChild(sp); }
+      if (o.on) b.style.borderStyle = 'dashed';
+      b.onclick = () => elChoose(i); elPickBody.appendChild(b);
+    });
+    if (uiOpen) closeUI();
+    uiOpen = 'elpick'; elPickEl.style.display = 'flex';
+  }
+  function elChoose(i) { const o = elOpts[i]; if (!o) return; closeUI(); o.act(); }
+  addEventListener('keydown', e => { if (uiOpen !== 'elpick' || e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 9) { e.preventDefault(); elChoose(n - 1); } });
+  // ---- riding him ----
+  const elderSaddle = () => { const m = ELD.mesh; m.head.updateMatrixWorld(); return m.head.localToWorld(new THREE.Vector3(0, 0.82, 0.9)); };
+  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && ELD.waiting && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < 150;
+  function elderMount() {
+    if (sailing) leaveWheel();
+    if (onShip) detach();
+    if (ship) ship.sailTarget = Math.min(ship.sailTarget ?? 0.12, 0.12);
+    RIDE.on = true; ELD.thr = 0; P.vy = 0; P.speed = 0; dist = 75; yaw = ELD.h + Math.PI; pitch = 0.3;
+    SFX.roar(); toast('Ye climb onto the Elder Serpent! W/S to speed up or slow down, A/D to turn, E to climb down.');
+  }
+  function elderDismount() {
+    RIDE.on = false; ELD.mode = 'guard'; ELD.thr = 0;
+    if (ship && !ship.sinking && Math.hypot(ship.x - P.pos.x, ship.z - P.pos.z) < 260) { P.pos.set(ship.x, P.pos.y, ship.z); board(); toast('Ye climb down onto yer ship. The Elder Serpent takes up his guard.'); }
+    else { const s = Math.sin(ELD.h), c = Math.cos(ELD.h); P.pos.set(ELD.x + c * 45, 2, ELD.z - s * 45); P.vy = 0; P.grounded = false; toast('Ye slide down into the sea beside him. He keeps guard over ye.'); }
+    dist = Math.min(dist, 30); snapCam = true;
+  }
+  function rideUpdate(dt) {
+    const p = elderSaddle(); P.pos.copy(p); P.facing = ELD.h; P.speed = 0;
+    if (player.root.parent !== scene) scene.add(player.root);
+    player.root.position.copy(P.pos); player.root.rotation.set(0, P.facing, 0);
+    player.update(dt, 0, false, false);
+  }
+  function refreshHornSlot() { const el = document.getElementById('hornSlot'); if (el) el.style.display = STATE.horn ? '' : 'none'; hornGroup.visible = !STATE.horn; }
+  document.getElementById('hornSlot').addEventListener('click', soundHorn);
+  addEventListener('keydown', e => { if (e.key === '3' && !e.repeat && !uiOpen && !talk) soundHorn(); });
+  refreshHornSlot();
+  // other captains' Elder Serpents, drawn from their presence
+  function updateRemoteElders(dt, t) {
+    for (const p of MP.peers.values()) {
+      const el = p.tgt && Array.isArray(p.tgt.el) ? p.tgt.el : null;
+      if (!el) { if (p.elder) p.elder.m.g.visible = false; continue; }
+      if (!p.elder) { const m = makeElderMesh(); p.elder = { m, x: el[0], z: el[1], h: el[2] }; elderResetTrail(m, el[0], el[1], el[2]); }
+      const E = p.elder, k = Math.min(1, dt * 4);
+      if (Math.hypot(el[0] - E.x, el[1] - E.z) > 600) { E.x = el[0]; E.z = el[1]; elderResetTrail(E.m, E.x, E.z, el[2]); }
+      E.x += (el[0] - E.x) * k; E.z += (el[1] - E.z) * k; E.h += angDiff(E.h, el[2]) * k;
+      const ls = +el[3] || 0;   // signed: rearing up (+) or lunging down (-)
+      poseElder(E.m, E.x, E.z, E.h, Math.abs(ls), el[4] ?? 1, dt, t, { sk: ls < 0 ? 1.2 : 0.5, angry: el[6] === 1, still: el[5] === 2 });
+    }
+  }
+
   // ---------- Loop ----------
   // ---------- Multiplayer (room presence) ----------
   const MP = { me: null, room: null, peers: new Map(), names: {}, sendT: 0, user: null, label: null };
@@ -7342,6 +7697,7 @@
     const p = MP.peers.get(peer); if (!p) return;
     scene.remove(p.ch.root); p.tag.remove();
     if (p.ship) scene.remove(p.ship.group);
+    if (p.elder) scene.remove(p.elder.m.g);
     MP.peers.delete(peer); mpDrawHud();
   }
   function mpOnPeers(ch) {
@@ -7370,7 +7726,10 @@
       if (!MP.room) return;
       MP.room.onPeers(mpOnPeers);
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
-      MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
+      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(`${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent strikes yer hull!`); } catch (e) {} });
+      window.__mpElderBite = (peer, dmg) => { MP.room.emit('ebite', { to: peer, dmg }).catch(() => {}); };
+      window.__mpPeerName = peer => MP.peers.get(peer)?.name;
+      MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { ELD.threats.set(m.peer, clock.elapsedTime); hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
       // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
       // Sword of the Sea vs players: the target's own game runs its kraken on their ship (full attack, they can fight back);
       // ours plays the same fight on our copy of their ship, and they tell us how it ends.
@@ -7513,7 +7872,8 @@
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null,
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
-          w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0 };   // w: weapon in hand
+          w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
+          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0] : 0 };   // el: their Elder Serpent
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0 };   // a: crewed, so raiders will hunt it
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
@@ -7597,6 +7957,7 @@
 
     updateShip(dt, t);
     updateCrew(dt);
+    updateElder(dt, t); if (MP.room) updateRemoteElders(dt, t);
     mpUpdate(dt, t);
     if (STOM.on) {
       stomachWalk(dt, t);
@@ -7613,6 +7974,8 @@
       if (player.root.parent !== scene) { scene.add(player.root); }
       player.root.position.copy(P.pos);
       player.update(dt, 0, true, false);
+    } else if (RIDE.on) {
+      rideUpdate(dt);
     } else if (sailing) {
       ship.group.updateMatrixWorld();
       player.root.getWorldPosition(P.pos);
@@ -7642,7 +8005,8 @@
     if (ship) npcColliders.push({ box: true, x: ship.x, z: ship.z, hw: ship.T.B / 2, hd: ship.T.L / 2, rot: ship.heading });
     if (P.speed > 0.05) moveWithCollision(P.pos, fx * P.speed * dt, fz * P.speed * dt, 0.45, npcColliders, playerOK);
     else resolve(P.pos, 0.45, npcColliders);
-    const g2 = groundAt(P.pos.x, P.pos.z);
+    spireClamp(P.pos);
+    const g2 = Math.max(groundAt(P.pos.x, P.pos.z), spireFloor(P.pos.x, P.pos.z, P.pos.y));
     const swimNow = !onDock(P.pos.x, P.pos.z) && g2 < swimY - 0.85;
     const floor = swimNow ? swimY : g2;
     if (P.grounded && keys[' '] && !talk && !uiOpen && !swimNow) { P.vy = 8; P.grounded = false; SFX.jump(); }
@@ -7726,11 +8090,14 @@
     else if (STOM.on) promptHtml = nearChest() ? '<b>E</b> Grab the treasure' : null;
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
+    else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>E</b> Climb down`;
+    else if (canMount()) promptHtml = '<b>E</b> Climb onto the Elder Serpent';
     else if (sailing) promptHtml = ship && ship.submerged ? '<b>C</b> Rise · <b>V</b> Dive · <b>E</b> Leave wheel' : '<b>E</b> Step away from the wheel';
     else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : nearWardrobe() ? '<b>E</b> Change yer outfit at the looking-glass' : nearTrophies() ? '<b>E</b> Look at yer trophies' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
     else if (nearHatch()) promptHtml = '<b>E</b> Go below deck';
     else if (nearDoor()) promptHtml = "<b>E</b> Enter the captain's quarters";
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
+    else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
@@ -7741,6 +8108,9 @@
       // A target inside the hull made the camera appear to clip through the ship.
       camTarget.lerp(tmp.set(ship.x, ship.group.position.y + (ship.submerged ? 4.5 : ship.T.H + 3), ship.z), Math.min(1, dt * (ship.submerged ? 4.5 : 6)));
       if (!drag && performance.now() > userOrbitUntil && Math.abs(ship.speed) > 1) yaw = angLerp(yaw, ship.heading + Math.PI, Math.min(1, dt * 0.35));
+    } else if (RIDE.on) {
+      camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 8, P.pos.z), Math.min(1, dt * 6));
+      if (!drag && performance.now() > userOrbitUntil && ELD.speed > 3) yaw = angLerp(yaw, ELD.h + Math.PI, Math.min(1, dt * 0.6));
     } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7, P.pos.z), Math.min(1, dt * 8));
     if (snapCam) { camTarget.set(P.pos.x, P.pos.y + 1.7, P.pos.z); snapCam = false; }
     camera.position.set(

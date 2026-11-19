@@ -108,6 +108,7 @@ const MIST = { x: -12900, z: 12900, r: 1350, rocks: [], name: 'The Mistwrack Sho
     const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
     const big = MIST.rocks.length < 14, r = big ? 110 + mr() * 85 : 34 + mr() * 42, hp = big ? 140 + mr() * 150 : 26 + mr() * 60;
     if (Math.abs(x) > EDGE - 120 || Math.abs(z) > EDGE - 120 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+    if (Math.hypot(x - MIST.x, z - MIST.z) < r + 150) continue;   // keep clear water round the Serpent Spire
     if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 75)) continue;
     MIST.rocks.push({ x, z, r, hp, e: big ? 0.85 : 0.6, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
   }
@@ -125,7 +126,13 @@ function mistRockH(x, z) {
   }
   return h;
 }
-function heightAt(x, z) { let h = mistRockH(x, z); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
+// the Serpent Spire stands in the heart of the shoals on a round stone skerry: flat on top, sloping into the sea like a beach
+const TOWER = { x: MIST.x, z: MIST.z, flat: 46, foot: 80, top: 3.2 };
+function towerH(x, z) {
+  const d = Math.hypot(x - TOWER.x, z - TOWER.z); if (d > TOWER.foot) return -100;
+  return -7 + (TOWER.top + 7) * sstep(TOWER.foot, TOWER.flat, d);
+}
+function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
 const DOCK_TOP = DECK_Y + 0.25;
 const DOCKS = [
@@ -181,4 +188,4 @@ function blockedAt(T, cx, cz, h) {
 }
 const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
 
-module.exports = { EDGE, MIST, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
+module.exports = { EDGE, MIST, TOWER, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };

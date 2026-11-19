@@ -123,7 +123,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     const q = players.get(from); if (!q || !q.p) return;
     const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z;
     if (topic === 'kdmg') {
-      if ((K.st !== 'engaged') || Math.min(Math.hypot(px - K.x, pz - K.z), Math.hypot(q.p.x - K.x, q.p.z - K.z)) > 400) return;
+      const el = Array.isArray(q.p.el) ? q.p.el : null, elNear = !!(d.el && el && Math.hypot(el[0] - K.x, el[1] - K.z) < 400);   // an Elder Serpent can tear into it anywhere
+      if (elNear ? (K.st === 'dying' || K.st === 'dead') : ((K.st !== 'engaged') || Math.min(Math.hypot(px - K.x, pz - K.z), Math.hypot(q.p.x - K.x, q.p.z - K.z)) > 400)) return;
       if (K.ally && K.ally.owner === from) return;   // its caller can't hurt it
       K.hp -= Math.max(0, Math.min(60, +d.dmg || 0));
       if (K.hp <= 0) { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); }
@@ -240,7 +241,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     const s = SERP[d.i | 0], q = players.get(from);
     if (!s || !serpAlive(s) || !q || !q.p) return;
     const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z;
-    if (Math.min(Math.hypot(px - s.x, pz - s.z), Math.hypot(q.p.x - s.x, q.p.z - s.z)) > 500) return;
+    const el = Array.isArray(q.p.el) ? q.p.el : null;
+    if (Math.min(Math.hypot(px - s.x, pz - s.z), Math.hypot(q.p.x - s.x, q.p.z - s.z), el ? Math.hypot(el[0] - s.x, el[1] - s.z) : 1e9) > 500) return;
     s.hp -= Math.max(0, Math.min(60, +d.dmg || 0));
     if (s.st === 'roam') { s.st = 'hunt'; s.tg = from; }
     if (s.hp <= 0) { s.hp = 0; s.st = 'dying'; s.deadT = 0; broadcast('sdead', { i: d.i | 0, by: from }); }
