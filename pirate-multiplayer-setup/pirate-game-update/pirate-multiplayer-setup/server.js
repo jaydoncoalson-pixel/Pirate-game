@@ -74,10 +74,13 @@ function hornClaim(me, d) {
   }
   send(me.ws, hornMsg(me));
 }
-// an Elder Serpent's bite on another player's ship: only from the horn's owner, with the serpent right beside that ship
+// a horn serpent's bite on another player's ship, with the serpent right beside that ship. A sinking bite only comes from
+// the true horn's owner (the Elder Serpent); anyone else's common sea serpent bites for at most 22
 function ebiteOk(me, d) {
   const el = me.p && me.p.el, tq = d && players.get(d.to);
-  return !!(HORN.owner && me.name === HORN.owner && Array.isArray(el) && tq && tq.p && tq.p.sh && Math.hypot(el[0] - tq.p.sh.x, el[1] - tq.p.sh.z) < 400);
+  if (!Array.isArray(el) || !tq || !tq.p || !tq.p.sh || Math.hypot(el[0] - tq.p.sh.x, el[1] - tq.p.sh.z) > 400) return false;
+  if (d.kill) return !!(HORN.owner && me.name === HORN.owner);
+  return (+d.dmg || 0) <= 22;
 }
 
 const env = createEnv();

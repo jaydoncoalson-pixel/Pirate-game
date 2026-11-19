@@ -1145,13 +1145,20 @@
   // Online there is only one Serpent Horn: the server remembers the first captain ever to take it. Offline, each game has its own.
   const HORN = { known: false, owner: null, mine: false };
   const hornOnline = () => !!(window.__mpSerpOnline && window.__mpSerpOnline());
-  const hasHorn = () => hornOnline() ? HORN.mine : !!STATE.horn;
-  const hornOnPedestal = () => hornOnline() ? HORN.known && !HORN.owner : !STATE.horn;
+  // once the true horn is claimed, anyone else who climbs up takes a lesser horn that calls a common sea serpent
+  const hasHorn = () => hornOnline() ? HORN.mine || !!STATE.smallHorn : !!STATE.horn;
+  const hornIsTrue = () => hornOnline() ? HORN.mine : !!STATE.horn;
+  const hornOnPedestal = () => hornOnline() ? HORN.known && (!HORN.owner || (!HORN.mine && !STATE.smallHorn)) : !STATE.horn;
   const atPedestal = () => !onShip && !sailing && !inInterior && P.pos.y > SPIRE.top - 1 && Math.hypot(P.pos.x - SPIRE.x, P.pos.z - SPIRE.z) < 5;
   const nearHorn = () => atPedestal() && hornOnPedestal() && !hasHorn();
-  const nearEmptyPedestal = () => atPedestal() && hornOnline() && HORN.known && HORN.owner && !HORN.mine;
+  const nearEmptyPedestal = () => atPedestal() && hornOnline() && HORN.known && HORN.owner && !HORN.mine && STATE.smallHorn;
   function takeHorn() {
-    if (hornOnline()) { if (window.__mpHornClaim) window.__mpHornClaim(false); return; }   // the server decides who was first
+    if (hornOnline()) {
+      if (!HORN.owner) { if (window.__mpHornClaim) window.__mpHornClaim(false); return; }   // the server decides who was first
+      STATE.smallHorn = true; save(); refreshHornSlot(); SFX.pickup();
+      toast(`Ye take up a horn... but it's not the true Serpent Horn. Captain ${HORN.owner} claimed that long ago. This one only calls a common sea serpent. Press 3 to sound it.`);
+      return;
+    }
     STATE.horn = true; save(); refreshHornSlot();
     SFX.fanfare(); toast('Ye take up the Serpent Horn! Press 3 to sound it and call the Elder Serpent from the deep.');
   }
@@ -1162,8 +1169,7 @@
     if (HORN.mine && !STATE.hornOnline) { STATE.hornOnline = true; save(); }
     if (!HORN.mine && HORN.owner && STATE.hornOnline) { STATE.hornOnline = false; save(); }
     if (HORN.mine && !was) { SFX.fanfare(); toast('Ye take up the Serpent Horn, the first captain ever to claim it! Press 3 to sound it and call the Elder Serpent from the deep.'); }
-    if (!HORN.mine && atPedestal() && HORN.owner) toast(`The pedestal is empty. Captain ${HORN.owner} claimed the Serpent Horn long before ye.`);
-    if (!HORN.mine && hornOnline() && ELD.on && !ELD.leaving) dismissElder();   // no horn, no serpent
+    if (!HORN.mine && hornOnline() && ELD.on && !ELD.leaving && ELD.K.elder) dismissElder();   // no true horn, no Elder Serpent
     refreshHornSlot();
   }
   // low banks of mist that drift around ye inside the shoals
@@ -4225,7 +4231,7 @@
     if (nearDoor()) { goInside('quarters'); return; }
     if (nearWheel()) { takeWheel(); return; }
     if (nearHorn()) { takeHorn(); return; }
-    if (nearEmptyPedestal()) { toast(`The pedestal is empty. Captain ${HORN.owner} claimed the Serpent Horn long before ye.`); return; }
+    if (nearEmptyPedestal()) { toast(`The pedestal is empty. Ye already carry a horn; Captain ${HORN.owner} holds the true one.`); return; }
     const qs = nearQSpot(); if (qs) { qs.act(); return; }
     const nd = nearNode(); if (nd) { gather(nd); return; }
     if (nearSwordStone()) { summonMermaid(); return; }
@@ -7431,8 +7437,13 @@
   // Guard: he keeps by yer ship and falls on anything that attacks ye (raiders, rival captains, serpents, even the Kraken).
   // Attack: sound the horn again to pick a ship (or the Kraken) for him to hunt. Mount: he waits beside yer ship and ye ride him.
   // He belongs to whoever sounded the horn: their game moves him, everyone else sees him through their presence.
-  const ELD_MAX = 102, ELD_SCALE = 10;   // 3x a shoal serpent's 34; 10x its size
-  const ELD = { on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
+  // two kinds answer a horn: the true Serpent Horn's Elder Serpent (10x a shoal serpent's size, 3x its speed, sinks ships in one bite),
+  // and the common sea serpent that answers anyone else's horn once the true one has been claimed
+  const ELD_KINDS = {
+    elder: { elder: true, scale: 10, max: 102, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, baseY: -9, amp: 20, neck: 16, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
+    common: { elder: false, scale: 1, max: 34, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
+  };
+  const ELD = { K: ELD_KINDS.elder, on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
   const RIDE = { on: false };
   const ELD_MATS = {
     scale: new THREE.MeshLambertMaterial({ color: 0x14231f, flatShading: true }), belly: new THREE.MeshLambertMaterial({ color: 0x4f5f46 }),
@@ -7440,18 +7451,26 @@
     eye: new THREE.MeshBasicMaterial({ color: 0xff3418 }), mouth: new THREE.MeshLambertMaterial({ color: 0x3a0606 }), tooth: new THREE.MeshLambertMaterial({ color: 0xe8dfc4 }),
     glow: new THREE.MeshBasicMaterial({ color: 0xff5a1e, transparent: true, opacity: 0.55 }),
   };
-  function makeElderMesh() {
-    const M = ELD_MATS, g = new THREE.Group(), N = 30, SPACING = 4.2 * ELD_SCALE, segs = [];
+  const COMMON_MATS = {   // the same colours as the shoal serpents
+    scale: new THREE.MeshLambertMaterial({ color: 0x1f6e5e, flatShading: true }), belly: new THREE.MeshLambertMaterial({ color: 0x9cc79a }),
+    fin: new THREE.MeshLambertMaterial({ color: 0x8e2a2a, side: THREE.DoubleSide }), horn: new THREE.MeshLambertMaterial({ color: 0xd9cfb4 }),
+    eye: new THREE.MeshBasicMaterial({ color: 0xffd23a }), mouth: new THREE.MeshLambertMaterial({ color: 0x5a1414 }), tooth: new THREE.MeshLambertMaterial({ color: 0xf2ecd8 }),
+    glow: new THREE.MeshLambertMaterial({ color: 0x5a1414 }),
+  };
+  // yer serpent's name in messages
+  const etoast = msg => toast(ELD.K.elder ? msg : msg.replace(/the Elder Serpent/g, 'yer sea serpent').replace(/The Elder Serpent/g, 'Yer sea serpent').replace(/Elder Serpent/g, 'sea serpent'));
+  function makeElderMesh(K) {
+    const M = K.elder ? ELD_MATS : COMMON_MATS, SC = K.scale, g = new THREE.Group(), N = K.elder ? 30 : 28, SPACING = 4.2 * SC, segs = [];
     scene.add(g);
     for (let k = 0; k < N; k++) {
-      const r = 3.0 * ELD_SCALE * (1 - (k / N) * 0.8), m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), M.scale);
+      const r = 3.0 * SC * (1 - (k / N) * 0.8), m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), M.scale);
       m.scale.set(1, 0.9, 1.75); g.add(m);
       const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.82, 10, 6), M.belly); belly.position.y = -r * 0.32; belly.scale.set(1.05, 0.7, 1.2); m.add(belly);
       // a ridge of blood-red blades all down the back, and bony spines between them
       const fin = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, r * 1.6, 3), k % 2 ? M.horn : M.fin); fin.position.y = r * 0.95; fin.rotation.x = -0.55; fin.scale.z = 0.35; m.add(fin);
       segs.push(m);
     }
-    const head = new THREE.Group(); head.scale.setScalar(2.8 * ELD_SCALE); g.add(head);
+    const head = new THREE.Group(); head.scale.setScalar(2.8 * SC); g.add(head);
     const skull = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 3.6), M.scale); skull.position.z = 1.0; head.add(skull);
     const brow = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.35, 1.2), M.horn); brow.position.set(0, 0.75, 1.6); brow.rotation.x = 0.25; head.add(brow);
     const snout = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 2.0), M.scale); snout.position.set(0, -0.2, 3.4); head.add(snout);
@@ -7467,26 +7486,25 @@
       for (let i = 0; i < 3; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.4 - i * 0.25, 5), M.horn); sp.position.set(s * (1.1 + i * 0.12), 0.5 - i * 0.2, -0.2 - i * 0.6); sp.rotation.set(-1.3, 0, s * -1.0); head.add(sp); }
       const frill = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.0, 3), M.fin); frill.position.set(s * 1.45, 0.1, -0.5); frill.rotation.set(0, 0, s * 1.3); frill.scale.z = 0.22; head.add(frill);
     });
-    return { g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10 };
+    return { K, g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10 };
   }
-  const ELD_TRAIL = 2;   // metres between remembered points of the path his body follows
-  function elderResetTrail(m, x, z, h) { m.trail.length = 0; for (let k = 0; k < m.N * m.SPACING / ELD_TRAIL + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * ELD_TRAIL, z: z - Math.cos(h) * k * ELD_TRAIL }); }
+  function elderResetTrail(m, x, z, h) { const st = m.K.trail; m.trail.length = 0; for (let k = 0; k < m.N * m.SPACING / st + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * st, z: z - Math.cos(h) * k * st }); }
   // lay the body along its path; lift rears the head up (to strike), emerge lowers the whole beast below the waves
   function poseElder(m, x, z, h, lift, emerge, dt, t, opts = {}) {
     m.t += dt;
-    const last = m.trail[0];
-    if (Math.hypot(x - last.x, z - last.z) > ELD_TRAIL) { m.trail.unshift({ x, z }); if (m.trail.length > m.N * m.SPACING / ELD_TRAIL + 8) m.trail.pop(); }
-    const sink = (1 - emerge) * 90, still = opts.still ? 0.35 : 1;
+    const K = m.K, st = K.trail, last = m.trail[0];
+    if (Math.hypot(x - last.x, z - last.z) > st) { m.trail.unshift({ x, z }); if (m.trail.length > m.N * m.SPACING / st + 8) m.trail.pop(); }
+    const sink = (1 - emerge) * K.sink, still = opts.still ? 0.35 : 1;
     const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
     m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
     for (let k = 0; k < m.N; k++) {
-      const idx = Math.min(m.trail.length - 1, Math.round(k * m.SPACING / ELD_TRAIL)), p = m.trail[idx], q = m.trail[Math.min(m.trail.length - 1, idx + 3)];
-      let y = -9 + 20 * still * Math.sin(k * 0.42 - m.t * 1.5) - sink;
-      if (k < 7 && lift > 0) y += lift * (7 - k) * 16;
+      const idx = Math.min(m.trail.length - 1, Math.round(k * m.SPACING / st)), p = m.trail[idx], q = m.trail[Math.min(m.trail.length - 1, idx + 3)];
+      let y = K.baseY + K.amp * still * Math.sin(k * 0.42 - m.t * (K.elder ? 1.5 : 2.6)) - sink;
+      if (k < 7 && lift > 0) y += lift * (7 - k) * K.neck;
       m.segs[k].position.set(p.x, y + waveHeight(p.x, p.z, t) * 0.5, p.z);
       m.segs[k].rotation.set(0, Math.atan2(p.x - q.x, p.z - q.z), 0);
     }
-    const hy = 16 + 8 * still * Math.sin(-m.t * 1.5 + 0.5) + lift * 130 - sink + waveHeight(x, z, t) * 0.5;
+    const hy = K.headY + K.headAmp * still * Math.sin(-m.t * (K.elder ? 1.5 : 2.6) + 0.5) + lift * K.liftH - sink + waveHeight(x, z, t) * 0.5;
     m.head.position.set(x, hy, z);
     m.head.rotation.set(lift > 0 ? (opts.sk < 1.15 ? -0.5 * lift : 0.7 * lift) : -0.05, h, 0);
     m.jaw.rotation.x = lift > 0 ? Math.min(0.9, lift * 1.1) : opts.angry ? 0.18 + Math.sin(m.t * 2.5) * 0.08 : 0.05;
@@ -7496,7 +7514,7 @@
   function elderSteer(tx, tz, want, dt, turn = 1.3) {
     const desired = Math.atan2(tx - ELD.x, tz - ELD.z);
     let nh = ELD.h + Math.max(-turn * dt, Math.min(turn * dt, angDiff(ELD.h, desired)));
-    for (let tries = 0; tries < 8; tries++) { const ax = ELD.x + Math.sin(nh) * 90, az = ELD.z + Math.cos(nh) * 90; if (heightAt(ax, az) < -4.5) break; nh += (tries % 2 ? -1 : 1) * 0.45 * (tries + 1); }
+    for (let tries = 0; tries < 8; tries++) { const ax = ELD.x + Math.sin(nh) * ELD.K.probe, az = ELD.z + Math.cos(nh) * ELD.K.probe; if (heightAt(ax, az) < -4.5) break; nh += (tries % 2 ? -1 : 1) * 0.45 * (tries + 1); }
     ELD.h = nh; ELD.speed += (want - ELD.speed) * Math.min(1, dt * 1.2);
     elderMove(dt);
   }
@@ -7531,27 +7549,30 @@
   const elderName = T => T.kind === 'kraken' ? 'the Kraken' : T.kind === 'serp' ? 'a sea serpent' : T.kind === 'player' ? `${(window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain'}'s ship` : 'a Blackwater raider';
   function elderBite(T, e) {
     SFX.crash({ x: e.x, z: e.z }); wSplash(e.x, 1, e.z, true); wSplash(ELD.x, 1, ELD.z, true);
-    if (T.kind === 'raider') { if (!window.__mpRaiderKill || !window.__mpRaiderKill(e)) damageShip(e, e.hp + 1); }   // one bite sinks any ship
+    const big = ELD.K.elder;
+    if (T.kind === 'raider') { if (!big) damageShip(e, 22); else if (!window.__mpRaiderKill || !window.__mpRaiderKill(e)) damageShip(e, e.hp + 1); }   // the Elder Serpent sinks any ship in one bite
     else if (T.kind === 'kraken') {
-      if (krNet()) window.__mpKrSend('kdmg', { dmg: 45, el: 1 });
-      else { KR.hp -= 45; if (KR.hp <= 0 && KR.st !== 'grip' && KR.st !== 'attack') { KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; SFX.roar(); toast('The Elder Serpent drives the Kraken down into the abyss!'); } }
+      const kd = big ? 45 : 15;
+      if (krNet()) window.__mpKrSend('kdmg', { dmg: kd, el: 1 });
+      else { KR.hp -= kd; if (KR.hp <= 0 && KR.st !== 'grip' && KR.st !== 'attack') { KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; SFX.roar(); etoast('The Elder Serpent drives the Kraken down into the abyss!'); } }
     }
-    else if (T.kind === 'serp') serpentHurt(e, 60, { x: e.x, y: 2, z: e.z });
-    else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer);
+    else if (T.kind === 'serp') serpentHurt(e, big ? 60 : 20, { x: e.x, y: 2, z: e.z });
+    else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer, big);
   }
   // close in at full speed, circle, rear up and strike
   function elderFight(T, e, dt) {
     const d = Math.hypot(e.x - ELD.x, e.z - ELD.z);
     if (ELD.st === 'strike') {
       // rear up over the prey, checking his speed so he doesn't overshoot it, then lunge down
-      ELD.sk += dt; ELD.speed = Math.min(ELD.speed, Math.max(10, d * 0.8)); elderSteer(e.x, e.z, Math.min(40, d * 0.8), dt, 2.6);
-      if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; if (d < 160) elderBite(T, e); }
+      ELD.sk += dt; ELD.speed = Math.min(ELD.speed, Math.max(ELD.K.max * 0.1, d * 0.8)); elderSteer(e.x, e.z, Math.min(ELD.K.max * 0.4, d * 0.8), dt, 2.6);
+      if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; if (d < ELD.K.strikeR) elderBite(T, e); }
       if (ELD.sk > 1.9) { ELD.st = 'swim'; ELD.strikeT = 1.4 + Math.random(); }
       return;
     }
-    if (d > 110) { elderSteer(e.x, e.z, Math.min(ELD_MAX, 30 + d * 0.5), dt, 1.6); return; }
+    const K = ELD.K;
+    if (d > K.approachR) { elderSteer(e.x, e.z, Math.min(K.max, K.max * 0.3 + d * 0.5), dt, 1.6); return; }
     ELD.ang = (ELD.ang ?? Math.atan2(ELD.x - e.x, ELD.z - e.z)) + dt * 0.5 * ELD.side;
-    elderSteer(e.x + Math.sin(ELD.ang) * 80, e.z + Math.cos(ELD.ang) * 80, 45, dt, 2.2);
+    elderSteer(e.x + Math.sin(ELD.ang) * K.circle, e.z + Math.cos(ELD.ang) * K.circle, K.max * 0.45, dt, 2.2);
     ELD.strikeT -= dt; if (ELD.strikeT <= 0) { ELD.st = 'strike'; ELD.sk = 0; ELD.hit = false; SFX.roar(); }
   }
   function updateElder(dt, t) {
@@ -7567,48 +7588,51 @@
         ELD.thr = Math.max(0, Math.min(1, ELD.thr + f * dt * 0.7));
         ELD.h -= s * dt * (0.5 + 0.6 * (1 - ELD.thr * 0.5));
       }
-      ELD.speed += (ELD.thr * ELD_MAX - ELD.speed) * Math.min(1, dt * 0.9);
+      ELD.speed += (ELD.thr * ELD.K.max - ELD.speed) * Math.min(1, dt * 0.9);
       if (!elderMove(dt)) { ELD.thr = 0; if (t - ELD.landT > 4) { ELD.landT = t; toast("He won't swim into the shallows. Turn him about!"); } }
       ELD.st = 'swim';
     } else if (ELD.mode === 'mount') {
       // come alongside, a good way off the beam, and lie still
-      const sx = Math.sin(H.h), sz = Math.cos(H.h), off = (H.ship ? 70 : 60) * ELD.side, tx = H.x + sz * off, tz = H.z - sx * off, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
-      ELD.waiting = ds < 45;
+      const sx = Math.sin(H.h), sz = Math.cos(H.h), off = ELD.K.mountOff * ELD.side, tx = H.x + sz * off, tz = H.z - sx * off, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
+      ELD.waiting = ds < ELD.K.mountR;
       if (ELD.waiting) { ELD.speed *= Math.max(0, 1 - dt * 1.5); ELD.h += angDiff(ELD.h, H.h) * Math.min(1, dt * 0.8); elderMove(dt); }
-      else elderSteer(tx, tz, Math.min(ELD_MAX, H.sp + ds * 0.4), dt, 1.4);
+      else elderSteer(tx, tz, Math.min(ELD.K.max, H.sp + ds * 0.4), dt, 1.4);
       ELD.st = 'swim';
     } else {
       ELD.scanT -= dt;
-      if (ELD.mode === 'guard' && ELD.scanT <= 0) { ELD.scanT = 0.5; const T = elderThreat(); if (T && (!ELD.tg || !elderTgPos(ELD.tg))) { ELD.tg = T; toast(`The Elder Serpent turns on ${elderName(T)}!`); SFX.roar(); } else if (!T && ELD.tg && !elderTgPos(ELD.tg)) ELD.tg = null; }
+      if (ELD.mode === 'guard' && ELD.scanT <= 0) { ELD.scanT = 0.5; const T = elderThreat(); if (T && (!ELD.tg || !elderTgPos(ELD.tg))) { ELD.tg = T; etoast(`The Elder Serpent turns on ${elderName(T)}!`); SFX.roar(); } else if (!T && ELD.tg && !elderTgPos(ELD.tg)) ELD.tg = null; }
       const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg, e = elderTgPos(T);
-      if (ELD.mode === 'attack' && !e) { ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; toast('The Elder Serpent has no prey left. He returns to guard yer ship.'); }
+      if (ELD.mode === 'attack' && !e) { ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; etoast('The Elder Serpent has no prey left. He returns to guard yer ship.'); }
       else if (ELD.mode === 'guard' && ELD.tg && (!e || Math.hypot(e.x - H.x, e.z - H.z) > 1600)) { ELD.tg = null; ELD.st = 'swim'; }
       if (e && (ELD.mode === 'attack' || ELD.tg)) { elderFight(T, e, dt); fighting = true; }
       else {
         // keep station off yer quarter, matching yer pace
         ELD.st = 'swim';
-        const sx = Math.sin(H.h), sz = Math.cos(H.h), off = 120 * ELD.side, tx = H.x + sz * off - sx * 60, tz = H.z - sx * off - sz * 60, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
-        elderSteer(tx, tz, Math.min(ELD_MAX, H.sp + ds * 0.25), dt, 1.2);
+        const sx = Math.sin(H.h), sz = Math.cos(H.h), off = ELD.K.guardOff * ELD.side, tx = H.x + sz * off - sx * ELD.K.guardBack, tz = H.z - sx * off - sz * ELD.K.guardBack, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
+        elderSteer(tx, tz, Math.min(ELD.K.max, H.sp + ds * 0.25), dt, 1.2);
       }
     }
     const lift = ELD.st === 'strike' ? elderLift(ELD.sk) : 0;
     ELD.lift = ELD.st === 'strike' && ELD.sk >= 1.15 ? -lift : lift; ELD.fighting = fighting;
     poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.sk, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting });
   }
-  function deepSpotNear(x, z, r0, r1) {
-    for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1 - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; let ok = Math.abs(px) < EDGE - 100 && Math.abs(pz) < EDGE - 100; for (let k = 0; k < 8 && ok; k++) ok = heightAt(px + Math.cos(k) * 70, pz + Math.sin(k) * 70) < -6; if (ok) return { x: px, z: pz }; }
+  function deepSpotNear(x, z, r0, r1, clear = 70) {
+    for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1 - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; let ok = Math.abs(px) < EDGE - 100 && Math.abs(pz) < EDGE - 100; for (let k = 0; k < 8 && ok; k++) ok = heightAt(px + Math.cos(k) * clear, pz + Math.sin(k) * clear) < -6; if (ok) return { x: px, z: pz }; }
     return null;
   }
   function summonElder() {
-    const H = elderHome(), q = deepSpotNear(H.x, H.z, 180, 420);
+    const K = hornIsTrue() ? ELD_KINDS.elder : ELD_KINDS.common, H = elderHome(), q = deepSpotNear(H.x, H.z, K.spawn[0], K.spawn[1], K.probe * 0.8);
     if (!q) { toast("The horn's call rolls out... but there's no deep water near enough for him to rise. Try it at sea."); return; }
-    if (!ELD.mesh) ELD.mesh = makeElderMesh();
+    if (ELD.mesh && ELD.mesh.K !== K) { scene.remove(ELD.mesh.g); ELD.mesh = null; }
+    ELD.K = K;
+    if (!ELD.mesh) ELD.mesh = makeElderMesh(K);
     Object.assign(ELD, { on: true, mode: 'guard', x: q.x, z: q.z, h: Math.atan2(H.x - q.x, H.z - q.z), speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, tg: null, pick: null, emerge: 0, leaving: false, side: Math.random() < 0.5 ? 1 : -1, waiting: false });
     elderResetTrail(ELD.mesh, ELD.x, ELD.z, ELD.h);
     SFX.roar(); wSplash(q.x, 2, q.z, true);
-    toast('The sea boils... and the Elder Serpent rises from the deep! He guards yer ship. Sound the horn again (3) to command him.');
+    if (K.elder) etoast('The sea boils... and the Elder Serpent rises from the deep! He guards yer ship. Sound the horn again (3) to command him.');
+    else etoast(`A common sea serpent answers yer horn and guards yer ship. (Captain ${HORN.owner || 'another'} holds the true Serpent Horn.) Sound the horn again (3) to command it.`);
   }
-  function dismissElder() { if (RIDE.on) elderDismount(); ELD.leaving = true; ELD.mode = 'guard'; toast('The Elder Serpent sinks back into the deep.'); }
+  function dismissElder() { if (RIDE.on) elderDismount(); ELD.leaving = true; ELD.mode = 'guard'; etoast('The Elder Serpent sinks back into the deep.'); }
   function soundHorn() {
     if (!hasHorn() || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
     SFX.horn();
@@ -7620,8 +7644,8 @@
   function elderOpenMenu() {
     const H = elderHome(), dd = e => Math.round(Math.hypot(e.x - H.x, e.z - H.z));
     elOpts = [
-      { label: 'Guard my ship', sub: 'follows close and attacks anything that attacks ye', on: ELD.mode === 'guard', act: () => { ELD.mode = 'guard'; ELD.pick = null; ELD.tg = null; ELD.st = 'swim'; toast('The Elder Serpent takes up his guard beside yer ship.'); } },
-      { label: 'Let me ride him', sub: 'he stops beside yer ship so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; toast('The Elder Serpent swims alongside and lowers his head. Walk up to him and press E to climb on.'); } },
+      { label: 'Guard my ship', sub: 'follows close and attacks anything that attacks ye', on: ELD.mode === 'guard', act: () => { ELD.mode = 'guard'; ELD.pick = null; ELD.tg = null; ELD.st = 'swim'; etoast('The Elder Serpent takes up his guard beside yer ship.'); } },
+      { label: 'Let me ride him', sub: 'he stops beside yer ship so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; etoast('The Elder Serpent swims alongside and lowers his head. Walk up to him and press E to climb on.'); } },
     ];
     const tg = [];
     if (raiders.some(r => r.state === 'patrol' || r.state === 'attack')) tg.push({ T: { kind: 'nearestRaider' }, label: 'Attack the nearest Blackwater raider' });
@@ -7643,24 +7667,25 @@
       b.onclick = () => elChoose(i); elPickBody.appendChild(b);
     });
     if (uiOpen) closeUI();
+    elPickEl.querySelector('h2').textContent = ELD.K.elder ? 'The Elder Serpent awaits yer command' : 'Yer sea serpent awaits yer command';
     uiOpen = 'elpick'; elPickEl.style.display = 'flex';
   }
   function elChoose(i) { const o = elOpts[i]; if (!o) return; closeUI(); o.act(); }
   addEventListener('keydown', e => { if (uiOpen !== 'elpick' || e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 9) { e.preventDefault(); elChoose(n - 1); } });
   // ---- riding him ----
   const elderSaddle = () => { const m = ELD.mesh; m.head.updateMatrixWorld(); return m.head.localToWorld(new THREE.Vector3(0, 0.82, 0.9)); };
-  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && ELD.waiting && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < 150;
+  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && ELD.waiting && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach;
   function elderMount() {
     if (sailing) leaveWheel();
     if (onShip) detach();
     if (ship) ship.sailTarget = Math.min(ship.sailTarget ?? 0.12, 0.12);
-    RIDE.on = true; ELD.thr = 0; P.vy = 0; P.speed = 0; dist = 75; yaw = ELD.h + Math.PI; pitch = 0.3;
-    SFX.roar(); toast('Ye climb onto the Elder Serpent! W/S to speed up or slow down, A/D to turn, E to climb down.');
+    RIDE.on = true; ELD.thr = 0; P.vy = 0; P.speed = 0; dist = ELD.K.rideDist; yaw = ELD.h + Math.PI; pitch = 0.3;
+    SFX.roar(); etoast('Ye climb onto the Elder Serpent! W/S to speed up or slow down, A/D to turn, E to climb down.');
   }
   function elderDismount() {
     RIDE.on = false; ELD.mode = 'guard'; ELD.thr = 0;
-    if (ship && !ship.sinking && Math.hypot(ship.x - P.pos.x, ship.z - P.pos.z) < 260) { P.pos.set(ship.x, P.pos.y, ship.z); board(); toast('Ye climb down onto yer ship. The Elder Serpent takes up his guard.'); }
-    else { const s = Math.sin(ELD.h), c = Math.cos(ELD.h); P.pos.set(ELD.x + c * 45, 2, ELD.z - s * 45); P.vy = 0; P.grounded = false; toast('Ye slide down into the sea beside him. He keeps guard over ye.'); }
+    if (ship && !ship.sinking && Math.hypot(ship.x - P.pos.x, ship.z - P.pos.z) < 260) { P.pos.set(ship.x, P.pos.y, ship.z); board(); etoast('Ye climb down onto yer ship. The Elder Serpent takes up his guard.'); }
+    else { const s = Math.sin(ELD.h), c = Math.cos(ELD.h); P.pos.set(ELD.x + c * 45, 2, ELD.z - s * 45); P.vy = 0; P.grounded = false; etoast('Ye slide down into the sea beside him. He keeps guard over ye.'); }
     dist = Math.min(dist, 30); snapCam = true;
   }
   function rideUpdate(dt) {
@@ -7678,9 +7703,11 @@
     for (const p of MP.peers.values()) {
       const el = p.tgt && Array.isArray(p.tgt.el) ? p.tgt.el : null;
       if (!el) { if (p.elder) p.elder.m.g.visible = false; continue; }
-      if (!p.elder) { const m = makeElderMesh(); p.elder = { m, x: el[0], z: el[1], h: el[2] }; elderResetTrail(m, el[0], el[1], el[2]); }
+      const K = el[7] === 0 ? ELD_KINDS.common : ELD_KINDS.elder;
+      if (p.elder && p.elder.m.K !== K) { scene.remove(p.elder.m.g); p.elder = null; }
+      if (!p.elder) { const m = makeElderMesh(K); p.elder = { m, x: el[0], z: el[1], h: el[2] }; elderResetTrail(m, el[0], el[1], el[2]); }
       const E = p.elder, k = Math.min(1, dt * 4);
-      if (Math.hypot(el[0] - E.x, el[1] - E.z) > 600) { E.x = el[0]; E.z = el[1]; elderResetTrail(E.m, E.x, E.z, el[2]); }
+      if (Math.hypot(el[0] - E.x, el[1] - E.z) > 60 * K.scale) { E.x = el[0]; E.z = el[1]; elderResetTrail(E.m, E.x, E.z, el[2]); }
       E.x += (el[0] - E.x) * k; E.z += (el[1] - E.z) * k; E.h += angDiff(E.h, el[2]) * k;
       const ls = +el[3] || 0;   // signed: rearing up (+) or lunging down (-)
       poseElder(E.m, E.x, E.z, E.h, Math.abs(ls), el[4] ?? 1, dt, t, { sk: ls < 0 ? 1.2 : 0.5, angry: el[6] === 1, still: el[5] === 2 });
@@ -7747,8 +7774,8 @@
       if (!MP.room) return;
       MP.room.onPeers(mpOnPeers);
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
-      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(`${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!`); } catch (e) {} });
-      window.__mpElderBite = peer => { MP.room.emit('ebite', { to: peer, kill: 1, dmg: 1 }).catch(() => {}); };
+      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(d.kill ? `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!` : `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s sea serpent strikes yer hull!`); } catch (e) {} });
+      window.__mpElderBite = (peer, big) => { MP.room.emit('ebite', big ? { to: peer, kill: 1, dmg: 1 } : { to: peer, dmg: 22 }).catch(() => {}); };
       window.__mpRaiderKill = r => { if (!online()) return false; const i = raiders.indexOf(r); if (i < 0) return false; MP.room.emit('rdmg', { i, dmg: 40, el: 1 }).catch(() => {}); return true; };
       window.__mpHornClaim = re => { MP.room.emit('hclaim', { re: re ? 1 : 0 }).catch(() => {}); };
       MP.room.on('horn', m => { if (m.peer !== 'server') return; hornNews(m.data); });
@@ -7899,7 +7926,7 @@
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
-          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0] : 0 };   // el: their Elder Serpent
+          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0] : 0 };   // el: their horn's serpent (last: 1 Elder Serpent, 0 common)
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0 };   // a: crewed, so raiders will hunt it
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
@@ -8124,7 +8151,7 @@
     else if (nearDoor()) promptHtml = "<b>E</b> Enter the captain's quarters";
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
     else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
-    else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the Serpent Horn.`;
+    else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
