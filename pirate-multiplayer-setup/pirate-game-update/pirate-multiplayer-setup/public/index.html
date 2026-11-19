@@ -5078,6 +5078,7 @@
       if (WEATHERS[net.w] && net.w !== weatherKey) { weatherKey = net.w; if (envNetSeen) toast(`The weather turns: ${WEATHERS[net.w].name.toLowerCase()}.`); }
       envNetSeen = true;
     } else {
+      if (envNetSeen) { natTime = gameTime; timeOff = 0; wxLock = null; natWx = weatherKey; }   // left the server: carry on from its time, no jump
       envNetSeen = false;
       natTime += dt * 24 / DAY_LEN;
       if (natTime >= 24) { natTime -= 24; dayNum++; }
@@ -7893,7 +7894,9 @@
         const prev = MP.env; MP.env = Object.assign({}, m.data, { at: performance.now() });
         if (uiOpen === 'admin' && (!prev || prev.w !== MP.env.w || prev.ot !== MP.env.ot || prev.ow !== MP.env.ow)) renderAdmin();
       });
-      window.__mpEnv = () => (online() && MP.env && performance.now() - MP.env.at < 5000) ? MP.env : null;
+      // Keep following the server's clock (run forward locally) through gaps in its updates and short reconnects.
+      // Falling back to this browser's own saved clock after 5 s without an update made day and night flip back and forth.
+      window.__mpEnv = () => MP.env && (online() || performance.now() - MP.env.at < 120000) ? MP.env : null;
       window.__mpAdminEnv = d => {
         if (!online()) return false;
         let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {}
