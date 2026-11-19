@@ -1142,10 +1142,29 @@
     else lo = S.Rc + 4.6;                                                // the plinth at the foot
     const nr = Math.max(lo, Math.min(hi, r)); if (nr !== r) { pos.x = S.x + dx / r * nr; pos.z = S.z + dz / r * nr; }
   }
-  const nearHorn = () => !STATE.horn && !onShip && !sailing && !inInterior && P.pos.y > SPIRE.top - 1 && Math.hypot(P.pos.x - SPIRE.x, P.pos.z - SPIRE.z) < 5;
+  // Online there is only one Serpent Horn: the server remembers the first captain ever to take it. Offline, each game has its own.
+  const HORN = { known: false, owner: null, mine: false };
+  const hornOnline = () => !!(window.__mpSerpOnline && window.__mpSerpOnline());
+  const hasHorn = () => hornOnline() ? HORN.mine : !!STATE.horn;
+  const hornOnPedestal = () => hornOnline() ? HORN.known && !HORN.owner : !STATE.horn;
+  const atPedestal = () => !onShip && !sailing && !inInterior && P.pos.y > SPIRE.top - 1 && Math.hypot(P.pos.x - SPIRE.x, P.pos.z - SPIRE.z) < 5;
+  const nearHorn = () => atPedestal() && hornOnPedestal() && !hasHorn();
+  const nearEmptyPedestal = () => atPedestal() && hornOnline() && HORN.known && HORN.owner && !HORN.mine;
   function takeHorn() {
-    STATE.horn = true; save(); hornGroup.visible = false; refreshHornSlot();
+    if (hornOnline()) { if (window.__mpHornClaim) window.__mpHornClaim(false); return; }   // the server decides who was first
+    STATE.horn = true; save(); refreshHornSlot();
     SFX.fanfare(); toast('Ye take up the Serpent Horn! Press 3 to sound it and call the Elder Serpent from the deep.');
+  }
+  // the server's word on who owns it
+  function hornNews(d) {
+    const was = HORN.mine;
+    HORN.known = true; HORN.owner = d && d.owner || null; HORN.mine = !!(d && d.mine);
+    if (HORN.mine && !STATE.hornOnline) { STATE.hornOnline = true; save(); }
+    if (!HORN.mine && HORN.owner && STATE.hornOnline) { STATE.hornOnline = false; save(); }
+    if (HORN.mine && !was) { SFX.fanfare(); toast('Ye take up the Serpent Horn, the first captain ever to claim it! Press 3 to sound it and call the Elder Serpent from the deep.'); }
+    if (!HORN.mine && atPedestal() && HORN.owner) toast(`The pedestal is empty. Captain ${HORN.owner} claimed the Serpent Horn long before ye.`);
+    if (!HORN.mine && hornOnline() && ELD.on && !ELD.leaving) dismissElder();   // no horn, no serpent
+    refreshHornSlot();
   }
   // low banks of mist that drift around ye inside the shoals
   const mistBanks = [];
@@ -4206,6 +4225,7 @@
     if (nearDoor()) { goInside('quarters'); return; }
     if (nearWheel()) { takeWheel(); return; }
     if (nearHorn()) { takeHorn(); return; }
+    if (nearEmptyPedestal()) { toast(`The pedestal is empty. Captain ${HORN.owner} claimed the Serpent Horn long before ye.`); return; }
     const qs = nearQSpot(); if (qs) { qs.act(); return; }
     const nd = nearNode(); if (nd) { gather(nd); return; }
     if (nearSwordStone()) { summonMermaid(); return; }
@@ -7511,20 +7531,21 @@
   const elderName = T => T.kind === 'kraken' ? 'the Kraken' : T.kind === 'serp' ? 'a sea serpent' : T.kind === 'player' ? `${(window.__mpPeerName && window.__mpPeerName(T.peer)) || 'a rival captain'}'s ship` : 'a Blackwater raider';
   function elderBite(T, e) {
     SFX.crash({ x: e.x, z: e.z }); wSplash(e.x, 1, e.z, true); wSplash(ELD.x, 1, ELD.z, true);
-    if (T.kind === 'raider') damageShip(e, 40);
+    if (T.kind === 'raider') { if (!window.__mpRaiderKill || !window.__mpRaiderKill(e)) damageShip(e, e.hp + 1); }   // one bite sinks any ship
     else if (T.kind === 'kraken') {
       if (krNet()) window.__mpKrSend('kdmg', { dmg: 45, el: 1 });
       else { KR.hp -= 45; if (KR.hp <= 0 && KR.st !== 'grip' && KR.st !== 'attack') { KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; SFX.roar(); toast('The Elder Serpent drives the Kraken down into the abyss!'); } }
     }
     else if (T.kind === 'serp') serpentHurt(e, 60, { x: e.x, y: 2, z: e.z });
-    else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer, 30);
+    else if (T.kind === 'player' && window.__mpElderBite) window.__mpElderBite(T.peer);
   }
   // close in at full speed, circle, rear up and strike
   function elderFight(T, e, dt) {
     const d = Math.hypot(e.x - ELD.x, e.z - ELD.z);
     if (ELD.st === 'strike') {
-      ELD.sk += dt; elderSteer(e.x, e.z, ELD.sk < 0.9 ? 8 : 40, dt, 2.2);
-      if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; if (d < 140) elderBite(T, e); }
+      // rear up over the prey, checking his speed so he doesn't overshoot it, then lunge down
+      ELD.sk += dt; ELD.speed = Math.min(ELD.speed, Math.max(10, d * 0.8)); elderSteer(e.x, e.z, Math.min(40, d * 0.8), dt, 2.6);
+      if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; if (d < 160) elderBite(T, e); }
       if (ELD.sk > 1.9) { ELD.st = 'swim'; ELD.strikeT = 1.4 + Math.random(); }
       return;
     }
@@ -7589,7 +7610,7 @@
   }
   function dismissElder() { if (RIDE.on) elderDismount(); ELD.leaving = true; ELD.mode = 'guard'; toast('The Elder Serpent sinks back into the deep.'); }
   function soundHorn() {
-    if (!STATE.horn || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
+    if (!hasHorn() || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
     SFX.horn();
     if (!ELD.on || ELD.leaving) summonElder(); else elderOpenMenu();
   }
@@ -7648,7 +7669,7 @@
     player.root.position.copy(P.pos); player.root.rotation.set(0, P.facing, 0);
     player.update(dt, 0, false, false);
   }
-  function refreshHornSlot() { const el = document.getElementById('hornSlot'); if (el) el.style.display = STATE.horn ? '' : 'none'; hornGroup.visible = !STATE.horn; }
+  function refreshHornSlot() { const el = document.getElementById('hornSlot'), want = hasHorn() ? '' : 'none'; if (el && el.style.display !== want) el.style.display = want; hornGroup.visible = hornOnPedestal(); }
   document.getElementById('hornSlot').addEventListener('click', soundHorn);
   addEventListener('keydown', e => { if (e.key === '3' && !e.repeat && !uiOpen && !talk) soundHorn(); });
   refreshHornSlot();
@@ -7726,8 +7747,12 @@
       if (!MP.room) return;
       MP.room.onPeers(mpOnPeers);
       MP.room.on('fire', m => { if (m.isMe) return; const p = MP.peers.get(m.peer); if (p && p.ship && m.data) { try { fireBroadside(p.ship, m.data.s > 0 ? 1 : -1, true); } catch (e) {} } });
-      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(`${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent strikes yer hull!`); } catch (e) {} });
-      window.__mpElderBite = (peer, dmg) => { MP.room.emit('ebite', { to: peer, dmg }).catch(() => {}); };
+      MP.room.on('ebite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0) || !ship || ship.sinking) return; try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg)); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(`${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!`); } catch (e) {} });
+      window.__mpElderBite = peer => { MP.room.emit('ebite', { to: peer, kill: 1, dmg: 1 }).catch(() => {}); };
+      window.__mpRaiderKill = r => { if (!online()) return false; const i = raiders.indexOf(r); if (i < 0) return false; MP.room.emit('rdmg', { i, dmg: 40, el: 1 }).catch(() => {}); return true; };
+      window.__mpHornClaim = re => { MP.room.emit('hclaim', { re: re ? 1 : 0 }).catch(() => {}); };
+      MP.room.on('horn', m => { if (m.peer !== 'server') return; hornNews(m.data); });
+      if (STATE.hornOnline) setTimeout(() => window.__mpHornClaim(true), 1500);   // after a server restart, the first owner claims it back
       window.__mpPeerName = peer => MP.peers.get(peer)?.name;
       MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { ELD.threats.set(m.peer, clock.elapsedTime); hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
       // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
@@ -7865,7 +7890,8 @@
     if (MP.syncTick) MP.syncTick(dt);
     MP.sendT -= dt;
     if (MP.sendT <= 0) {
-      MP.sendT = 0.12;
+      MP.sendT = 0.12; refreshHornSlot();
+      if (!HORN.known && window.__mpHornClaim && hornOnline() && (MP.hornAskT = (MP.hornAskT || 0) - 0.12) <= 0) { MP.hornAskT = 2; window.__mpHornClaim(!!STATE.hornOnline); }   // ask the server who holds the horn
       try {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         const r = v => Math.round(v * 100) / 100;
@@ -8098,6 +8124,7 @@
     else if (nearDoor()) promptHtml = "<b>E</b> Enter the captain's quarters";
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
     else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
+    else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the Serpent Horn.`;
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';

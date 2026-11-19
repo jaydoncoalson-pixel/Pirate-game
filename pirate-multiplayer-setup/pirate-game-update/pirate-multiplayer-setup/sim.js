@@ -11,7 +11,7 @@ const angDiff = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (M
 const angLerp = (a, b, t) => a + angDiff(a, b) * t;
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 
-function createSim({ sendTo, broadcast, adminOk = () => true }) {
+function createSim({ sendTo, broadcast, adminOk = () => true, hornOwner = () => null }) {
   // ---------- state ----------
   const bandits = W.BANDIT_SPAWNS.map(s => ({
     name: s.name, home: s.home, x: s.x, z: s.z, facing: s.facing,
@@ -144,13 +144,16 @@ function createSim({ sendTo, broadcast, adminOk = () => true }) {
       else { r.heading = nh; r.x = nx; r.z = nz; }
     }
   }
-  function hitRaider(i, dmg, kr, from, players) {
+  function hitRaider(i, dmg, kr, from, players, elKill) {
     const r = raiders[i], q = players.get(from);
     if (!r || (r.state !== 'patrol' && r.state !== 'attack') || !q || !q.p) return;
     const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z;
     const el = Array.isArray(q.p.el) ? q.p.el : null;   // their Elder Serpent bites too
     if (Math.min(Math.hypot(px - r.x, pz - r.z), Math.hypot(q.p.x - r.x, q.p.z - r.z), el ? Math.hypot(el[0] - r.x, el[1] - r.z) : 1e9) > 1000) return;   // cannon, kraken or serpent range
-    r.hp -= Math.max(0, Math.min(40, +dmg || 0)); r.lastHitBy = from; r.lastHitKr = !!kr;
+    // the Elder Serpent sinks any ship in one bite (only the horn's owner has one, and he must be right there)
+    if (elKill && el && q.name && q.name === hornOwner() && Math.hypot(el[0] - r.x, el[1] - r.z) < 300) r.hp = 0;
+    else r.hp -= Math.max(0, Math.min(40, +dmg || 0));
+    r.lastHitBy = from; r.lastHitKr = !!kr;
     if (r.hp <= 0) sinkRaider(r, from, r.lastHitKr);
   }
   function sinkRaider(r, by, kr) {
@@ -178,7 +181,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true }) {
       if (monsters.handle(from, topic, d, players)) return true;
       if (!d || typeof d !== 'object') return topic === 'bdmg' || topic === 'rdmg' || topic === 'rhold';
       if (topic === 'bdmg') { hitBandit(d.i | 0, d.dmg, from, players); return true; }
-      if (topic === 'rdmg') { hitRaider(d.i | 0, d.dmg, d.kr, from, players); return true; }
+      if (topic === 'rdmg') { hitRaider(d.i | 0, d.dmg, d.kr, from, players, !!d.el); return true; }
       if (topic === 'rhold') { const r = raiders[d.i | 0]; if (r) { if (d.on && (r.state === 'patrol' || r.state === 'attack')) r.heldBy = from; else if (r.heldBy === from) r.heldBy = null; } return true; }
       return false;
     },

@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createSim } = require('./sim');
 const { createEnv } = require('./env');
+const W = require('./world');
 
 const PORT = +process.env.PORT || 8080;
 const MAX_PLAYERS = +process.env.MAX_PLAYERS || 16;
@@ -49,7 +50,35 @@ const sim = createSim({
   sendTo: (id, topic, data) => { const q = players.get(id); if (q) send(q.ws, serverEmit(topic, data)); },
   broadcast: (topic, data) => broadcastRaw(serverEmit(topic, data)),
   adminOk: d => !ADMIN_KEY || (d && d.key === ADMIN_KEY),
+  hornOwner: () => HORN.owner,
 });
+
+// ---------- the Serpent Horn: only the first captain ever to take it from the top of the Serpent Spire owns it ----------
+// Kept in horn.json (DATA_DIR if set). Render's free plan wipes files when the server restarts or redeploys, so the
+// owner's game re-claims it when they reconnect; set HORN_OWNER in Render's Environment tab to fix it for good.
+const HORN_FILE = path.join(process.env.DATA_DIR || __dirname, 'horn.json');
+let HORN = { owner: process.env.HORN_OWNER || null, at: null };
+if (!HORN.owner) { try { const h = JSON.parse(fs.readFileSync(HORN_FILE, 'utf8')); if (h && typeof h.owner === 'string') HORN = h; } catch (e) {} }
+if (HORN.owner) console.log(`Serpent Horn belongs to ${HORN.owner}`);
+const hornMsg = q => serverEmit('horn', { owner: HORN.owner, mine: !!HORN.owner && q.name === HORN.owner });
+function hornClaim(me, d) {
+  if (!HORN.owner) {
+    const p = me.p || {}, atTop = Math.hypot((+p.x || 0) - W.TOWER.x, (+p.z || 0) - W.TOWER.z) < 40 && (+p.y || 0) > 280;
+    if (atTop || d.re) {
+      HORN = { owner: me.name, at: new Date().toISOString() };
+      try { fs.writeFileSync(HORN_FILE, JSON.stringify(HORN)); } catch (e) {}
+      console.log(`Serpent Horn claimed by ${me.name}${d.re ? ' (re-claimed after a restart)' : ''}`);
+      for (const q of players.values()) send(q.ws, hornMsg(q));
+      return;
+    }
+  }
+  send(me.ws, hornMsg(me));
+}
+// an Elder Serpent's bite on another player's ship: only from the horn's owner, with the serpent right beside that ship
+function ebiteOk(me, d) {
+  const el = me.p && me.p.el, tq = d && players.get(d.to);
+  return !!(HORN.owner && me.name === HORN.owner && Array.isArray(el) && tq && tq.p && tq.p.sh && Math.hypot(el[0] - tq.p.sh.x, el[1] - tq.p.sh.z) < 400);
+}
 
 const env = createEnv();
 
@@ -71,6 +100,7 @@ wss.on('connection', ws => {
       const snap = sim.snapshot();   // so the newcomer sees the world right away
       for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) send(ws, serverEmit(k, snap[k]));
       send(ws, serverEmit('env', env.snapshot()));
+      send(ws, hornMsg(players.get(id)));
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
       return;
@@ -88,6 +118,8 @@ wss.on('connection', ws => {
         if (env.admin(d)) { broadcastRaw(serverEmit('env', env.snapshot())); console.log(`admin ${me.name}: ${d.reset ? 'reset time and weather' : JSON.stringify({ time: d.time, weather: d.weather })}`); }
         return;
       }
+      if (m.topic === 'hclaim') { hornClaim(me, m.data || {}); return; }
+      if (m.topic === 'ebite' && !ebiteOk(me, m.data)) return;
       if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
       if (RELAY_TOPICS.has(m.topic)) broadcastRaw({ t: 'emit', topic: m.topic, data: m.data, from: id }, id);
