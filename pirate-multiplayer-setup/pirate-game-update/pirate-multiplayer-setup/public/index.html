@@ -1070,6 +1070,9 @@
   // A spiral stair winds up the outside to a platform at the top, where the Serpent Horn rests on a pedestal.
   const SPIRE = { x: TOWER.x, z: TOWER.z, Rc: 16, Ro: 25, y0: TOWER.top, H: 300, P: 36 };
   SPIRE.top = SPIRE.y0 + SPIRE.H; SPIRE.turns = SPIRE.H / SPIRE.P;
+  // the stair's last stretch comes up through an opening in the top platform, and steps out through a gateway in the battlements
+  SPIRE.aEnd = (SPIRE.turns % 1) * Math.PI * 2; SPIRE.gapA = SPIRE.aEnd - 1.25; SPIRE.gapB = SPIRE.aEnd + 0.06;
+  const spireInGap = a => { const d = ((a - SPIRE.gapA) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); return d <= SPIRE.gapB - SPIRE.gapA; };
   const spireGroup = new THREE.Group(); scene.add(spireGroup);
   const hornGroup = new THREE.Group();
   {
@@ -1105,8 +1108,16 @@
     }
     spireGroup.add(slabs, walls);
     // the platform on top: battlements, braziers and the pedestal
-    add(new THREE.Mesh(new THREE.CylinderGeometry(S.Ro + 1, S.Rc, 6, 32), stone), 0, S.top - 3, 0);
-    for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2, b = add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 1.4), stone), Math.cos(a) * S.Ro, S.top + 1.2, Math.sin(a) * S.Ro); b.rotation.y = -a + Math.PI / 2; }
+    // a solid cap over the core, and a thin ring of paving round it with an opening where the stair comes up
+    add(new THREE.Mesh(new THREE.CylinderGeometry(S.Rc + 0.4, S.Rc, 1.4, 32), stone), 0, S.top - 0.7, 0);
+    { const a1 = S.gapA + Math.PI * 2, len = a1 - S.gapB;   // three.js measures round from +z, so turn our angles over
+      const ring = add(new THREE.Mesh(new THREE.CylinderGeometry(S.Ro + 1, S.Ro + 1, 1.4, 48, 1, false, Math.PI / 2 - a1, len), stone), 0, S.top - 0.7, 0);
+      const hole = new THREE.Mesh(new THREE.CylinderGeometry(S.Rc + 0.3, S.Rc + 0.3, 1.5, 32), stone); ring.add(hole); }   // fills the middle of the ring
+    for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2; if (spireInGap(a) || spireInGap(a - 0.18) || spireInGap(a + 0.18)) continue; const b = add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 1.4), stone), Math.cos(a) * S.Ro, S.top + 1.2, Math.sin(a) * S.Ro); b.rotation.y = -a + Math.PI / 2; }
+    // a stone gateway where the stair steps out onto the top: two pillars and a lintel, so it's easy to find going down too
+    { const ga = S.aEnd + 0.12, gx = Math.cos(ga), gz = Math.sin(ga), rm = (S.Rc + S.Ro) / 2, half = (S.Ro - S.Rc) / 2 + 0.9;
+      for (const sd of [-1, 1]) { const pl = add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 6, 1.6), dark), gx * (rm + sd * half), S.top + 3, gz * (rm + sd * half)); pl.rotation.y = -ga; }
+      const lin = add(new THREE.Mesh(new THREE.BoxGeometry(half * 2 + 1.6, 1.2, 1.8), stone), gx * rm, S.top + 6.4, gz * rm); lin.rotation.y = -ga; }
     const fireM = new THREE.MeshBasicMaterial({ color: 0x5ad8ff });
     for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; add(new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.7, 2.2, 10), dark), Math.cos(a) * 15, S.top + 1.1, Math.sin(a) * 15); add(new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 8), fireM), Math.cos(a) * 15, S.top + 3.2, Math.sin(a) * 15); }
     add(new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 1.6, 12), stone), 0, S.top + 0.8, 0);
@@ -1125,9 +1136,10 @@
   function spireFloor(x, z, y) {
     const S = SPIRE, dx = x - S.x, dz = z - S.z, r = Math.hypot(dx, dz);
     if (r > S.Ro + 0.6) return -1e9;
-    if (y > S.top - 1.6) return S.top;
-    if (r < S.Rc) return -1e9;
     let a = Math.atan2(dz, dx); if (a < 0) a += Math.PI * 2;
+    const open = r > S.Rc && spireInGap(a);   // over the opening the stair comes up through
+    if (y > S.top - 1.6 && !(open && ((a - S.gapA + Math.PI * 4) % (Math.PI * 2)) < 1.25 - 1.6 / S.P * Math.PI * 2)) return S.top;
+    if (r < S.Rc) return -1e9;
     const f = a / (Math.PI * 2); let best = -1e9;
     for (let k = 0; k <= S.turns; k++) { const yy = S.y0 + S.P * (f + k); if (yy > S.top) break; if (yy <= y + 1.0 && yy > best) best = yy; }
     return best;
