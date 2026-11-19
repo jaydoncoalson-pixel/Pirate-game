@@ -427,7 +427,35 @@
     for (let t = 1.5; t > 0.2; t -= 0.01) { const q = I.c.clone().addScaledVector(dir, I.r * t), h = heightAt(q.x, q.y); if (h >= lo && h <= hi) return q; }
     return I.c.clone().addScaledVector(dir, I.r * 0.7);
   }
-  function heightAt(x, z) { let h = -100; for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
+  // ---------- The Mistwrack Shoals: a wide field of sea stacks and reefs in the south-west, always shrouded in fog ----------
+  // Part of the terrain itself (heightAt), so ships, raiders, cannonballs, the kraken and the autopilot all treat the rocks as solid.
+  // The server builds the very same rocks from the same seed (world.js); keep the two in step.
+  const MIST = { x: -3300, z: 3300, r: 1250, rocks: [], name: 'The Mistwrack Shoals' };
+  {
+    let s = 917; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const J = ISLANDS[2], jx = J.c.x, jz = J.c.y, jr = J.r * 1.7 + 120;
+    for (let tries = 0; tries < 4000 && MIST.rocks.length < 90; tries++) {
+      const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
+      const big = mr() < 0.22, r = big ? 34 + mr() * 22 : 12 + mr() * 20, hp = big ? 26 + mr() * 34 : 4 + mr() * 18;
+      if (Math.abs(x) > 4750 || Math.abs(z) > 4750 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+      if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 28)) continue;
+      MIST.rocks.push({ x, z, r, hp, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
+    }
+  }
+  // a sea stack rises steeply from the sea floor (-7) to its peak; slightly oval so they don't all look turned on a lathe
+  function mistRockH(x, z) {
+    const dx0 = x - MIST.x, dz0 = z - MIST.z;
+    if (dx0 * dx0 + dz0 * dz0 > (MIST.r + 70) * (MIST.r + 70)) return -100;
+    let h = -100;
+    for (const o of MIST.rocks) {
+      const dx = x - o.x, dz = z - o.z; if (dx > o.r || dx < -o.r || dz > o.r || dz < -o.r) continue;
+      const c = Math.cos(o.rot), sn = Math.sin(o.rot), u = (dx * c + dz * sn) / o.sx, v = (-dx * sn + dz * c) * o.sx, d = Math.hypot(u, v);
+      if (d >= o.r) continue;
+      const v2 = -7 + (o.hp + 7) * Math.pow(1 - d / o.r, 0.55); if (v2 > h) h = v2;
+    }
+    return h;
+  }
+  function heightAt(x, z) { let h = mistRockH(x, z); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
   const PALETTES = {
     home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 22 },
@@ -796,7 +824,9 @@
     const g = c.getContext('2d'), img = g.createImageData(N, N);
     for (let i = 0; i < N * N; i++) {
       const h = wmapH[i]; let r, gg, b;
-      if (h <= -6.8) { r = 45; gg = 106; b = 144; }
+      const mx = WMAP.min + (i % N + 0.5) * (WMAP.size / N), mz = WMAP.min + (Math.floor(i / N) + 0.5) * (WMAP.size / N);
+      if (h > -1 && mistRockH(mx, mz) >= h - 0.01) { const t = Math.min(1, h / 40); r = 112 - t * 40; gg = 114 - t * 40; b = 112 - t * 36; }
+      else if (h <= -6.8) { r = 45; gg = 106; b = 144; }
       else if (h < 0) { const t = (h + 6.8) / 6.8; r = 45 + t * 70; gg = 106 + t * 85; b = 144 + t * 40; }
       else if (h < 3.4) { r = 232; gg = 212; b = 154; }
       else if (h < 24) { const t = Math.min(1, (h - 3.4) / 20); r = 95 - t * 30; gg = 158 - t * 45; b = 72 - t * 18; }
@@ -980,6 +1010,58 @@
   const far = new THREE.Mesh(new THREE.RingGeometry(700, 10500, 128, 6), farMat);
   far.rotation.x = -Math.PI / 2; far.position.y = -0.35;
   scene.add(far);
+
+  // the sea stacks of the Mistwrack Shoals, shaped to match mistRockH so what ye see is what ye hit
+  const mistGroup = new THREE.Group(); scene.add(mistGroup);
+  {
+    let s = 4711; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const rockMats = [0x575d5c, 0x4c5250, 0x63625a].map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
+    const foamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
+    const guano = new THREE.MeshLambertMaterial({ color: 0xd8d4c8, flatShading: true });
+    for (const o of MIST.rocks) {
+      const pts = [], n = 9;
+      for (let k = 0; k <= n; k++) { const y = -7 + (o.hp + 7) * k / n, d = o.r * (1 - Math.pow((y + 7) / (o.hp + 7), 1 / 0.55)); pts.push(new THREE.Vector2(Math.max(0.01, d), y)); }
+      const geo = new THREE.LatheGeometry(pts, 9), pos = geo.attributes.position;
+      for (let k = 0; k < pos.count; k++) { const y = pos.getY(k); if (y > o.hp - 0.5) continue; const j = 1 + (mr() - 0.5) * 0.22; pos.setX(k, pos.getX(k) * j); pos.setZ(k, pos.getZ(k) * j); pos.setY(k, y + (mr() - 0.5) * 1.2); }
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, rockMats[Math.floor(mr() * 3)]);
+      m.position.set(o.x, 0, o.z); m.rotation.y = -o.rot; m.scale.set(o.sx, 1, 1 / o.sx); mistGroup.add(m);
+      if (o.hp > 24) { const cap = new THREE.Mesh(new THREE.ConeGeometry(o.r * 0.12, o.hp * 0.08, 7), guano); cap.position.set(o.x, o.hp - o.hp * 0.03, o.z); mistGroup.add(cap); }   // sea birds' work
+      const wl = o.r * (1 - Math.pow(7 / (o.hp + 7), 1 / 0.55));
+      if (wl > 1) { const f = new THREE.Mesh(new THREE.RingGeometry(wl * 0.92, wl * 1.35 + 1.5, 22), foamM); f.rotation.x = -Math.PI / 2; f.position.set(o.x, 0.25, o.z); f.scale.set(o.sx, 1 / o.sx, 1); f.rotation.z = o.rot; mistGroup.add(f); }
+    }
+    // the bones of ships that didn't make it
+    const hullM = new THREE.MeshLambertMaterial({ color: 0x3a2e24, flatShading: true });
+    [[MIST.x + 140, MIST.z - 90, 0.6, 0.5], [MIST.x - 420, MIST.z + 380, 2.2, -0.4], [MIST.x + 520, MIST.z + 610, 4.1, 0.3]].forEach(([x, z, h, roll]) => {
+      if (heightAt(x, z) > -5) return;
+      const w = new THREE.Group(); w.position.set(x, -1.6, z); w.rotation.set(0.25, h, roll); mistGroup.add(w);
+      const hull = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.2, 22, 8, 1, true, 0, Math.PI), hullM); hull.material.side = THREE.DoubleSide; hull.rotation.x = Math.PI / 2; w.add(hull);
+      for (let k = -4; k <= 4; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(3.0, 0.18, 4, 10, Math.PI), hullM); rib.position.z = k * 2.3; rib.rotation.z = Math.PI; w.add(rib); }
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 14, 6), hullM); mast.position.set(0, 4, 2); mast.rotation.z = 0.5; w.add(mast);
+    });
+  }
+  // low banks of mist that drift around ye inside the shoals
+  const mistBanks = [];
+  { const mm = () => new THREE.SpriteMaterial({ map: cloudTex, color: 0xdfe5e8, transparent: true, depthWrite: false, opacity: 0 });
+    for (let i = 0; i < 36; i++) { const sp = new THREE.Sprite(mm()); sp.userData = { vx: (Math.random() - 0.3) * 4, vz: (Math.random() - 0.5) * 3, base: 0.45 + Math.random() * 0.35 }; sp.visible = false; scene.add(sp); mistBanks.push(sp); } }
+  function updateMist(dt, f, day) {
+    const c = camera.position;
+    mistGroup.visible = Math.hypot(c.x - MIST.x, c.z - MIST.z) < MIST.r + 3500 && !inInterior;
+    for (const sp of mistBanks) {
+      sp.visible = f > 0.02 && !inInterior;
+      if (!sp.visible) continue;
+      const u = sp.userData;
+      sp.position.x += u.vx * dt; sp.position.z += u.vz * dt;
+      const dx = sp.position.x - c.x, dz = sp.position.z - c.z;
+      if (!u.placed || Math.hypot(dx, dz) > 420) {   // drift back in somewhere around the camera
+        const a = Math.random() * 6.28, r = u.placed ? 300 + Math.random() * 110 : 40 + Math.random() * 360;
+        sp.position.set(c.x + Math.cos(a) * r, 3 + Math.random() * 22, c.z + Math.sin(a) * r);
+        const sc = 120 + Math.random() * 160; sp.scale.set(sc, sc * 0.32, 1); u.placed = true;
+      }
+      sp.material.opacity = u.base * f;
+      sp.material.color.setScalar(0.25 + 0.65 * day);
+    }
+  }
 
   // Deep-sea floor: scattered rock pinnacles, coral fans and kelp forests.
   const seabed = new THREE.Group(); scene.add(seabed);
@@ -2315,9 +2397,10 @@
         autoRoute.stuckT = 0; autoRoute.tries = (autoRoute.tries || 0) + 1;
         if (autoRoute.tries % 4 === 0) { const r = planRoute(ship.x, ship.z, autoRoute.x, autoRoute.z); if (r) { autoRoute.path = r.pts; autoRoute.wp = 0; } }
         let best = null, bs = 1e9;
-        for (const dh of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) for (const dir of [1, -1]) {
-          const h = ship.heading + dh; if (shipBlocked(ship.x, ship.z, h)) continue;
-          let ok = true; for (let k = 1; k <= 6 && ok; k++) ok = !shipBlocked(ship.x + dir * Math.sin(h) * 4 * k, ship.z + dir * Math.cos(h) * 4 * k, h);
+        for (const dh of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5, 0.8, -0.8, 1.2, -1.2]) for (const dir of [1, -1]) {
+          const h = ship.heading + dh; if (dh && shipBlocked(ship.x, ship.z, h)) continue;   // she must have room to swing to it
+          // the whole way out must be clear, starting right at her bow or stern
+          let ok = true; for (const k of [0.3, 1, 2, 3, 4, 6, 8, 12, 16, 20, 24]) { if (!ok) break; ok = !shipBlocked(ship.x + dir * Math.sin(h) * k, ship.z + dir * Math.cos(h) * k, h); }
           if (!ok) continue;
           const ex = ship.x + dir * Math.sin(h) * 24, ez = ship.z + dir * Math.cos(h) * 24, sc = Math.hypot(wp.x - ex, wp.z - ez) + Math.abs(dh) * 30 + (dir < 0 ? 15 : 0);
           if (sc < bs) { bs = sc; best = { h, dir }; }
@@ -2377,7 +2460,17 @@
     const requestedStep = ship.speed * dt;
     const step = autoRoute && autoRoute.active ? Math.min(requestedStep, T.speed * 1.6 * dt) : requestedStep;
     const nx = ship.x + sx * step, nz = ship.z + sz * step;
-    if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; } else ship.speed *= -0.18;
+    if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; }
+    else {
+      if (!ship.submerged && Math.abs(ship.speed) > 4 && Math.hypot(ship.x - MIST.x, ship.z - MIST.z) < MIST.r + 80 && clock.elapsedTime - (ship.rockT ?? -9) > 1.5) {
+        ship.rockT = clock.elapsedTime;
+        const dmg = Math.min(30, 6 + Math.abs(ship.speed) * 0.9);
+        ship.hp = Math.max(0, ship.hp - dmg); ship.lastHit = 0; SFX.crash({ x: ship.x, z: ship.z });
+        toast(`The hull grinds against the rocks! ${Math.ceil(dmg)} hull damage.`);
+        if (ship.hp <= 0) sinkPlayerShip();
+      }
+      ship.speed *= -0.18;
+    }
     // A collision with an offshore reef damages the hull and knocks the ship back.
     if (!ship.submerged) {
       const now = performance.now() / 1000;
@@ -2392,7 +2485,7 @@
         for (let i = 0; i < 9; i++) puff(reef.x + (Math.random() - 0.5) * 7, 0.4, reef.z + (Math.random() - 0.5) * 7, { color: 0xb8d7d4, size: 1.1, life: 0.65, grow: 1.2, vy: 2, op: 0.8 });
         SFX.splash({ x: reef.x, z: reef.z }, true);
         toast(`CRASH! The reef tears into yer hull! ${Math.ceil(impact)} hull damage.`);
-        if (ship.hp <= 0) { ship.hp = 0; beginSink(); }
+        if (ship.hp <= 0) { ship.hp = 0; sinkPlayerShip(); }
       }
     }
     const L = T.L, B = T.B;
@@ -3625,16 +3718,25 @@
     m.rotation.order = 'YXZ'; if (barrel) m.rotation.z = Math.PI / 2;
     scene.add(m); loot.push({ m, x: q.x, z: q.z, respawn: 0, ph: Math.random() * 6 });
   }
+  // wreckage from ships the shoals claimed: worth more, if ye dare the rocks to fetch it
+  function mistSpot() {
+    for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * (MIST.r - 80), x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d; if (heightAt(x, z) <= -6.9 && heightAt(x + 20, z) <= -6.9 && heightAt(x - 20, z) <= -6.9) return { x, z }; }
+    return { x: MIST.x, z: MIST.z - MIST.r - 100 };
+  }
+  for (let i = 0; i < 10; i++) {
+    const q = mistSpot(), m = new THREE.Mesh(lootGeoC, lootMatC); m.rotation.order = 'YXZ';
+    scene.add(m); loot.push({ m, x: q.x, z: q.z, respawn: 0, ph: Math.random() * 6, mist: true });
+  }
   function updateLoot(dt, t) {
     const cx = camera.position.x, cz = camera.position.z, aboard = ship && (sailing || onShip);
     for (const l of loot) {
-      if (l.respawn > 0) { l.respawn -= dt; l.m.visible = false; if (l.respawn <= 0) { const q = lootSpot(); l.x = q.x; l.z = q.z; } continue; }
+      if (l.respawn > 0) { l.respawn -= dt; l.m.visible = false; if (l.respawn <= 0) { const q = l.mist ? mistSpot() : lootSpot(); l.x = q.x; l.z = q.z; } continue; }
       const vis = Math.hypot(l.x - cx, l.z - cz) < 2600; l.m.visible = vis;
       if (vis) { l.m.position.set(l.x, waveHeight(l.x, l.z, t) * 0.8 + 0.1, l.z); l.m.rotation.y = t * 0.2 + l.ph; }
       let got = false;
       if (aboard) got = Math.hypot(l.x - ship.x, l.z - ship.z) < ship.T.L * 0.5 + 4;
       else if (!inInterior) got = Math.hypot(l.x - P.pos.x, l.z - P.pos.z) < 4.5;
-      if (got) { questEvent('cargo'); addGold(15 + Math.floor(Math.random() * 46), 'Floating cargo'); const r = Math.random(); if (r < 0.3) addMat('iron', 1); else if (r < 0.42) addMat('wood', 1); l.respawn = 120; }
+      if (got) { questEvent('cargo'); if (l.mist) { addGold(60 + Math.floor(Math.random() * 90), 'Wreckage from the shoals'); if (Math.random() < 0.35) addMat('pearl', 1); } else addGold(15 + Math.floor(Math.random() * 46), 'Floating cargo'); const r = Math.random(); if (r < 0.3) addMat('iron', 1); else if (r < 0.42) addMat('wood', 1); l.respawn = 120; }
     }
   }
 
@@ -3856,6 +3958,12 @@
       if (x < -80 || x > W + 80 || y < -80 || y > H + 80) continue;
       if (big || r > 5) { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = big ? '13px Georgia' : '10px Georgia'; ctx.textAlign = 'center'; ctx.strokeText(I.name, x, y - r * 1.15 - 4); ctx.fillText(I.name, x, y - r * 1.15 - 4); }
     }
+    { const [x, y] = S(MIST.x, MIST.z), r = MIST.r / scale;
+      if (x > -r - 80 && x < W + r + 80 && y > -r - 80 && y < H + r + 80) {
+        const gr = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.15); gr.addColorStop(0, 'rgba(225,230,233,0.42)'); gr.addColorStop(1, 'rgba(225,230,233,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r * 1.15, 0, Math.PI * 2); ctx.fill();
+        if (big || r > 30) { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = big ? 'italic 13px Georgia' : 'italic 10px Georgia'; ctx.textAlign = 'center'; ctx.strokeText('Mistwrack Shoals', x, y - r * 0.85); ctx.fillText('Mistwrack Shoals', x, y - r * 0.85); }
+      } }
     for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') {
       const [x, y] = S(r.x, r.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = '#c0392b'; ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 1.5;
@@ -4848,8 +4956,19 @@
     SKY_TOP.copy(cTop); SKY_HORIZON.copy(cHor); scene.fog.color.copy(cHor);
     const fogFar = 5600 * (1 - 0.82 * Wx.fog) * (1 - 0.35 * Wx.rain);
     scene.fog.far = fogFar; scene.fog.near = fogFar * 0.1; oceanMat.uniforms.fogDist.value = fogFar * 0.68;
-    skyU.sunK.value = (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8);
-    skyU.nightK.value = night * (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8);
+    { // the Mistwrack Shoals: thick fog that closes in as ye sail into them, whatever the weather
+      const mp0 = mapPos(), md = Math.hypot(mp0.x - MIST.x, mp0.z - MIST.z), mf = sstep(MIST.r + 450, MIST.r - 250, md);
+      MIST.f = mf;
+      if (mf > 0) {
+        cTmp.setHex(0xb4bcc0).multiplyScalar(0.14 + 0.86 * day);
+        SKY_HORIZON.lerp(cTmp, mf * 0.95); scene.fog.color.lerp(cTmp, mf * 0.97); SKY_TOP.lerp(cTmp, mf * 0.85);
+        scene.fog.far += (250 - scene.fog.far) * mf; scene.fog.near += (4 - scene.fog.near) * mf;
+        oceanMat.uniforms.fogDist.value += (150 - oceanMat.uniforms.fogDist.value) * mf;
+      }
+      updateMist(dt, mf, day);
+    }
+    skyU.sunK.value = (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8) * (1 - 0.85 * (MIST.f || 0));
+    skyU.nightK.value = night * (1 - 0.9 * Wx.cloud) * (1 - Wx.fog * 0.8) * (1 - 0.9 * (MIST.f || 0));
     // sunlight by day, moonlight by night
     const sunUp = sstep(-0.06, 0.12, e), moonUp = sstep(-0.02, -0.18, e);
     if (e > -0.06) {
@@ -4866,7 +4985,7 @@
     waveUniform.forEach((w, i) => { w.z = BASE_STEEP[i] * Math.max(0.3, 1 + (Wx.wave - 1) * w.w / 40); });   // storms build the long swells most
     oceanMat.uniforms.seaState.value = Math.max(0, Math.min(1, (Wx.wave - 1) / 0.35));
     // stars, clouds, rain, lighthouse
-    stars.material.opacity = night * (1 - Wx.cloud) * (1 - Wx.fog); stars.visible = stars.material.opacity > 0.01; stars.position.copy(camera.position);
+    stars.material.opacity = night * (1 - Wx.cloud) * (1 - Wx.fog) * (1 - (MIST.f || 0)); stars.visible = stars.material.opacity > 0.01; stars.position.copy(camera.position);
     cCloud.setHex(0xffffff).lerp(cTmp.setHex(0x5e646c), Math.min(1, Math.max(0, Wx.cloud - 0.3) / 0.7 * 0.75 + Wx.storm * 0.25)).lerp(cTmp2.copy(cHor), 0.2 + 0.25 * night).multiplyScalar(0.22 + 0.78 * day);
     for (const c of clouds.children) { c.material.color.copy(cCloud); c.material.opacity = 0.45 + 0.5 * Wx.cloud; }
     updateRain(dt, Wx.rain);
@@ -7207,6 +7326,7 @@
     // which island are we near?
     let where = 'The open sea';
     for (const I of ISLANDS) if (Math.hypot(P.pos.x - I.c.x, P.pos.z - I.c.y) < I.r * 1.2) where = I.name;
+    if (Math.hypot(P.pos.x - MIST.x, P.pos.z - MIST.z) < MIST.r) where = MIST.name;
     if (inInterior) where = interior.title;
     if (where !== hudTitle.textContent) hudTitle.textContent = where;
 

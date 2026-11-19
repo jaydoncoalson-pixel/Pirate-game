@@ -95,7 +95,35 @@ function islandHeight(I, x, z) {
   }
   return h;
 }
-function heightAt(x, z) { let h = -100; for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
+// ---------- The Mistwrack Shoals: a wide field of sea stacks and reefs in the south-west, always shrouded in fog ----------
+// Part of the terrain itself (heightAt), so ships, raiders, cannonballs, the kraken and the autopilot all treat the rocks as solid.
+// The server builds the very same rocks from the same seed (world.js); keep the two in step.
+const MIST = { x: -3300, z: 3300, r: 1250, rocks: [], name: 'The Mistwrack Shoals' };
+{
+  let s = 917; const mr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const J = ISLANDS[2], jx = J.c.x, jz = J.c.y, jr = J.r * 1.7 + 120;
+  for (let tries = 0; tries < 4000 && MIST.rocks.length < 90; tries++) {
+    const a = mr() * Math.PI * 2, d = Math.sqrt(mr()) * MIST.r, x = MIST.x + Math.cos(a) * d, z = MIST.z + Math.sin(a) * d;
+    const big = mr() < 0.22, r = big ? 34 + mr() * 22 : 12 + mr() * 20, hp = big ? 26 + mr() * 34 : 4 + mr() * 18;
+    if (Math.abs(x) > 4750 || Math.abs(z) > 4750 || Math.hypot(x - jx, z - jz) < jr + r) continue;
+    if (MIST.rocks.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r + 28)) continue;
+    MIST.rocks.push({ x, z, r, hp, sx: 0.8 + mr() * 0.45, rot: mr() * 6.28 });
+  }
+}
+// a sea stack rises steeply from the sea floor (-7) to its peak; slightly oval so they don't all look turned on a lathe
+function mistRockH(x, z) {
+  const dx0 = x - MIST.x, dz0 = z - MIST.z;
+  if (dx0 * dx0 + dz0 * dz0 > (MIST.r + 70) * (MIST.r + 70)) return -100;
+  let h = -100;
+  for (const o of MIST.rocks) {
+    const dx = x - o.x, dz = z - o.z; if (dx > o.r || dx < -o.r || dz > o.r || dz < -o.r) continue;
+    const c = Math.cos(o.rot), sn = Math.sin(o.rot), u = (dx * c + dz * sn) / o.sx, v = (-dx * sn + dz * c) * o.sx, d = Math.hypot(u, v);
+    if (d >= o.r) continue;
+    const v2 = -7 + (o.hp + 7) * Math.pow(1 - d / o.r, 0.55); if (v2 > h) h = v2;
+  }
+  return h;
+}
+function heightAt(x, z) { let h = mistRockH(x, z); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
 const DOCK_TOP = DECK_Y + 0.25;
 const DOCKS = [
@@ -151,4 +179,4 @@ function blockedAt(T, cx, cz, h) {
 }
 const raidSea = (x, z) => Math.abs(x) < 4800 && Math.abs(z) < 4800 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
 
-module.exports = { heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
+module.exports = { MIST, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
