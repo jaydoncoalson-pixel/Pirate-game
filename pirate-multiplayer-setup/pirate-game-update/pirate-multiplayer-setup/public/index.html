@@ -3696,7 +3696,7 @@
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Its edge glows like moonlit water.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, yer cannons hit 50% harder, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => SWORDS[STATE.sword] || SWORDS.rusty;
@@ -4083,9 +4083,51 @@
     const x = ent.x + lx * c + lz * s, z = ent.z - lx * s + lz * c, y = ent.group.position.y + T.H * 0.38;
     const rx = p.side * c, rz = -p.side * s, spd = 115 + Math.random() * 15;
     const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
-    balls.push({ m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, life: 6 });
+    const b = { m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, life: 6, dmg: shotDamage(ent, p.enemy) };
+    const tg = aimTarget(ent, p.side, x, z, rx, rz);
+    if (tg) aimShot(b, x, y, z, tg, p.lz / T.L);
+    balls.push(b);
     puff(x + rx * 2, y, z + rz * 2, { color: 0xffb04a, size: 3, life: 0.15, grow: 0.5, op: 1 });
     puff(x + rx * 3, y, z + rz * 3, { color: 0xdedad2, size: 5, life: 3, grow: 2.2, vx: rx * 3 + s * ent.speed * 0.5, vy: 1.5, vz: rz * 3 + c * ent.speed * 0.5, op: 0.75 });
+  }
+  // ---- auto-aim: players' broadsides lead the nearest enemy ship on the side they fire ----
+  const AIM_RANGE = 380, AIM_CONE = Math.cos(40 * Math.PI / 180);
+  function aimTarget(ent, side, x, z, rx, rz) {
+    let list;
+    if (ent === ship) {                // yer own guns: raiders and other players' ships
+      list = raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
+      if (window.__mpShips) list = list.concat(window.__mpShips());
+    } else if (ent.remote) {           // another player's broadside, replayed here: it was aimed at us
+      list = ship && !ship.sinking && !ship.submerged ? [ship] : [];
+    } else return null;                // raiders don't get auto-aim
+    let best = null, bs = 1e9;
+    for (const e of list) {
+      const dx = e.x - x, dz = e.z - z, d = Math.hypot(dx, dz);
+      if (d > AIM_RANGE || d < 4) continue;
+      const dot = (dx * rx + dz * rz) / d;
+      if (dot < AIM_CONE) continue;
+      const score = d * (2 - dot);
+      if (score < bs) { bs = score; best = e; }
+    }
+    return best;
+  }
+  function aimShot(b, x, y, z, e, along) {
+    const vx = e === ship || !e.remote ? Math.sin(e.heading) * (e.speed || 0) : e.vx || 0;
+    const vz = e === ship || !e.remote ? Math.cos(e.heading) * (e.speed || 0) : e.vz || 0;
+    // spread the broadside along the target's hull, the way the guns are spread along ours
+    const off = Math.max(-0.45, Math.min(0.45, along)) * e.T.L * 0.8, fx = Math.sin(e.heading), fz = Math.cos(e.heading);
+    const ax = e.x + fx * off + (Math.random() - 0.5) * 2, az = e.z + fz * off + (Math.random() - 0.5) * 2, ay = e.group.position.y + 1.5;
+    let t = Math.hypot(ax - x, az - z) / 120;
+    for (let i = 0; i < 3; i++) t = Math.hypot(ax + vx * t - x, az + vz * t - z) / 120;   // lead a moving ship
+    t = Math.max(0.15, Math.min(3.2, t));
+    b.vx = (ax + vx * t - x) / t; b.vz = (az + vz * t - z) / t; b.vy = (ay - y) / t + 10 * t;   // gravity is 20
+    b.life = Math.max(b.life, t + 1);
+  }
+  // damage per ball: the Sword of the Sea makes its owner's cannons hit 50% harder
+  function shotDamage(ent, enemy) {
+    if (ent === ship) return STATE.sword === 'seasword' ? 16.5 : 11;
+    if (ent.remote) return ent.sw === 'seasword' ? 9 : 6;
+    return 6;
   }
   function updateBalls(dt, t) {
     for (let i = pendingShots.length - 1; i >= 0; i--) { const p = pendingShots[i]; p.delay -= dt; if (p.delay <= 0) { pendingShots.splice(i, 1); launchShot(p); } }
@@ -4099,7 +4141,7 @@
         const dx = x - tg.x, dz = z - tg.z, hh = tg.heading;
         const lx = dx * Math.cos(hh) - dz * Math.sin(hh), lz = dx * Math.sin(hh) + dz * Math.cos(hh), gy = tg.group.position.y;
         if (Math.abs(lx) < tg.T.B / 2 + 0.6 && Math.abs(lz) < tg.T.L / 2 && y < gy + tg.T.H && y > gy - 3) {
-          hit = true; damageShip(tg, b.enemy ? 6 : 11); SFX.crash({ x, z });
+          hit = true; damageShip(tg, b.dmg || (b.enemy ? 6 : 11)); SFX.crash({ x, z });
           puff(x, y, z, { color: 0x6b4423, size: 3, life: 0.8, grow: 1.5, vy: 3, op: 0.9 });
           puff(x, y + 1, z, { color: 0x888888, size: 4, life: 2, grow: 2, vy: 2, op: 0.6 });
           break;
@@ -6668,6 +6710,7 @@
         if (held) MP.room.emit('rhold', { i: raiders.indexOf(held), on: 1 }).catch(() => {});
         MP.krHeld = held;
       };
+      window.__mpShips = () => [...MP.peers.values()].filter(q => q.ship && q.tgt && q.tgt.sh).map(q => q.ship);
       window.__mpFire = side => { MP.room.emit('fire', { s: side }).catch(() => {}); };
       window.__mpSlash = delay => setTimeout(() => {
         if (onShip || sailing || inInterior) { /* allow deck duels too */ }
@@ -6745,7 +6788,8 @@
         let dh = sh.h - g.rotation.y; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
         g.rotation.set(sh.p || 0, g.rotation.y + dh * k, sh.r || 0);
         g.rotation.order = 'YXZ';
-        Object.assign(p.ship, { x: g.position.x, z: g.position.z, heading: g.rotation.y, speed: 0, roll: p.ship.roll || 0, sinking: false });
+        Object.assign(p.ship, { x: g.position.x, z: g.position.z, heading: g.rotation.y, speed: 0, roll: p.ship.roll || 0, sinking: false,
+          remote: true, peer: p.peer, pname: p.name, vx: p.shipVx || 0, vz: p.shipVz || 0, sw: d.sw });   // for cannon aim and damage
       }
       // name tag
       const pd = Math.hypot(p.pos.x - P.pos.x, p.pos.z - P.pos.z);
