@@ -3008,105 +3008,220 @@
     beachSpot(ISLANDS[2], -1, 2.2, 1.7), beachSpot(ISLANDS[3], -1, 2.2, -1.2),
     beachSpot(ISLANDS[5], -1, 2.2, 2.2), beachSpot(ISLANDS[1], -1, 2.2, -2.0)
   ];
+  // Stage types:
+  //   talk   - speak to an NPC (optionally needs gold / materials, which are handed over, or a time of day)
+  //   spot   - go somewhere on foot and press E (optionally only at night)
+  //   kill   - defeat bandits / thugs or sink raiders / galleons (counted from now on)
+  //   cargo  - sail through floating cargo
+  //   mats   - gather materials (checked automatically; handed over at the next talk stage)
+  //   sail   - sail yer ship to a spot at sea
+  //   kraken - sail to a spot in deep water, then drive off the Kraken when it comes
+  const isNight = () => gameTime >= 20 || gameTime < 5;
+  const SEA_W1 = { x: -900, z: -2700 }, SEA_W2 = { x: 1500, z: -2600 }, SEA_W3 = { x: 3300, z: -1900 }, KRAKEN_DEEP = { x: 1100, z: 3300 };
+  const COVE_SHORE = beachSpot(ISLANDS[8], -1, 2.2, 0.9);
+  const matList = m => Object.entries(m).map(([k, n]) => `${n} ${MATS[k].name.toLowerCase()}`).join(' and ');
   const QUESTS = {
-    treasure: { title: "Barnaby's buried treasure", reward: 500, hint: 'Old Barnaby, at the end of the Gull Island dock, has a story to tell.',
-      stages: [{ text: 'Dig at the red X on Skull Isle, far to the north-east', at: () => SPOT_X }] },
-    ledger: { title: 'The lost ledger', reward: 150, hint: 'Gus, outside the Salty Gull tavern at the top of the main street, needs a favour.',
-      stages: [{ text: 'Search the shipwreck on Palm Key, to the east', at: () => WRECK_SPOT }, { text: 'Bring the ledger back to Gus at the Salty Gull', at: () => npcAt('Gus') }] },
-    oranges: { title: 'Oranges for the hermit', reward: 200, hint: 'Rosa, by the well in the Gull Island town square, has a delivery.',
-      stages: [{ text: 'Deliver the crate of oranges to Hermit Jonah on Jungle Isle, far to the west', at: () => npcAt('Hermit Jonah') }] },
-    oil: { title: 'Light in the dark', reward: 250, hint: 'Silas, by the lighthouse on Gull Island, is running low on something.',
-      stages: [{ text: 'Buy lamp oil from Trader Quint in Port Coral, far to the east (50 gold)', at: () => npcAt('Trader Quint') }, { text: 'Bring the lamp oil to Silas by the lighthouse', at: () => npcAt('Silas') }] },
-    gem: { title: 'Heart of the volcano', reward: 300, hint: 'Tom the smith, wandering the Gull Island streets, wants something rare.',
-      stages: [{ text: 'Find a fire gem on the shore of Smoke Peak, far to the north', at: () => GEM_SPOT }, { text: 'Bring the fire gem to Tom the smith on Gull Island', at: () => npcAt('Tom the smith') }] },
-    lostBell: { title: 'The bell of Gull Rocks', reward: 180, hint: 'Dockmaster Nell has a salvage job waiting at Gull Rocks.',
-      stages: [{ text: 'Recover the brass signal bell from Gull Rocks', at: () => EXTRA_QSPOTS[0] }] },
-    bakerRun: { title: 'A baker’s dozen', reward: 160, hint: 'Marta the baker needs a rare spice from Turtle Cay.',
-      stages: [{ text: 'Find the spice bundle washed ashore on Turtle Cay', at: () => EXTRA_QSPOTS[1] }] },
-    supplyRun: { title: 'Quartermaster’s list', reward: 220, hint: 'Quartermaster Pell has lost a supply crate near Mermaid Cove.',
-      stages: [{ text: 'Recover Pell’s sealed supply crate at Mermaid Cove', at: () => EXTRA_QSPOTS[2] }] },
-    bigCatch: { title: 'The fisher’s promise', reward: 190, hint: 'Fisher Toma is looking for a rare pearl on Driftwood Isle.',
-      stages: [{ text: 'Find the rare pearl on Driftwood Isle', at: () => EXTRA_QSPOTS[3] }] },
-    warehouse: { title: 'Missing manifest', reward: 240, hint: 'Porter Venn needs a missing cargo manifest from Jungle Isle.',
-      stages: [{ text: 'Search the Jungle Isle shore for the cargo manifest', at: () => EXTRA_QSPOTS[4] }] },
-    charting: { title: 'The uncharted current', reward: 260, hint: 'Captain Inez wants proof of a safe landing on Smoke Peak.',
-      stages: [{ text: 'Reach the marked landing on Smoke Peak', at: () => EXTRA_QSPOTS[5] }] },
-    keepsake: { title: 'A keepsake from home', reward: 210, hint: 'Old Pavo lost a family keepsake near Port Coral.',
-      stages: [{ text: 'Find Pavo’s keepsake on the Port Coral shore', at: () => EXTRA_QSPOTS[6] }] },
-    message: { title: 'Message in a bottle', reward: 230, hint: 'Sera the navigator spotted a bottle drifting near Palm Key.',
-      stages: [{ text: 'Retrieve the navigator’s bottle on Palm Key', at: () => EXTRA_QSPOTS[7] }] },
+    treasure: { title: "Blackwater's buried gold", reward: 900, giver: 'Old Barnaby', hint: 'Old Barnaby, at the end of the Gull Island dock, has a story to tell.',
+      start: ["Arr, ye've got the look of a captain with a spine.", "Captain Blackwater buried his gold on Skull Isle, but nobody knows where. Only his old crew ever saw the map.", "One o' them, Sailor Bram, drinks his days away in Port Coral, far to the east. Find him."],
+      done: ["Ye found Blackwater's gold? Har! I knew ye had it in ye, captain."],
+      stages: [
+        { type: 'talk', npc: 'Sailor Bram', text: 'Find Sailor Bram in Port Coral, far to the east', lines: ["Blackwater's map? Aye, I had a piece of it... till his thugs on Skull Isle beat it out o' me.", "There's three of 'em camped by the skull rock, north-west o' here. Get it back and I'll tell ye where to dig."] },
+        { type: 'kill', what: 'Blackwater thug', n: 3, text: 'Defeat Blackwater thugs camped on Skull Isle', at: () => SPOT_X },
+        { type: 'talk', npc: 'Sailor Bram', text: 'Bring the torn map back to Sailor Bram in Port Coral', lines: ["That's it! See the red X, by the skull's left eye? That's where he dug.", "Mind ye: the thugs will be back. Dig fast."] },
+        { type: 'spot', at: () => SPOT_X, r: 7, label: 'Dig for treasure', text: 'Dig at the red X on Skull Isle', act: () => { SFX.chop(); digTreasure(); toast("Ye've struck Blackwater's chest!"); } },
+        { type: 'talk', npc: 'Old Barnaby', text: 'Tell Old Barnaby on the Gull Island dock what ye found', lines: ["Ye found it! Har! Blackwater's gold, after all these years!", "Keep it, captain. Ye earned every coin."] },
+      ] },
+    ledger: { title: 'The lost ledger', reward: 400, giver: 'Gus', hint: 'Gus, outside the Salty Gull tavern at the top of the main street, needs a favour.',
+      start: ["Captain! My tavern ledger went down with the Mary Bell. She wrecked on the beach at Palm Key, east o' here.", "Every debt on this island is in that book. Fetch it and I'll make it worth yer while."],
+      done: ["Ledger's dryin' by the fire. One-Eyed Jack owes me forty years o' grog money."],
+      stages: [
+        { type: 'spot', at: () => WRECK_SPOT, r: 16, label: 'Search the shipwreck', text: 'Search the shipwreck on Palm Key, to the east', act: () => toast("The ledger's gone! A soggy receipt: 'Sold to Trader Quint, Port Coral.'") },
+        { type: 'talk', npc: 'Trader Quint', need: { gold: 120 }, text: 'Buy the ledger back from Trader Quint in Port Coral (120 gold)', lines: ["Gus's ledger? Aye, a salvager sold it to me. Fine leather, that.", "A hundred and twenty gold and it's yours. Pleasure doin' business."], wait: ["Gus's ledger is a hundred and twenty gold, friend. Come back when yer purse is heavier."] },
+        { type: 'talk', npc: 'Gus', text: 'Bring the ledger back to Gus at the Salty Gull', lines: ["Ye found it! Soggy, but every page is there.", "Quint charged ye for it? That crook. Here, I'll more than make it up to ye."] },
+      ] },
+    oranges: { title: 'Oranges for the hermit', reward: 450, giver: 'Rosa', hint: 'Rosa, by the well in the Gull Island town square, has a delivery.',
+      start: ["Captain, love! Old Hermit Jonah on Jungle Isle has scurvy again.", "Take him this crate of oranges, would ye? Jungle Isle is far to the west."],
+      done: ["Jonah sent word ye made it, and that ye ran off those bandits! Ye're a treasure, captain."],
+      stages: [
+        { type: 'talk', npc: 'Hermit Jonah', text: 'Deliver the oranges to Hermit Jonah on Jungle Isle, far to the west', lines: ["Oranges? From Rosa? Bless that woman! *munch munch*", "Now, while ye're here... bandits from Driftwood Isle keep raidin' my hut. Four of 'em.", "Run 'em off, would ye? Driftwood Isle is south-west of here."] },
+        { type: 'kill', what: 'Bandit', n: 4, text: 'Defeat bandits at the Driftwood Isle camp', at: () => ({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }) },
+        { type: 'talk', npc: 'Hermit Jonah', text: 'Tell Hermit Jonah the bandits are dealt with', lines: ["Ha! They'll think twice now. Take this letter back to Rosa, would ye?"] },
+        { type: 'talk', npc: 'Rosa', text: "Bring Jonah's letter back to Rosa on Gull Island", lines: ["A letter from Jonah! And he says ye fought off bandits for him?", "Ye're a real hero, captain. Here, ye've earned this."] },
+      ] },
+    oil: { title: 'Light in the dark', reward: 550, giver: 'Silas', hint: 'Silas, by the lighthouse on Gull Island, is running low on something.',
+      start: ["Captain, my lamp oil's near gone. When the light goes out, ships hit the reef.", "Trader Quint in Port Coral sells the good stuff. Port Coral's far to the east, past Palm Key."],
+      done: ["Brightest light on the seven seas, thanks to you."],
+      stages: [
+        { type: 'talk', npc: 'Trader Quint', need: { gold: 80 }, text: 'Buy lamp oil from Trader Quint in Port Coral (80 gold)', lines: ["Lamp oil for old Silas? Eighty gold.", "Bad news, though: Blackwater raiders took my last shipment. Ye'll find it in the hold of one o' their ships.", "Sink one and the barrel's yours. I'll throw in the price."], wait: ["Lamp oil's eighty gold, friend. Come back when yer purse is heavier."] },
+        { type: 'kill', what: 'raider', n: 1, text: 'Sink a Blackwater raider ship to recover the oil' },
+        { type: 'talk', npc: 'Silas', text: 'Bring the lamp oil to Silas by the lighthouse', lines: ["That's the stuff! But the lamp's only lit after dark, captain.", "Come back after nightfall and we'll light her together."] },
+        { type: 'talk', npc: 'Silas', cond: isNight, condText: "Not yet, captain. Come back after nightfall (8 in the evening).", text: 'Return to Silas after nightfall to light the lamp', lines: ["*whoosh* There she burns! Every ship from here to Port Coral can see her.", "Here's yer gold, captain, with my thanks."] },
+      ] },
+    gem: { title: 'Heart of the volcano', reward: 600, giver: 'Tom the smith', hint: 'Tom the smith, wandering the Gull Island streets, wants something rare.',
+      start: ["Captain, I've a mind to forge somethin' legendary. But I need a fire gem.", "A great one glows on the black sand of Smoke Peak, the volcano far to the north."],
+      done: ["That fire gem's makin' the finest steel I've ever worked."],
+      stages: [
+        { type: 'spot', at: () => GEM_SPOT, r: 7, label: 'Take the fire gem', text: 'Find the great fire gem on the shore of Smoke Peak, far to the north', act: () => { gemMesh.visible = false; toast('Picked up a glowing fire gem!'); } },
+        { type: 'talk', npc: 'Tom the smith', text: 'Bring the fire gem to Tom the smith on Gull Island', lines: ["By my anvil, a real fire gem! Feel the heat comin' off it!", "But one gem won't hold the heat of a proper forge. I need three more, chipped from the volcano rocks, and four iron scrap for the frame."] },
+        { type: 'mats', mats: { gem: 3, iron: 4 }, text: 'Gather 3 fire gems on Smoke Peak and 4 iron scrap', at: () => ({ x: ISLANDS[3].c.x, z: ISLANDS[3].c.y }) },
+        { type: 'talk', npc: 'Tom the smith', need: { mats: { gem: 3, iron: 4 } }, text: 'Bring the gems and iron to Tom the smith', lines: ["That's a forge fit for a king! Here's yer gold.", "And gold cloth is yours now. Press C and try a golden hat or coat."], end: () => { STATE.unlocked.gold = true; } },
+      ] },
+    lostBell: { title: 'The bell of Gull Rocks', reward: 350, giver: 'Dockmaster Nell', hint: 'Dockmaster Nell has a salvage job waiting at Gull Rocks.',
+      start: ["The harbour bell was torn away in a squall. It washed up on Gull Rocks, south of the main route.", "Bring it back and the harbour's yours to call home."],
+      done: ["Hear that bell? Clear as a gull's cry, thanks to you."],
+      stages: [
+        { type: 'spot', item: 0, at: () => EXTRA_QSPOTS[0], r: 13, label: 'Pick up the harbour bell', text: 'Recover the brass signal bell from Gull Rocks', act: () => toast("Got the bell, but it's cracked clean through. Tom the smith could recast it.") },
+        { type: 'mats', mats: { iron: 3 }, text: 'Gather 3 iron scrap to repair the bell (bandits and floating cargo carry it)' },
+        { type: 'talk', npc: 'Tom the smith', need: { mats: { iron: 3 } }, text: 'Have Tom the smith recast the bell', lines: ["Nell's bell? Cracked like an egg. Hand me that iron...", "*clang* *clang* There. She'll ring truer than ever."] },
+        { type: 'talk', npc: 'Dockmaster Nell', text: 'Return the bell to Dockmaster Nell', lines: ["My bell! And recast too! Ye've gone above and beyond, captain."] },
+      ] },
+    bakerRun: { title: 'A baker’s dozen', reward: 300, giver: 'Marta the baker', hint: 'Marta the baker needs a rare spice from Turtle Cay.',
+      start: ["A spice bundle for my next batch washed up on Turtle Cay. Bring it back and the whole crew gets a treat."],
+      done: ["The whole island's talkin' about my new bread. Thank ye, captain."],
+      stages: [
+        { type: 'spot', item: 1, at: () => EXTRA_QSPOTS[1], r: 13, label: 'Pick up the spice bundle', text: 'Find the spice bundle washed ashore on Turtle Cay', act: () => toast('Got the spice bundle!') },
+        { type: 'mats', mats: { wood: 4 }, text: 'Gather 4 hardwood for Marta’s oven (Turtle Cay, Jungle Isle or Driftwood Isle)' },
+        { type: 'talk', npc: 'Marta the baker', need: { mats: { wood: 4 } }, text: 'Bring the spice and hardwood to Marta the baker', lines: ["Spice AND firewood! Now I can bake properly.", "Here, for yer trouble, and a loaf for the road."] },
+      ] },
+    supplyRun: { title: 'Quartermaster’s list', reward: 700, giver: 'Quartermaster Pell', hint: 'Quartermaster Pell has lost a supply crate near Mermaid Cove.',
+      start: ["A sealed crate went overboard near Mermaid Cove, far to the south. Retrieve it before the tide takes it."],
+      done: ["Stores are full and the crew's fed. Ye're a quartermaster's dream, captain."],
+      stages: [
+        { type: 'spot', item: 2, at: () => EXTRA_QSPOTS[2], r: 13, label: 'Open the supply crate', text: 'Recover Pell’s sealed supply crate at Mermaid Cove', act: () => toast("The crate's been emptied! A note inside: 'Taken aboard the galleon. Blackwater.'") },
+        { type: 'kill', what: 'galleon', n: 1, text: 'Sink a Blackwater galleon to take the supplies back' },
+        { type: 'talk', npc: 'Quartermaster Pell', text: 'Report back to Quartermaster Pell', lines: ["Ye sank a galleon for my stores? Remind me never to cross ye, captain.", "Here's yer pay, with a bonus."] },
+      ] },
+    bigCatch: { title: 'The fisher’s promise', reward: 400, giver: 'Fisher Toma', hint: 'Fisher Toma is looking for a rare pearl on Driftwood Isle.',
+      start: ["There's a pearl of unusual size on Driftwood Isle. But a buyer won't take one pearl alone.", "Bring me five ordinary pearls first, then fetch the big one. Mind the bandits on Driftwood."],
+      done: ["Sold the lot to a Port Coral jeweller! Ye're a lucky charm, captain."],
+      stages: [
+        { type: 'mats', mats: { pearl: 5 }, text: 'Gather 5 pearls from oysters (Mermaid Cove has the most)', at: () => COVE_SHORE && { x: COVE_SHORE.x, z: COVE_SHORE.y } },
+        { type: 'spot', item: 3, at: () => EXTRA_QSPOTS[3], r: 13, label: 'Take the giant pearl', text: 'Find the giant pearl on Driftwood Isle', act: () => toast('What a pearl! It’s the size of a fist.') },
+        { type: 'talk', npc: 'Fisher Toma', need: { mats: { pearl: 5 } }, text: 'Bring the pearls to Fisher Toma', lines: ["Look at the size of it! And five more besides. We'll be rich!"] },
+      ] },
+    warehouse: { title: 'Missing manifest', reward: 380, giver: 'Porter Venn', hint: 'Porter Venn needs a missing cargo manifest from Jungle Isle.',
+      start: ["A cargo manifest blew off my clipboard and landed somewhere on Jungle Isle, far to the west.", "And the cargo on it fell overboard too. I'll need both."],
+      done: ["Every crate accounted for. The warehouse owners won't hang me after all!"],
+      stages: [
+        { type: 'spot', item: 4, at: () => EXTRA_QSPOTS[4], r: 13, label: 'Pick up the manifest', text: 'Search the Jungle Isle shore for the cargo manifest', act: () => toast('Got the manifest. Six crates listed... all lost at sea.') },
+        { type: 'cargo', n: 6, text: 'Recover floating cargo at sea' },
+        { type: 'talk', npc: 'Porter Venn', text: 'Bring the manifest back to Porter Venn in Port Coral', lines: ["The manifest AND the cargo! Captain, ye're a miracle."] },
+      ] },
+    charting: { title: 'The uncharted current', reward: 450, giver: 'Captain Inez', hint: 'Captain Inez wants a new sea route charted to Smoke Peak.',
+      start: ["There's a fast current runnin' from Port Coral to Smoke Peak, but nobody's charted it.", "Sail it for me: three markers, in order, then land on Smoke Peak and mark the safe approach."],
+      done: ["Every trader in Port Coral's usin' yer route now, captain."],
+      stages: [
+        { type: 'sail', at: () => SEA_W3, r: 120, text: 'Sail to the first current marker, south-west of Port Coral' },
+        { type: 'sail', at: () => SEA_W2, r: 120, text: 'Sail to the second current marker' },
+        { type: 'sail', at: () => SEA_W1, r: 120, text: 'Sail to the third current marker, near Smoke Peak' },
+        { type: 'spot', item: 5, at: () => EXTRA_QSPOTS[5], r: 13, label: 'Mark the landing', text: 'Land on Smoke Peak and mark the safe approach', act: () => toast('Landing marked on the chart!') },
+        { type: 'talk', npc: 'Captain Inez', text: 'Bring the chart back to Captain Inez in Port Coral', lines: ["Three markers and a landing! This chart's worth its weight in gold. And so's yer pay."] },
+      ] },
+    keepsake: { title: 'A keepsake from home', reward: 350, giver: 'Old Pavo', hint: 'Old Pavo lost a family keepsake near Port Coral.',
+      start: ["My granddaughter’s little silver locket was lost on the Port Coral shore. It means more than its weight in gold."],
+      done: ["I wear it every day now. Thank ye, captain."],
+      stages: [
+        { type: 'spot', item: 6, at: () => EXTRA_QSPOTS[6], r: 13, label: 'Search the shore', text: 'Search the Port Coral shore for Pavo’s keepsake', act: () => toast("Only an empty box... and boot prints. Blackwater thugs took it to Skull Isle!") },
+        { type: 'kill', what: 'Blackwater thug', n: 2, text: 'Defeat Blackwater thugs on Skull Isle to get the locket back', at: () => SPOT_X },
+        { type: 'talk', npc: 'Old Pavo', text: 'Return the locket to Old Pavo in Port Coral', lines: ["My locket! Ye fought Blackwater's men for it? Bless ye, captain."] },
+      ] },
+    message: { title: 'Message in a bottle', reward: 1000, giver: 'Sera the navigator', hint: 'Sera the navigator spotted a bottle drifting near Palm Key.',
+      start: ["A bottle with a chart fragment washed up on Palm Key. Bring it to me before another captain finds it."],
+      done: ["The deep's secrets are ours now, captain. I'll never forget this."],
+      stages: [
+        { type: 'spot', item: 7, at: () => EXTRA_QSPOTS[7], r: 13, label: 'Pick up the bottle', text: 'Retrieve the bottle on Palm Key', act: () => toast("Inside: 'When the moon is up, the cove remembers. Seek the deep beyond.'") },
+        { type: 'spot', at: () => COVE_SHORE && { x: COVE_SHORE.x, z: COVE_SHORE.y }, r: 14, cond: isNight, condText: 'Nothing stirs. The note said: when the moon is up (come back at night).', label: 'Read the shore by moonlight', text: 'Visit the Mermaid Cove shore at night', act: () => toast('Moonlight shows a path of foam leading out to the deep water north of the cove...') },
+        { type: 'kraken', at: () => KRAKEN_DEEP, r: 150, text: 'Sail into the deep north of Mermaid Cove and drive off what lives there' },
+        { type: 'talk', npc: 'Sera the navigator', text: 'Tell Sera the navigator what ye found', lines: ["Ye fought the Kraken?! And lived?!", "The chart was a warning, not a treasure map. Here, captain, ye've earned every coin."] },
+      ] },
   };
-  function startQuest(id) { SFX.quest(); STATE.quests[id] = 0; STATE.track = id; save(); toast(`New quest: ${QUESTS[id].title}`); refreshQuestHud(); }
+  // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
+  STATE.qprog = STATE.qprog || {};
+  for (const id in STATE.quests) { const s = STATE.quests[id]; if (!QUESTS[id]) delete STATE.quests[id]; else if (typeof s === 'number' && s >= QUESTS[id].stages.length) STATE.quests[id] = QUESTS[id].stages.length - 1; }
+  const curStage = id => { const s = STATE.quests[id]; return typeof s === 'number' ? QUESTS[id].stages[s] : null; };
+  const haveMats = m => Object.entries(m || {}).every(([k, n]) => (STATE.mats[k] || 0) >= n);
+  function stageText(id) {
+    const st = curStage(id); if (!st) return '';
+    const p = STATE.qprog[id] || 0;
+    if (st.type === 'kill' || st.type === 'cargo') return `${st.text} (${Math.min(p, st.n)}/${st.n})`;
+    if (st.type === 'mats') return `${st.text} (${Object.entries(st.mats).map(([k, n]) => `${Math.min(STATE.mats[k] || 0, n)}/${n}`).join(', ')})`;
+    return st.text;
+  }
+  function startQuest(id) { SFX.quest(); STATE.quests[id] = 0; STATE.qprog[id] = 0; STATE.track = id; save(); toast(`New quest: ${QUESTS[id].title}`); refreshQuestHud(); }
   function advanceQuest(id) {
-    const s = STATE.quests[id] + 1;
+    const s = STATE.quests[id] + 1; STATE.qprog[id] = 0;
     if (s >= QUESTS[id].stages.length) { completeQuest(id); return; }
-    STATE.quests[id] = s; STATE.track = id; save(); toast(QUESTS[id].stages[s].text); refreshQuestHud();
+    STATE.quests[id] = s; STATE.track = id; save(); SFX.quest(); toast(stageText(id)); refreshQuestHud();
   }
   function completeQuest(id) {
-    STATE.quests[id] = 'done'; SFX.fanfare();
+    STATE.quests[id] = 'done'; delete STATE.qprog[id]; SFX.fanfare();
     if (STATE.track === id) STATE.track = Object.keys(STATE.quests).find(k => typeof STATE.quests[k] === 'number') || null;
     addGold(QUESTS[id].reward, `Quest complete: ${QUESTS[id].title}`);
     refreshQuestHud();
   }
-  function questTalk(name) {
-    const s = id => STATE.quests[id];
-    switch (name) {
-      case 'Old Barnaby':
-        if (s('treasure') === undefined) return { lines: ["Arr, ye've got the look of a captain with a spine.", "Legend says Captain Blackwater buried his gold on Skull Isle, far to the north-east, under a great red X.", "I'm too old for diggin'. Find it and it's all yers. Mind ye, Blackwater's old crew still camp by that X. Keep yer cutlass handy."], end: () => startQuest('treasure') };
-        if (s('treasure') === 'done') return { lines: ["Ye found Blackwater's gold? Har! I knew ye had it in ye, captain."] };
-        return { lines: ["The red X on Skull Isle, captain. Far to the north-east. Look for the giant skull rock."] };
-      case 'Gus':
-        if (s('ledger') === undefined) return { lines: ["Captain! Ye wouldn't happen to be sailin' east, would ye?", "My tavern ledger went down with the Mary Bell. She wrecked on the beach at Palm Key, east o' here.", "Every debt on this island is in that book. Fetch it and I'll make it worth yer while."], end: () => startQuest('ledger') };
-        if (s('ledger') === 0) return { lines: ["The wreck's on the beach at Palm Key, east o' Gull Island. The ledger's a fat leather book. Can't miss it."] };
-        if (s('ledger') === 1) return { lines: ["Ye found it! Soggy, but every page is there.", "Here's yer reward, captain. And free grog whenever ye like."], end: () => advanceQuest('ledger') };
-        return { lines: ["Ledger's dryin' by the fire. One-Eyed Jack owes me forty years o' grog money."] };
-      case 'Rosa':
-        if (s('oranges') === undefined) return { lines: ["Captain, love! Old Hermit Jonah on Jungle Isle has scurvy again.", "Take him this crate of oranges, would ye? Jungle Isle is far to the west.", "He'll pay ye well. He's got more gold than sense, that one."], end: () => startQuest('oranges') };
-        if (s('oranges') === 'done') return { lines: ["Jonah sent word ye made it! Ye're a treasure, captain."] };
-        return { lines: ["The oranges, love! Jungle Isle, far to the west. Look for Jonah's hut on the beach."] };
-      case 'Hermit Jonah':
-        if (s('oranges') === 0) return { lines: ["Eh? Oranges? From Rosa? Bless that woman!", "*munch munch* Oh, that's the stuff. Here, take this gold. I've no use for it out here."], end: () => advanceQuest('oranges') };
-        return { lines: ["Forty years on this rock and I've never once been bored. Lonely, aye. Bored, never.", "Mind the parrots. They steal hats."] };
-      case 'Silas':
-        if (s('oil') === undefined) return { lines: ["Captain, my lamp oil's near gone. When the light goes out, ships hit the reef.", "Trader Quint in Port Coral sells the good stuff. Port Coral's far to the east, past Palm Key.", "Bring me a barrel and I'll pay ye back and then some."], end: () => startQuest('oil') };
-        if (s('oil') === 1) return { lines: ["That's the stuff! The light'll burn bright for a year with this.", "Here's yer gold, captain, with my thanks."], end: () => advanceQuest('oil') };
-        if (s('oil') === 'done') return { lines: ["Brightest light on the seven seas, thanks to you."] };
-        return { lines: ["Port Coral, far to the east. Trader Quint. Lamp oil. Don't forget!"] };
-      case 'Trader Quint':
-        if (s('oil') === 0) {
-          if (STATE.gold < 50) return { lines: ["Lamp oil for Silas? That's 50 gold, friend, and yer purse is light. Come back when it's heavier."] };
-          return { lines: ["Lamp oil for old Silas? Fifty gold, and I'm givin' ye a discount.", "Pleasure doin' business. Tell Silas that Quint says hello."], end: () => { addGold(-50, 'Bought lamp oil'); advanceQuest('oil'); } };
+  // something happened in the world: count it for any quest waiting on it
+  function questEvent(kind, info) {
+    for (const id in QUESTS) {
+      const st = curStage(id); if (!st) continue;
+      let hit = false;
+      if (st.type === 'kill') hit = kind === 'bandit' ? st.what === info : kind === 'raider' && (st.what === 'raider' || (st.what === 'galleon' && info === 'galleon'));
+      else if (st.type === 'cargo') hit = kind === 'cargo';
+      else if (st.type === 'kraken') hit = kind === 'kraken' && STATE.qprog[id] === 1;
+      if (!hit) continue;
+      if (st.type === 'kraken') { advanceQuest(id); continue; }
+      STATE.qprog[id] = (STATE.qprog[id] || 0) + 1; save();
+      if (STATE.qprog[id] >= st.n) advanceQuest(id); else { toast(stageText(id)); if (STATE.track === id) refreshQuestHud(); }
+    }
+  }
+  // checked a few times a second: materials gathered, markers reached at sea, the deep stirring
+  function questTick() {
+    for (const id in QUESTS) {
+      const st = curStage(id); if (!st) continue;
+      if (st.type === 'kraken' && STATE.qprog[id] === 1 && KR.st !== 'hunt' && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown') { STATE.qprog[id] = 0; save(); }   // it got away (or ye fled): sail back out to call it again
+      if (st.type === 'mats') { if (haveMats(st.mats)) advanceQuest(id); else if (STATE.track === id && qObj.textContent !== stageText(id)) refreshQuestHud(); }
+      else if ((st.type === 'sail' || st.type === 'kraken') && ship && sailing && !ship.sinking) {
+        const a = st.at(), d = Math.hypot(ship.x - a.x, ship.z - a.z);
+        if (d > st.r) continue;
+        if (st.type === 'sail') { advanceQuest(id); continue; }
+        if (!STATE.qprog[id] && !ship.submerged && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown' && KR.ally <= 0) {
+          // the Kraken rises to meet ye
+          STATE.qprog[id] = 1; save();
+          const ang = Math.random() * 6.28; KR.x = ship.x + Math.sin(ang) * 250; KR.z = ship.z + Math.cos(ang) * 250;
+          KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null;
+          SFX.roar(); toast('The water goes still... something vast is rising from the deep!'); refreshQuestHud();
         }
-        return { lines: ["Welcome to Port Coral, the finest tradin' post this side o' the reef!", "I buy, I sell, and I don't ask questions."] };
-      case 'Tom the smith':
-        if (s('gem') === undefined) return { lines: ["Captain, I've a mind to forge somethin' legendary. But I need a fire gem.", "They wash up on the black sand of Smoke Peak, the volcano far to the north.", "Bring me one and I'll pay ye, and teach yer tailor to work in gold besides."], end: () => startQuest('gem') };
-        if (s('gem') === 1) return { lines: ["By my anvil, a real fire gem! Feel the heat comin' off it!", "Here's yer gold. And gold cloth is yours now. Press C and try a golden hat or coat."], end: () => { STATE.unlocked.gold = true; advanceQuest('gem'); } };
-        if (s('gem') === 'done') return { lines: ["That fire gem's makin' the finest steel I've ever worked."] };
-        return { lines: ["Black sand on Smoke Peak, far to the north. The gems glow red. Ye can't miss 'em."] };
-      case 'Dockmaster Nell':
-      case 'Marta the baker':
-      case 'Quartermaster Pell':
-      case 'Fisher Toma':
-      case 'Porter Venn':
-      case 'Captain Inez':
-      case 'Old Pavo':
-      case 'Sera the navigator': {
-        const jobs = {
-          'Dockmaster Nell': ['lostBell', 'The harbour bell was taken in a squall. I need it back from Gull Rocks, just off the main route.'],
-          'Marta the baker': ['bakerRun', 'A spice bundle for my next batch washed up on Turtle Cay. Bring it back and the whole crew gets a treat.'],
-          'Quartermaster Pell': ['supplyRun', 'A sealed crate went overboard near Mermaid Cove. Retrieve it before the tide takes it.'],
-          'Fisher Toma': ['bigCatch', 'There’s a pearl of unusual size on Driftwood Isle. Find it and I’ll share the sale money.'],
-          'Porter Venn': ['warehouse', 'A cargo manifest blew off my clipboard and landed somewhere on Jungle Isle. I need the names and numbers intact.'],
-          'Captain Inez': ['charting', 'I need a landing report from the black shore of Smoke Peak. Sail there and mark the safe approach.'],
-          'Old Pavo': ['keepsake', 'My granddaughter’s little silver locket was lost on the Port Coral shore. It means more than its weight in gold.'],
-          'Sera the navigator': ['message', 'A bottle with a chart fragment washed up on Palm Key. Bring it to me before another captain finds it.']
-        };
-        const [id, description] = jobs[name];
-        if (s(id) === undefined) return { lines: [description, 'I’ll pay you well if you bring it back.'], end: () => startQuest(id) };
-        if (s(id) === 'done') return { lines: ['You’ve already helped me with that job. Thank you, captain.'] };
-        return { lines: ['The job is still waiting, captain. Check your quest marker and head for the shore I mentioned.'] };
       }
     }
+  }
+  function questTalk(name) {
+    const say = (lines, end) => ({ lines, end, quest: true });
+    // 1) a quest stage waiting on this person (the quest ye're following first)
+    const ids = Object.keys(QUESTS).sort((a, b) => (b === STATE.track) - (a === STATE.track));
+    for (const id of ids) {
+      const st = curStage(id);
+      if (!st || st.type !== 'talk' || st.npc !== name) continue;
+      const need = st.need || {};
+      if (need.gold && STATE.gold < need.gold) return say(st.wait || [`That'll cost ye ${need.gold} gold, captain.`]);
+      if (need.mats && !haveMats(need.mats)) return say([`Ye'll need ${matList(need.mats)} for that, captain. Come back when ye have them.`]);
+      if (st.cond && !st.cond()) return say([st.condText || 'Not yet, captain.']);
+      return say(st.lines, () => {
+        if (need.gold) addGold(-need.gold, QUESTS[id].title);
+        if (need.mats) for (const [k, n] of Object.entries(need.mats)) STATE.mats[k] = (STATE.mats[k] || 0) - n;
+        if (st.end) st.end();
+        advanceQuest(id);
+      });
+    }
+    // 2) a quest this person gives
+    for (const id in QUESTS) {
+      const Q = QUESTS[id]; if (Q.giver !== name) continue;
+      const s = STATE.quests[id];
+      if (s === undefined) return say(Q.start, () => startQuest(id));
+      if (s !== 'done') return say([`Still waitin' on ye, captain: ${stageText(id).charAt(0).toLowerCase() + stageText(id).slice(1)}.`]);
+    }
+    // 3) a thank-you for finished work (the smith and the trader would rather show ye their wares)
+    if (name === 'Tom the smith' || name === 'Trader Quint') return null;
+    for (const id in QUESTS) if (QUESTS[id].giver === name && STATE.quests[id] === 'done') return say(QUESTS[id].done);
+    if (name === 'Hermit Jonah') return { lines: ["Forty years on this rock and I've never once been bored. Lonely, aye. Bored, never.", "Mind the parrots. They steal hats."] };
     return null;
   }
   function digTreasure() {
@@ -3118,13 +3233,9 @@
     const pile = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.8, 10), lam(0xcdb27a)); pile.position.set(2.4, 0.3, 0.5); g.add(pile);
     ISLANDS[4].group.add(g); enableShadows(g);
   }
-  if (STATE.quests.treasure === 'done') digTreasure();
-  if (STATE.quests.gem === 1 || STATE.quests.gem === 'done') gemMesh.visible = false;
-  const QSPOTS = [
-    { q: 'treasure', st: 0, spot: () => SPOT_X, r: 7, label: 'Dig for treasure', act: () => { SFX.chop(); digTreasure(); completeQuest('treasure'); } },
-    { q: 'ledger', st: 0, spot: () => WRECK_SPOT, r: 16, label: 'Search the shipwreck', act: () => { advanceQuest('ledger'); toast("Found Gus's ledger in the wreck!"); } },
-    { q: 'gem', st: 0, spot: () => GEM_SPOT, r: 7, label: 'Take the fire gem', act: () => { gemMesh.visible = false; advanceQuest('gem'); toast('Picked up a glowing fire gem!'); } },
-  ];
+  if (STATE.quests.treasure === 'done' || STATE.quests.treasure >= 4) digTreasure();
+  if (STATE.quests.gem === 'done' || STATE.quests.gem >= 1) gemMesh.visible = false;
+  const QUEST_ITEMS = [];
   const EXTRA_QUEST_IDS = ['lostBell', 'bakerRun', 'supplyRun', 'bigCatch', 'warehouse', 'charting', 'keepsake', 'message'];
   EXTRA_QUEST_IDS.forEach((id, i) => {
     const spot = EXTRA_QSPOTS[i];
@@ -3158,27 +3269,26 @@
     item.userData.questId = id;
     scene.add(item);
     enableShadows(item);
-    QSPOTS.push({
-      q: id, st: 0, spot: () => spot, r: 13, item,
-      label: 'Pick up the marked quest item',
-      act: () => {
-        SFX.quest();
-        item.visible = false;
-        completeQuest(id);
-        toast('Recovered the item and completed the contract!');
-      }
-    });
+    QUEST_ITEMS[i] = item;
   });
+  // the quest spot ye're standing at (on foot), if any
+  const spotPos = st => { const a = st.at(); return a ? { x: a.x, z: a.z !== undefined ? a.z : a.y } : null; };
   function nearQSpot() {
-    for (const q of QSPOTS) {
-      if (q.item) q.item.visible = STATE.quests[q.q] === q.st;
-    }
+    QUEST_ITEMS.forEach((it, i) => { it.visible = Object.keys(QUESTS).some(id => { const st = curStage(id); return st && st.type === 'spot' && st.item === i; }); });
     if (onShip || sailing || inInterior) return null;
-    return QSPOTS.find(q => STATE.quests[q.q] === q.st && Math.hypot(P.pos.x - q.spot().x, P.pos.z - q.spot().z) < q.r) || null;
+    for (const id in QUESTS) {
+      const st = curStage(id); if (!st || st.type !== 'spot') continue;
+      const a = spotPos(st); if (!a || Math.hypot(P.pos.x - a.x, P.pos.z - a.z) >= st.r) continue;
+      if (st.cond && !st.cond()) return { label: st.label, act: () => toast(st.condText || 'Not yet.') };
+      return { label: st.label, act: () => { SFX.quest(); if (st.act) st.act(); advanceQuest(id); } };
+    }
+    return null;
   }
   function questTarget() {
-    const id = STATE.track, s = id ? STATE.quests[id] : undefined;
-    return typeof s === 'number' ? QUESTS[id].stages[s].at() : null;
+    const st = STATE.track ? curStage(STATE.track) : null; if (!st) return null;
+    if (st.type === 'talk') { const n = npcAt(st.npc); return n; }
+    if (!st.at) return null;
+    return spotPos(st);
   }
   const qBox = document.getElementById('quest'), qTitle = document.getElementById('qTitle'), qObj = document.getElementById('qObj'), qDistRow = document.getElementById('qDist'), qDistEl = document.getElementById('qDistT'), qArrow = document.getElementById('qArrow');
   function refreshQuestHud() {
@@ -3191,7 +3301,7 @@
       qDistRow.style.display = 'none';
       return;
     }
-    qTitle.textContent = QUESTS[id].title; qObj.textContent = QUESTS[id].stages[s].text; qDistRow.style.display = 'flex';
+    qTitle.textContent = QUESTS[id].title; qObj.textContent = stageText(id); qDistRow.style.display = questTarget() ? 'flex' : 'none';
   }
   const mapPos = () => inInterior && ship ? { x: ship.x, z: ship.z } : { x: P.pos.x, z: P.pos.z };
   const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(64, 96, (g, w, h) => {
@@ -3200,6 +3310,7 @@
   }), depthTest: false, depthWrite: false, fog: false, transparent: true }));
   beacon.renderOrder = 999; beacon.visible = false; scene.add(beacon);
   function updateQuestHud() {
+    questTick();
     const tg = questTarget();
     if (!tg) { beacon.visible = false; return; }
     const from = mapPos(), dx = tg.x - from.x, dz = tg.z - from.z, d = Math.hypot(dx, dz);
@@ -3239,7 +3350,7 @@
       let got = false;
       if (aboard) got = Math.hypot(l.x - ship.x, l.z - ship.z) < ship.T.L * 0.5 + 4;
       else if (!inInterior) got = Math.hypot(l.x - P.pos.x, l.z - P.pos.z) < 4.5;
-      if (got) { addGold(15 + Math.floor(Math.random() * 46), 'Floating cargo'); const r = Math.random(); if (r < 0.3) addMat('iron', 1); else if (r < 0.42) addMat('wood', 1); l.respawn = 120; }
+      if (got) { questEvent('cargo'); addGold(15 + Math.floor(Math.random() * 46), 'Floating cargo'); const r = Math.random(); if (r < 0.3) addMat('iron', 1); else if (r < 0.42) addMat('wood', 1); l.respawn = 120; }
     }
   }
 
@@ -3437,8 +3548,8 @@
     Object.entries(QUESTS).forEach(([id, Q]) => {
       const s = STATE.quests[id], d = document.createElement('div');
       d.className = 'q' + (STATE.track === id && typeof s === 'number' ? ' on' : '') + (s === 'done' ? ' done' : '');
-      const status = s === undefined ? 'Not started' : s === 'done' ? 'Complete' : 'In progress';
-      d.innerHTML = `<div class="qt">${Q.title}<span>${status} · ${Q.reward} gold</span></div><div class="qd">${s === undefined ? Q.hint : s === 'done' ? 'Done!' : Q.stages[s].text}</div>`;
+      const status = s === undefined ? 'Not started' : s === 'done' ? 'Complete' : `Step ${s + 1} of ${Q.stages.length}`;
+      d.innerHTML = `<div class="qt">${Q.title}<span>${status} · ${Q.reward} gold</span></div><div class="qd">${s === undefined ? Q.hint : s === 'done' ? 'Done!' : stageText(id)}</div>`;
       if (typeof s === 'number') { d.style.cursor = 'pointer'; d.title = 'Click to follow this quest'; d.addEventListener('click', () => { STATE.track = id; save(); refreshQuestHud(); renderQuests(); }); }
       qlist.appendChild(d);
     });
@@ -3580,8 +3691,8 @@
     const n = nearestNpc();
     if (n) {
       if (n.def.shop) openShop(n);
-      else if (n.def.name === 'Tom the smith' && !(questTalk('Tom the smith') || {}).end) openForgeChat(n);
-      else if (n.def.name === 'Trader Quint' && STATE.quests.oil !== 0) openTrade(n);
+      else if (n.def.name === 'Tom the smith' && !(questTalk('Tom the smith') || {}).end) openForgeChat(n);   // quest business first, otherwise his forge
+      else if (n.def.name === 'Trader Quint' && !(questTalk('Trader Quint') || {}).end) openTrade(n);
       else { const q = npcs.includes(n) ? questTalk(n.def.name) : null; talk = { npc: n, line: 0, lines: q ? q.lines : null, end: q ? q.end : null }; if ((talk.lines || n.def.lines).length) showLine(); else talk = null; }
       return;
     }
@@ -4030,6 +4141,7 @@
     if (b.hp <= 0) { b.state = 'dead'; b.deadT = 0; b.slashT = 0; if (!window.__mpNear || window.__mpNear(b)) banditReward(b); }
   }
   function banditReward(b) {
+    questEvent('bandit', b.name);
     addGold(20 + Math.floor(crand() * 26), `Defeated a ${b.name.toLowerCase()}`); addMat('iron', 1 + (crand() < 0.4 ? 1 : 0));
   }
   function hurtPlayer(n) {
@@ -4164,6 +4276,7 @@
     if (tg === ship) { if (tg.hp <= 0) sinkPlayerShip(); }
     else if (tg.hp <= 0 && tg.state !== 'sinking') {
       tg.state = 'sinking'; tg.sinkT = 0; SFX.crash(tg);
+      if (!(KR.lock === tg && KR.ally <= 0)) questEvent('raider', tg.galleon ? 'galleon' : 'brig');   // sunk by ye (or yer kraken)
       if (KR.lock === tg && KR.ally > 0) { addGold(tg.galleon ? 600 : 250, `Yer kraken sank a Blackwater ${tg.galleon ? 'galleon' : 'raider'}!`); addMat('steel', tg.galleon ? 4 : 2); }
       else if (KR.lock === tg) { if (Math.hypot(tg.x - P.pos.x, tg.z - P.pos.z) < 700) toast('The kraken drags the raider ship down to the depths!'); }
       else if (tg.galleon) { addGold(600, 'Sank a Blackwater galleon!'); addMat('steel', 4); }
@@ -6120,7 +6233,7 @@
     }
     if (KR.st === 'grip' || KR.st === 'attack') {
       if (KR.hp <= 0) {
-        if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken shrieks and sinks back into the abyss!'); addGold(800, 'Drove off the Kraken!'); addMat('pearl', 3); }
+        if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken shrieks and sinks back into the abyss!'); addGold(800, 'Drove off the Kraken!'); addMat('pearl', 3); questEvent('kraken'); }
         krRelease(true);
       }
     }
@@ -6651,6 +6764,7 @@
         const d = m.data; if (m.peer !== 'server' || !d) return; const r = raiders[d.i]; if (!r) return;
         if (r.state !== 'sinking' && r.state !== 'gone') { r.state = 'sinking'; r.sinkT = 0; r.hp = 0; try { SFX.crash(r); } catch (e) {} }
         if (d.by !== MP.me) { if (Math.hypot(r.x - P.pos.x, r.z - P.pos.z) < 700) toast(`${(MP.peers.get(d.by)?.name || 'Another captain')} sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); return; }
+        questEvent('raider', d.gal ? 'galleon' : 'brig');
         if (d.kr) { addGold(d.gal ? 600 : 250, `Yer kraken sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); addMat('steel', d.gal ? 4 : 2); }
         else if (d.gal) { addGold(600, 'Sank a Blackwater galleon!'); addMat('steel', 4); }
         else { addGold(250, 'Sank a Blackwater raider!'); addMat('steel', 2); }
