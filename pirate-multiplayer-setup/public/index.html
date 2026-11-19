@@ -3968,7 +3968,7 @@
       if (far) { b.tag.style.display = 'none'; continue; }
       if (b.state === 'dead') {
         b.deadT += dt; b.ch.root.rotation.x = -Math.min(Math.PI / 2, b.deadT * 3);
-        if (b.deadT > 6) { b.state = 'gone'; b.deadT = 150; }
+        if (b.deadT > 6) { b.state = 'gone'; b.deadT = window.__mpOnline && window.__mpOnline() ? 3 : 150; }   // online, the server says when it respawns
         b.tag.style.display = 'none'; continue;
       }
       if (window.__mpBanditFollow && window.__mpBanditFollow(b, dt)) continue;
@@ -4109,6 +4109,7 @@
   }
   function damageShip(tg, n) {
     if (tg === ship && window.__god) return;
+    if (tg !== ship && window.__mpRaiderDmg && window.__mpRaiderDmg(tg, n)) return;   // online: the server owns raider hull points
     tg.hp -= n; tg.lastHit = 0;
     if (tg === ship) { if (tg.hp <= 0) sinkPlayerShip(); }
     else if (tg.hp <= 0 && tg.state !== 'sinking') {
@@ -4196,13 +4197,16 @@
   function updateRaiders(dt, t) {
     const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
     for (const r of raiders) {
-      if (r.state === 'gone') { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r); continue; }
+      // Online, the server sails the raiders; this only follows its snapshots.
+      const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
+      if (r.state === 'gone') { if (!net) { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r); } continue; }
       if (r.state === 'sinking') {
         r.sinkT += dt; r.group.position.y -= dt * 1.5; r.roll += dt * 0.06; r.group.rotation.set(r.pitch, r.heading, r.roll);
         r.tag.style.display = 'none';
         if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = 200; }
         continue;
       }
+      if (!net) {
       let desired = r.heading, want = 14;
       const tdx = target ? target.x - r.x : 0, tdz = target ? target.z - r.z : 0, td = Math.hypot(tdx, tdz);
       if (target && td < 1000) {
@@ -4228,6 +4232,7 @@
       const nx = r.x + Math.sin(nh) * r.speed * dt, nz = r.z + Math.cos(nh) * r.speed * dt;
       if (blockedAt(r, nx, nz, nh)) { r.heading += 0.9 * dt; r.speed *= 0.6; r.blockT = (r.blockT || 0) + dt; if (r.blockT > 4) { r.blockT = 0; raiderWaypoint(r); } }
       else { r.heading = nh; r.x = nx; r.z = nz; }
+      }
       bob(r, dt, t); krTilt(r, t);
       r.group.visible = Math.hypot(r.x - camera.position.x, r.z - camera.position.z) < 6000;
       const cd = Math.hypot(r.x - P.pos.x, r.z - P.pos.z);
@@ -6361,8 +6366,10 @@
       if (MP.names[by]) { p.name = MP.names[by]; p.tag.textContent = p.name; mpDrawHud(); }
     } catch (e) {}
   }
+  // Build a remote pirate's look exactly the way playerLook() builds yours (Sword of the Sea wearers get the marine outfit).
+  const remoteLook = d => { const L = Object.assign({}, DEFAULT_LOOK, d.look || {}); if (d.sw !== 'seasword') return lookToChar(L); const c = lookToChar(Object.assign(L, MARINE_LOOK)); c.marine = true; return c; };
   function mpAdd(peer, by, d) {
-    const ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
+    const ch = makeCharacter(remoteLook(d));
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = 'Pirate ' + peer.slice(0, 3); tagLayer.appendChild(tag);
     const p = { peer, ch, tag, name: 'Pirate ' + peer.slice(0, 3), pos: new THREE.Vector3(d.x, d.y, d.z), f: d.f || 0, sp: 0, ship: null, shipKey: null, tgt: d, lookKey: JSON.stringify(d.look || {}) };
     ch.root.position.copy(p.pos); scene.add(ch.root);
@@ -6411,52 +6418,90 @@
       window.__mpKrakenTargets = () => [...MP.peers.values()].filter(q => q.tgt && q.tgt.sh && q.ship && !q.ship.sinking).map(q => ({ peer: q.peer, x: q.ship.x, z: q.ship.z }));
       window.__mpKrakenTargetAlive = peer => { const q = MP.peers.get(peer); return !!(q && q.tgt && q.tgt.sh && q.ship); };
       window.__mpKrakenStrike = (peer, dmg) => MP.room.emit('kraken', { to: peer, dmg }).catch(() => {});
-      const isHost = () => !!MP.me && [...MP.peers.keys()].every(k => MP.me < k);
+      // ---- Server-authoritative world ----
+      // The server runs the bandits and the Blackwater raiders for everyone. This browser only
+      // sends what its own player did (hits) and draws the snapshots the server sends back.
+      const online = () => !!MP.me && MP.room.connected();
+      window.__mpOnline = online;
+      const fresh = n => n && performance.now() - n.t < 2500;
       const ST = ['idle', 'chase', 'dead', 'gone'];
+      const RST = ['patrol', 'attack', 'sinking', 'gone'];
       window.__mpNear = b => Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 80;
-      window.__mpTarget = b => {
-        let best = null, bd = 1e9;
-        if (playerTargetable() && PLAYER.hp > 0) { bd = Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z); best = { x: P.pos.x, z: P.pos.z, remote: null }; }
-        for (const q of MP.peers.values()) { const dd = Math.hypot(q.pos.x - b.pos.x, q.pos.z - b.pos.z); if (dd < bd - 0.5) { bd = dd; best = { x: q.pos.x, z: q.pos.z, remote: q.peer }; } }
-        return best || { x: P.pos.x, z: P.pos.z, remote: null };
-      };
-      window.__mpBanditHit = (peer, dmg) => MP.room.emit('bhit', { to: peer, dmg }).catch(() => {});
+      // Bandits: hits go to the server; it applies the damage and tells everyone.
       window.__mpBanditDmg = (b, dmg) => {
-        if (isHost() || !MP.me) return false;
+        if (!online()) return false;
         SFX.hit(b.pos); puff(b.pos.x, b.pos.y + 1.4, b.pos.z, { color: 0xb02020, size: 0.9, life: 0.4, grow: 1, op: 0.9 });
         MP.room.emit('bdmg', { i: bandits.indexOf(b), dmg }).catch(() => {}); return true;
       };
       window.__mpBanditFollow = (b, dt) => {
-        if (isHost() || !MP.me || !MP.peers.size) return false;
+        if (!online()) return false;
         const n = b.net; const k = Math.min(1, dt * 8);
-        if (n && performance.now() - n.t < 2500) {
-          b.pos.x += (n.x - b.pos.x) * k; b.pos.z += (n.z - b.pos.z) * k;
-          let df = n.f - b.facing; df = Math.atan2(Math.sin(df), Math.cos(df)); b.facing += df * k;
-          b.hp = n.hp; b.slashT = n.sl ? 0.2 : 0;
-          if (b.state !== n.st) { const was = b.state; b.state = n.st; if (n.st === 'dead' && was !== 'dead') { b.deadT = 0; if (window.__mpNear(b)) banditReward(b); } }
-          const mv = Math.hypot(n.x - b.pos.x, n.z - b.pos.z) > 0.3;
-          b.pos.y = groundAt(b.pos.x, b.pos.z); b.ch.root.position.copy(b.pos); b.ch.root.rotation.y = b.facing;
-          b.ch.slashP = n.sl ? 0.5 : 0; b.ch.update(dt, mv ? (b.state === 'chase' ? 4.6 : 1.6) : 0, false, false, n.sl ? 'slash' : null); b.ch.props.blade.visible = true;
-          if ((b.state === 'chase' || b.hp < b.max) && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40) {
-            _mpV.set(b.pos.x, b.pos.y + 2.9, b.pos.z).project(camera);
-            if (_mpV.z < 1) { b.tag.style.display = 'block'; b.tag.style.transform = `translate(-50%,-100%) translate(${(_mpV.x * 0.5 + 0.5) * innerWidth}px, ${(-_mpV.y * 0.5 + 0.5) * innerHeight}px)`; b.bar.style.width = Math.max(0, b.hp / b.max * 100) + '%'; } else b.tag.style.display = 'none';
-          } else b.tag.style.display = 'none';
+        if (!fresh(n)) { b.ch.update(dt, 0, false, false, null); return true; }   // wait for the server rather than guessing
+        if (n.st === 'gone') { b.state = 'gone'; b.deadT = 3; b.ch.root.visible = false; b.tag.style.display = 'none'; return true; }
+        if (Math.hypot(n.x - b.pos.x, n.z - b.pos.z) > 30) { b.pos.x = n.x; b.pos.z = n.z; }
+        b.pos.x += (n.x - b.pos.x) * k; b.pos.z += (n.z - b.pos.z) * k;
+        let df = n.f - b.facing; df = Math.atan2(Math.sin(df), Math.cos(df)); b.facing += df * k;
+        b.hp = n.hp; b.slashT = n.sl ? 0.2 : 0;
+        if (b.state !== n.st) { const was = b.state; b.state = n.st; if (n.st === 'dead' && was !== 'dead') { b.deadT = 0; if (window.__mpNear(b)) banditReward(b); } }
+        if (n.sl && !b.netSl) SFX.swing(b.pos); b.netSl = n.sl;
+        const mv = Math.hypot(n.x - b.pos.x, n.z - b.pos.z) > 0.3;
+        b.pos.y = groundAt(b.pos.x, b.pos.z); b.ch.root.position.copy(b.pos); b.ch.root.rotation.y = b.facing;
+        b.ch.slashP = n.sl ? 0.5 : 0; b.ch.update(dt, mv ? (b.state === 'chase' ? 4.6 : 1.6) : 0, false, false, n.sl ? 'slash' : null); b.ch.props.blade.visible = true;
+        if ((b.state === 'chase' || b.hp < b.max) && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40) {
+          _mpV.set(b.pos.x, b.pos.y + 2.9, b.pos.z).project(camera);
+          if (_mpV.z < 1) { b.tag.style.display = 'block'; b.tag.style.transform = `translate(-50%,-100%) translate(${(_mpV.x * 0.5 + 0.5) * innerWidth}px, ${(-_mpV.y * 0.5 + 0.5) * innerHeight}px)`; b.bar.style.width = Math.max(0, b.hp / b.max * 100) + '%'; } else b.tag.style.display = 'none';
+        } else b.tag.style.display = 'none';
+        return true;
+      };
+      MP.room.on('bsnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const b = bandits[e[0]]; if (b) b.net = { x: e[1], z: e[2], f: e[3], hp: e[4], st: ST[e[5]] || 'idle', sl: e[6], t }; } });
+      MP.room.on('bhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { hurtPlayer(Math.min(20, +d.dmg || 0)); } catch (e) {} });
+
+      // Raiders: the server sails them, fires their guns and decides when they sink.
+      MP.room.on('rsnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const r = raiders[e[0]]; if (r) { const o = r.net; r.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: RST[e[5]] || 'patrol', sp: e[6], steer: e[7], tg: e[8], t }; if (o && t > o.t) { const s = (t - o.t) / 1000; r.net.vx = Math.max(-45, Math.min(45, (e[1] - o.x) / s)); r.net.vz = Math.max(-45, Math.min(45, (e[2] - o.z) / s)); } } } });
+      MP.room.on('rfire', m => { const d = m.data; if (m.peer !== 'server' || !d) return; const r = raiders[d.i]; if (!r || (r.state !== 'patrol' && r.state !== 'attack')) return; if (Math.hypot(r.x - P.pos.x, r.z - P.pos.z) > 2500) return; try { fireBroadside(r, d.s > 0 ? 1 : -1, true); } catch (e) {} });
+      MP.room.on('rsunk', m => {
+        const d = m.data; if (m.peer !== 'server' || !d) return; const r = raiders[d.i]; if (!r) return;
+        if (r.state !== 'sinking' && r.state !== 'gone') { r.state = 'sinking'; r.sinkT = 0; r.hp = 0; try { SFX.crash(r); } catch (e) {} }
+        if (d.by !== MP.me) { if (Math.hypot(r.x - P.pos.x, r.z - P.pos.z) < 700) toast(`${(MP.peers.get(d.by)?.name || 'Another captain')} sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); return; }
+        if (d.kr) { addGold(d.gal ? 600 : 250, `Yer kraken sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); addMat('steel', d.gal ? 4 : 2); }
+        else if (d.gal) { addGold(600, 'Sank a Blackwater galleon!'); addMat('steel', 4); }
+        else { addGold(250, 'Sank a Blackwater raider!'); addMat('steel', 2); }
+      });
+      window.__mpRaiderDmg = (r, n) => {
+        if (!online()) return false;
+        const i = raiders.indexOf(r); if (i < 0) return false;
+        r.hp = Math.max(0, r.hp - n); r.lastHit = 0;   // shown right away; the next snapshot corrects it
+        MP.room.emit('rdmg', { i, dmg: n, kr: KR.lock === r && KR.ally > 0 ? 1 : 0 }).catch(() => {});
+        return true;
+      };
+      window.__mpRaiderSync = (r, dt) => {
+        if (!online()) return false;
+        const n = r.net;
+        if (!fresh(n)) { r.speed = 0; return true; }   // hold position until the server speaks
+        if (n.st === 'gone' || n.st === 'sinking') {
+          if (r.state === 'patrol' || r.state === 'attack') { r.state = 'sinking'; r.sinkT = n.st === 'gone' ? 8 : 0; }   // the local sinking branch finishes it
           return true;
         }
-        return false;   // no recent host data: fall back to local AI
+        if (r.state === 'gone' || r.state === 'sinking') {   // respawned on the server
+          r.x = n.x; r.z = n.z; r.heading = n.h; r.pitch = 0; r.roll = 0; r.sinkT = 0;
+          if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; });
+          r.group.rotation.set(0, r.heading, 0); scene.add(r.group);
+        }
+        if (n.st === 'attack' && n.tg === MP.me && !warned) { warned = true; toast('Blackwater raiders! At the wheel, press Space to fire the guns on the side ye\'re lookin\'.'); }
+        r.state = n.st; r.hp = n.hp; r.speed = n.sp; r.steer = n.steer;
+        const lead = Math.min(0.2, (performance.now() - n.t) / 1000), tx = n.x + (n.vx || 0) * lead, tz = n.z + (n.vz || 0) * lead;
+        if (Math.hypot(tx - r.x, tz - r.z) > 150) { r.x = tx; r.z = tz; r.heading = n.h; }
+        else { const k = 1 - Math.exp(-dt * 6); r.x += (tx - r.x) * k; r.z += (tz - r.z) * k; r.heading += Math.atan2(Math.sin(n.h - r.heading), Math.cos(n.h - r.heading)) * k; }
+        return true;
       };
-      MP.room.on('bsnap', m => { if (m.isMe || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const b = bandits[e[0]]; if (b) b.net = { x: e[1], z: e[2], f: e[3], hp: e[4], st: ST[e[5]] || 'idle', sl: e[6], t }; } });
-      MP.room.on('bdmg', m => { const d = m.data; if (m.isMe || !isHost() || !d || !bandits[d.i]) return; const b = bandits[d.i]; if (b.state === 'dead' || b.state === 'gone') return; hitBandit(b, Math.min(80, +d.dmg || 0)); });
-      MP.room.on('bhit', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return; try { hurtPlayer(Math.min(20, +d.dmg || 0)); } catch (e) {} });
-      MP.snapT = 0;
-      MP.hostTick = dt => {
-        if (!isHost() || !MP.peers.size) return;
-        MP.snapT -= dt; if (MP.snapT > 0) return; MP.snapT = 0.17;
-        const pts = [[P.pos.x, P.pos.z], ...[...MP.peers.values()].map(q => [q.pos.x, q.pos.z])];
-        const list = [];
-        bandits.forEach((b, i) => { const dd = Math.min(...pts.map(q => Math.hypot(q[0] - b.pos.x, q[1] - b.pos.z))); if (dd < 160) list.push([dd, [i, Math.round(b.pos.x * 10) / 10, Math.round(b.pos.z * 10) / 10, Math.round(b.facing * 100) / 100, Math.max(0, Math.round(b.hp)), Math.max(0, ST.indexOf(b.state)), b.slashT > 0 ? 1 : 0]]); });
-        list.sort((a, b) => a[0] - b[0]);
-        MP.room.emit('bsnap', list.slice(0, 40).map(e => e[1])).catch(() => {});
+      // Tell the server when our kraken grabs or lets go of a raider, so it stops sailing her.
+      MP.krHeld = null;
+      MP.syncTick = () => {
+        const held = KR.lock && raiders.includes(KR.lock) ? KR.lock : null;
+        if (held === MP.krHeld) return;
+        if (MP.krHeld) MP.room.emit('rhold', { i: raiders.indexOf(MP.krHeld), on: 0 }).catch(() => {});
+        if (held) MP.room.emit('rhold', { i: raiders.indexOf(held), on: 1 }).catch(() => {});
+        MP.krHeld = held;
       };
       window.__mpFire = side => { MP.room.emit('fire', { s: side }).catch(() => {}); };
       window.__mpSlash = delay => setTimeout(() => {
@@ -6473,15 +6518,18 @@
   const _mpV = new THREE.Vector3(), _mpQ = new THREE.Quaternion(), _mpE = new THREE.Euler();
   function mpUpdate(dt, t) {
     if (!MP.room) return;
-    if (MP.hostTick) MP.hostTick(dt);
+    if (MP.syncTick) MP.syncTick(dt);
     MP.sendT -= dt;
     if (MP.sendT <= 0) {
       MP.sendT = 0.12;
       try {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         const r = v => Math.round(v * 100) / 100;
-        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null };
-        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0) };
+        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null,
+          md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
+          w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0 };   // w: weapon in hand
+        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
+          a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0 };   // a: crewed, so raiders will hunt it
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
       } catch (e) {}
     }
@@ -6491,7 +6539,7 @@
       const lk = JSON.stringify(d.look || {}), swordId = d.sw || 'rusty';
       if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
         p.lookKey = lk; p.swordKey = swordId; scene.remove(p.ch.root);
-        p.ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
+        p.ch = makeCharacter(remoteLook(d));
         // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
         p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
@@ -6503,7 +6551,13 @@
       p.ch.root.position.copy(p.pos); p.ch.root.rotation.y = p.f;
       p.sp += ((d.s || 0) - p.sp) * k;
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
-      try { p.ch.slashP = p.sl; if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null); } catch (e) {}
+      try {
+        p.ch.slashP = p.sl; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null);
+        // ch.update() hides all props, so the weapon has to be shown after it, the same way the local player does.
+        const w = d.w === undefined ? 1 : d.w;
+        if (p.ch.props.blade) p.ch.props.blade.visible = w === 1 || !!d.a;
+        if (p.ch.props.pistol) p.ch.props.pistol.visible = w === 2 && !d.a;
+      } catch (e) {}
       // their ship
       const sh = d.sh;
       // Rebuild remote ships when either their hull type or Sword-of-the-Sea wreck form changes.
