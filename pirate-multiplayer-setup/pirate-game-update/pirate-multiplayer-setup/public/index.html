@@ -4923,7 +4923,7 @@
   addEventListener('keydown', e => {
     if (e.repeat || uiOpen || talk) return;
     const k = e.key.toLowerCase();
-    if (k === 'f') playerAttack();
+    if (k === 'f' && !RIDE.on) playerAttack();
     if (k === '1') setWeapon('cutlass');
     if (k === '2') setWeapon('pistol');
     if (k === ' ' && sailing) playerBroadside();
@@ -7590,7 +7590,12 @@
       }
       ELD.speed += (ELD.thr * ELD.K.max - ELD.speed) * Math.min(1, dt * 0.9);
       if (!elderMove(dt)) { ELD.thr = 0; if (t - ELD.landT > 4) { ELD.landT = t; toast("He won't swim into the shallows. Turn him about!"); } }
-      ELD.st = 'swim';
+      // F / Space: rear up and bite whatever is in front of his jaws
+      if (ELD.st === 'strike') {
+        ELD.sk += dt; fighting = true;
+        if (!ELD.hit && ELD.sk > 1.15) { ELD.hit = true; const b = elderRideTarget(); if (b) elderBite(b.T, b.e); else wSplash(ELD.x + Math.sin(ELD.h) * ELD.K.strikeR * 0.4, 1, ELD.z + Math.cos(ELD.h) * ELD.K.strikeR * 0.4, true); }
+        if (ELD.sk > 1.9) ELD.st = 'swim';
+      } else ELD.st = 'swim';
     } else if (ELD.mode === 'mount') {
       // come alongside, a good way off the beam, and lie still
       const sx = Math.sin(H.h), sz = Math.cos(H.h), off = ELD.K.mountOff * ELD.side, tx = H.x + sz * off, tz = H.z - sx * off, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
@@ -7616,6 +7621,21 @@
     ELD.lift = ELD.st === 'strike' && ELD.sk >= 1.15 ? -lift : lift; ELD.fighting = fighting;
     poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.sk, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting });
   }
+  // what's in reach of his jaws while ye ride him: the nearest ship, the Kraken or a serpent just ahead of his head
+  function elderRideTarget() {
+    const K = ELD.K, ax = ELD.x + Math.sin(ELD.h) * K.strikeR * 0.4, az = ELD.z + Math.cos(ELD.h) * K.strikeR * 0.4, out = [];
+    for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') out.push({ T: { kind: 'raider', ent: r }, e: r });
+    for (const q of (window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [])) if (q.ship && !q.ship.sinking) out.push({ T: { kind: 'player', peer: q.peer }, e: q.ship });
+    if (KR.st !== 'dead' && KR.st !== 'dying' && KR.st !== 'drown') out.push({ T: { kind: 'kraken' }, e: KR });
+    for (const s of SERP) if (serpAlive(s)) out.push({ T: { kind: 'serp', ent: s }, e: s });
+    let best = null, bd = K.strikeR; for (const o of out) { const d = Math.hypot(o.e.x - ax, o.e.z - az); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
+  function elderRideBite() {
+    if (!RIDE.on || ELD.st === 'strike' || talk || uiOpen) return;
+    ELD.st = 'strike'; ELD.sk = 0; ELD.hit = false; SFX.roar();
+  }
+  addEventListener('keydown', e => { if (!RIDE.on || e.repeat) return; const k = e.key.toLowerCase(); if (k === 'f' || k === ' ') { e.preventDefault(); elderRideBite(); } });
   function deepSpotNear(x, z, r0, r1, clear = 70) {
     for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1 - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; let ok = Math.abs(px) < EDGE - 100 && Math.abs(pz) < EDGE - 100; for (let k = 0; k < 8 && ok; k++) ok = heightAt(px + Math.cos(k) * clear, pz + Math.sin(k) * clear) < -6; if (ok) return { x: px, z: pz }; }
     return null;
@@ -7680,7 +7700,7 @@
     if (onShip) detach();
     if (ship) ship.sailTarget = Math.min(ship.sailTarget ?? 0.12, 0.12);
     RIDE.on = true; ELD.thr = 0; P.vy = 0; P.speed = 0; dist = ELD.K.rideDist; yaw = ELD.h + Math.PI; pitch = 0.3;
-    SFX.roar(); etoast('Ye climb onto the Elder Serpent! W/S to speed up or slow down, A/D to turn, E to climb down.');
+    SFX.roar(); etoast('Ye climb onto the Elder Serpent! W/S to speed up or slow down, A/D to turn, F (or Space) to bite, E to climb down.');
   }
   function elderDismount() {
     RIDE.on = false; ELD.mode = 'guard'; ELD.thr = 0;
@@ -8143,7 +8163,7 @@
     else if (STOM.on) promptHtml = nearChest() ? '<b>E</b> Grab the treasure' : null;
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
-    else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>E</b> Climb down`;
+    else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>F</b> Bite · <b>E</b> Climb down`;
     else if (canMount()) promptHtml = '<b>E</b> Climb onto the Elder Serpent';
     else if (sailing) promptHtml = ship && ship.submerged ? '<b>C</b> Rise · <b>V</b> Dive · <b>E</b> Leave wheel' : '<b>E</b> Step away from the wheel';
     else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : nearWardrobe() ? '<b>E</b> Change yer outfit at the looking-glass' : nearTrophies() ? '<b>E</b> Look at yer trophies' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
