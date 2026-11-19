@@ -7052,7 +7052,7 @@
     const eyeM = new THREE.MeshBasicMaterial({ color: 0xffd23a }), mouthM = new THREE.MeshLambertMaterial({ color: 0x5a1414 }), toothM = new THREE.MeshLambertMaterial({ color: 0xf2ecd8 });
     const N = 28, SPACING = 4.2;   // about 120 m of serpent
     const spawnAt = () => { for (let i = 0; i < 60; i++) { const q = mistSpot(); if (heightAt(q.x + 30, q.z) < -6 && heightAt(q.x - 30, q.z) < -6) return q; } return mistSpot(); };
-    for (let n = 0; n < 3; n++) {
+    for (let n = 0; n < 5; n++) {
       const g = new THREE.Group(); scene.add(g);
       const segs = [];
       for (let k = 0; k < N; k++) {
@@ -7078,7 +7078,7 @@
       const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = 'Sea serpent<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag);
       const q = spawnAt();
       const s = { g, segs, head, jaw, tag, bar: tag.querySelector('.ehp div'), x: q.x, z: q.z, y: -1, heading: Math.random() * 6.28, speed: 8,
-        st: 'roam', hp: 240, max: 240, wp: null, ang: 0, side: n % 2 ? 1 : -1, strikeT: 3, t: 0, deadT: 0, trail: [], ph: n * 2.1, told: false };
+        st: 'roam', hp: 320, max: 320, wp: null, ang: 0, side: n % 2 ? 1 : -1, strikeT: 3, t: 0, deadT: 0, trail: [], ph: n * 2.1, told: false };
       for (let k = 0; k < N * SPACING / 0.5 + 8; k++) s.trail.push({ x: s.x - Math.sin(s.heading) * k * 0.5, z: s.z - Math.cos(s.heading) * k * 0.5 });
       s.N = N; s.SPACING = SPACING;
       SERP.push(s);
@@ -7087,7 +7087,11 @@
   const serpAlive = s => s.st !== 'dying' && s.st !== 'gone';
   // who it goes for: yer ship, while ye're aboard, unless ye carry the Sword of the Sea
   const serpPrey = () => ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
+  // serpents never leave the mist: anything they steer for is pulled back inside its edge
+  const inMistAt = (x, z, m = 0) => Math.hypot(x - MIST.x, z - MIST.z) < MIST.r + m;
+  function clampMist(x, z) { const dx = x - MIST.x, dz = z - MIST.z, d = Math.hypot(dx, dz), lim = MIST.r - 40; return d <= lim ? [x, z] : [MIST.x + dx / d * lim, MIST.z + dz / d * lim]; }
   function serpSteer(s, tx, tz, want, dt, turn = 1.6) {
+    [tx, tz] = clampMist(tx, tz);
     const desired = Math.atan2(tx - s.x, tz - s.z), diff = angDiff(s.heading, desired);
     let nh = s.heading + Math.max(-turn * dt, Math.min(turn * dt, diff));
     s.speed += (want - s.speed) * Math.min(1, dt * 1.5);
@@ -7111,7 +7115,7 @@
     if (s.st === 'roam') s.st = 'hunt';
     if (s.hp <= 0) {
       s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none'; SFX.roar();
-      toast('The sea serpent shrieks and sinks beneath the waves!'); addGold(350, 'Slew a sea serpent!'); addMat('pearl', 2);
+      toast('The sea serpent shrieks and sinks beneath the waves!'); addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2);
     }
   }
   // cannonballs: anything of the serpent's above or near the water is a target
@@ -7138,14 +7142,14 @@
     const s = SERP[i]; if (!s || !ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + s.side * 0.1;
     SFX.crash({ x: ship.x, z: ship.z }); wSplash(s.x, 0.6, s.z, true);
-    if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(14);
+    if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(22);
     toast('A sea serpent slams into the hull!');
   }
   function serpentDied(i, mine) {
     const s = SERP[i]; if (!s || !serpAlive(s)) return;
     s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none';
     if (Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 700) { SFX.roar(); toast('The sea serpent shrieks and sinks beneath the waves!'); }
-    if (mine) { addGold(350, 'Slew a sea serpent!'); addMat('pearl', 2); }
+    if (mine) { addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2); }
   }
   const serpFighting = () => SERP.some(s => s.st === 'circle' || s.st === 'strike');
   // for the cannons' auto-aim
@@ -7168,7 +7172,7 @@
           s.st = N.st;
           if (N.tg === me && (N.st === 'hunt' || N.st === 'circle') && !s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
           if (N.tg === me && N.st === 'escort' && !s.toldCalm) { s.toldCalm = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
-          if (N.st === 'roam') { s.told = false; s.toldCalm = false; }
+          if (N.st === 'roam') { if (s.told && (was === 'hunt' || was === 'circle' || was === 'strike') && Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 900) toast('The serpent turns back into the mist.'); s.told = false; s.toldCalm = false; }
         }
         s.hp = N.hp;
         const lead = Math.min(0.3, (performance.now() - N.t) / 1000), tx = N.x + Math.sin(N.h) * N.sp * lead, tz = N.z + Math.cos(N.h) * N.sp * lead, k = Math.min(1, dt * 6);
@@ -7176,38 +7180,39 @@
       }
       if (s.st === 'gone') { s.deadT -= dt; s.g.visible = false; if (s.deadT <= 0) { const q = mistSpot(); s.x = q.x; s.z = q.z; s.hp = s.max; s.st = 'roam'; s.y = -1; s.trail.forEach(p => { p.x = s.x; p.z = s.z; }); } continue; }
       if (s.st === 'dying') { s.deadT += dt; s.y -= dt * 3; if (s.deadT > 5) { s.st = 'gone'; s.deadT = 300; } }
-      const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = Math.hypot(s.x - MIST.x, s.z - MIST.z) < MIST.r + 900;
+      const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = prey ? inMistAt(prey.x, prey.z, 30) : false;   // sail out of the fog and they let ye go
       let lift = 0;   // how far the head rears out of the water
       if (s.st !== 'dying' && !N) {
         // the Sword of the Sea: they bow their heads and escort ye instead
         if (calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) { s.st = 'escort'; s.jawT = 0; }
         if (!calm && s.st === 'escort') s.st = 'roam';
         if (s.st === 'escort') {
-          if (!prey || d > 420) s.st = 'roam';
+          if (!prey || d > 420 || !leash) s.st = 'roam';
           else {
             if (!s.told && d < 160) { s.told = true; toast('Sea serpents rise around the ship... and bow their heads to the Sword of the Sea.'); }
             const sx = Math.sin(prey.heading), sz = Math.cos(prey.heading), off = 38 * s.side;
             serpSteer(s, prey.x + sz * off + sx * 25, prey.z - sx * off + sz * 25, Math.max(8, Math.min(40, Math.abs(prey.speed || 0) + d * 0.05)), dt, 2.2);
           }
         } else if (s.st === 'roam') {
-          if (prey && d < (calm ? 160 : 380) && leash) s.st = calm ? 'escort' : 'hunt';
+          if (prey && d < (calm ? 160 : 520) && inMistAt(prey.x, prey.z)) s.st = calm ? 'escort' : 'hunt';
           if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < 40) s.wp = mistSpot();
           serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
         } else if (s.st === 'hunt') {
-          if (!prey || d > 700 || !leash) s.st = 'roam';
+          if (!prey || d > 800 || !leash) { if (s.st === 'hunt' && prey && !leash && s.told) toast('The serpent turns back into the mist.'); s.st = 'roam'; s.told = false; }
           else {
             if (!s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
             s.ang = Math.atan2(s.x - prey.x, s.z - prey.z);
-            serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 26, dt, 2.2);
-            if (d < 75) { s.st = 'circle'; s.strikeT = 2 + Math.random() * 2; }
+            serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 34, dt, 2.6);
+            if (d < 80) { s.st = 'circle'; s.strikeT = 1 + Math.random(); }
           }
         } else if (s.st === 'circle') {
-          if (!prey || d > 170) s.st = prey ? 'hunt' : 'roam';
+          if (!prey || !leash) { if (prey && !leash) toast('The serpent turns back into the mist.'); s.st = 'roam'; s.told = false; }
+          else if (d > 170) s.st = 'hunt';
           else {
             s.ang += dt * 0.55 * s.side;
-            serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(14, Math.abs(prey.speed || 0) + 8), dt, 2.6);
+            serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(18, Math.abs(prey.speed || 0) + 12), dt, 3);
             s.strikeT -= dt;
-            if (s.strikeT <= 0 && d < 62) { s.st = 'strike'; s.sk = 0; s.hit = false; SFX.roar(); }
+            if (s.strikeT <= 0 && d < 66) { s.st = 'strike'; s.sk = 0; s.hit = false; SFX.roar(); }
           }
         } else if (s.st === 'strike') {
           // rear up, hang there a moment, then lunge down at the hull
@@ -7216,14 +7221,14 @@
           lift = s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6);
           if (!s.hit && s.sk > 1.15 && prey) {
             s.hit = true;
-            if (d < 42) {
-              damageShip(prey, 13); prey.krJolt = Math.max(prey.krJolt || 0, 1.2); prey.krRz = (prey.krRz || 0) + s.side * 0.1;
+            if (d < 48) {
+              damageShip(prey, 22); prey.krJolt = Math.max(prey.krJolt || 0, 1.2); prey.krRz = (prey.krRz || 0) + s.side * 0.1;
               SFX.crash({ x: prey.x, z: prey.z }); wSplash(s.x, 0.6, s.z, true);
-              if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(14);
+              if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(22);
               toast('A sea serpent slams into the hull!');
             } else wSplash(s.x, 0.4, s.z, true);
           }
-          if (s.sk > 1.9) { s.st = 'circle'; s.strikeT = 3.5 + Math.random() * 2.5; }
+          if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
         }
       }
       if (N) lift = s.st === 'strike' ? (s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6)) : 0;

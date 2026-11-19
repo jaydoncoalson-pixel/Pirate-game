@@ -152,10 +152,14 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
   }
 
   // ---------------------------------------------------------------- sea serpents
-  const SERP = [0, 1, 2].map(n => { const q = mistSpot(); return { x: q.x, z: q.z, h: Math.random() * 6.28, speed: 8, st: 'roam', hp: 240, max: 240, wp: null, ang: 0, side: n % 2 ? 1 : -1, strikeT: 3, sk: 0, hit: false, deadT: 0, tg: null }; });
+  const SERP = [0, 1, 2, 3, 4].map(n => { const q = mistSpot(); return { x: q.x, z: q.z, h: Math.random() * 6.28, speed: 8, st: 'roam', hp: 320, max: 320, wp: null, ang: 0, side: n % 2 ? 1 : -1, strikeT: 3, sk: 0, hit: false, deadT: 0, tg: null }; });
   const serpAlive = s => s.st !== 'dying' && s.st !== 'gone';
   const prevSh = new Map();   // player -> last ship position, for speed
+  // serpents never leave the mist: anything they steer for is pulled back inside its edge
+  const inMist = (x, z, m = 0) => Math.hypot(x - W.MIST.x, z - W.MIST.z) < W.MIST.r + m;
+  function clampMist(x, z) { const M = W.MIST, dx = x - M.x, dz = z - M.z, d = Math.hypot(dx, dz), lim = M.r - 40; return d <= lim ? [x, z] : [M.x + dx / d * lim, M.z + dz / d * lim]; }
   function serpSteer(s, tx, tz, want, dt, turn) {
+    [tx, tz] = clampMist(tx, tz);
     const desired = Math.atan2(tx - s.x, tz - s.z), diff = angDiff(s.h, desired);
     let nh = s.h + Math.max(-turn * dt, Math.min(turn * dt, diff));
     s.speed += (want - s.speed) * Math.min(1, dt * 1.5);
@@ -181,32 +185,33 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
       if (!prey || s.st === 'roam') {   // nearest crewed ship
         let bd = 1e9; prey = null; for (const p of ships) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < bd) { bd = d; prey = p; } }
       }
-      const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = Math.hypot(s.x - M.x, s.z - M.z) < M.r + 900;
+      const d = prey ? Math.hypot(prey.x - s.x, prey.z - s.z) : 1e9, leash = prey ? inMist(prey.x, prey.z, 30) : false;   // a ship that sails out of the fog is let go
       if (prey && prey.calm && (s.st === 'hunt' || s.st === 'circle' || s.st === 'strike')) s.st = 'escort';
       if (prey && !prey.calm && s.st === 'escort') s.st = 'hunt';
       if (s.st === 'escort') {
-        if (!prey || d > 420) { s.st = 'roam'; s.tg = null; }
+        if (!prey || d > 420 || !leash) { s.st = 'roam'; s.tg = null; }
         else { const sx = Math.sin(prey.h), sz = Math.cos(prey.h), off = 38 * s.side; serpSteer(s, prey.x + sz * off + sx * 25, prey.z - sx * off + sz * 25, Math.max(8, Math.min(40, prey.sp + d * 0.05)), dt, 2.2); }
       } else if (s.st === 'roam') {
         s.tg = null;
-        if (prey && d < (prey.calm ? 160 : 380) && leash) { s.st = prey.calm ? 'escort' : 'hunt'; s.tg = prey.id; }
+        if (prey && d < (prey.calm ? 160 : 520) && inMist(prey.x, prey.z)) { s.st = prey.calm ? 'escort' : 'hunt'; s.tg = prey.id; }
         if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < 40) s.wp = mistSpot();
         serpSteer(s, s.wp.x, s.wp.z, 9, dt, 1.2);
       } else if (s.st === 'hunt') {
-        if (!prey || d > 700 || !leash) { s.st = 'roam'; s.tg = null; }
-        else { s.tg = prey.id; s.ang = Math.atan2(s.x - prey.x, s.z - prey.z); serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 26, dt, 2.2); if (d < 75) { s.st = 'circle'; s.strikeT = 2 + Math.random() * 2; } }
+        if (!prey || d > 800 || !leash) { s.st = 'roam'; s.tg = null; }
+        else { s.tg = prey.id; s.ang = Math.atan2(s.x - prey.x, s.z - prey.z); serpSteer(s, prey.x + Math.sin(s.ang) * 44, prey.z + Math.cos(s.ang) * 44, 34, dt, 2.6); if (d < 80) { s.st = 'circle'; s.strikeT = 1 + Math.random(); } }
       } else if (s.st === 'circle') {
-        if (!prey || d > 170) s.st = prey ? 'hunt' : 'roam';
+        if (!prey || !leash) { s.st = 'roam'; s.tg = null; }
+        else if (d > 170) s.st = 'hunt';
         else {
           s.ang += dt * 0.55 * s.side;
-          serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(14, prey.sp + 8), dt, 2.6);
-          s.strikeT -= dt; if (s.strikeT <= 0 && d < 62) { s.st = 'strike'; s.sk = 0; s.hit = false; }
+          serpSteer(s, prey.x + Math.sin(s.ang) * 40, prey.z + Math.cos(s.ang) * 40, Math.max(18, prey.sp + 12), dt, 3);
+          s.strikeT -= dt; if (s.strikeT <= 0 && d < 66) { s.st = 'strike'; s.sk = 0; s.hit = false; }
         }
       } else if (s.st === 'strike') {
         s.sk += dt;
         if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? 4 : 18, dt, 3);
-        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < 42) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 13 }); }
-        if (s.sk > 1.9) { s.st = 'circle'; s.strikeT = 3.5 + Math.random() * 2.5; }
+        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < 48) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22 }); }
+        if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
       }
     }
   }
