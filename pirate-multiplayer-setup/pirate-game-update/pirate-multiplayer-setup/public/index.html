@@ -7433,15 +7433,15 @@
   }
 
   // ---------- The Elder Serpent ----------
-  // Sound the Serpent Horn (3) and he rises from the deep: ten times the size of the shoal serpents and three times as fast.
+  // Sound the Serpent Horn (3) and he rises from the deep: ten times the size of the shoal serpents and three times as fast (165 m/s).
   // Guard: he keeps by yer ship and falls on anything that attacks ye (raiders, rival captains, serpents, even the Kraken).
   // Attack: sound the horn again to pick a ship (or the Kraken) for him to hunt. Mount: he waits beside yer ship and ye ride him.
   // He belongs to whoever sounded the horn: their game moves him, everyone else sees him through their presence.
-  // two kinds answer a horn: the true Serpent Horn's Elder Serpent (10x a shoal serpent's size, 3x its speed, sinks ships in one bite),
+  // two kinds answer a horn: the true Serpent Horn's Elder Serpent (10x a shoal serpent's size, 3x its 55 m/s hunting speed, sinks ships in one bite),
   // and the common sea serpent that answers anyone else's horn once the true one has been claimed
   const ELD_KINDS = {
-    elder: { elder: true, scale: 10, max: 102, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, baseY: -9, amp: 20, neck: 16, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
-    common: { elder: false, scale: 1, max: 34, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
+    elder: { elder: true, scale: 10, max: 165, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, baseY: -9, amp: 20, neck: 16, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
+    common: { elder: false, scale: 1, max: 55, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
   };
   const ELD = { K: ELD_KINDS.elder, on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
   const RIDE = { on: false };
