@@ -3321,10 +3321,13 @@
     btn(c, 'Heal me', () => { PLAYER.hp = PLAYER.max; });
     btn(c, 'Repair ship', () => { if (ship) ship.hp = ship.maxHp; else toast('Ye have no ship yet.'); });
     btn(c, 'God mode: ' + (window.__god ? 'on' : 'off'), () => { window.__god = !window.__god; }, window.__god);
-    c = sec('Time of day');
-    [['Dawn', 6], ['Noon', 12], ['Dusk', 18], ['Midnight', 0]].forEach(([n, h]) => btn(c, n, () => { gameTime = h; }));
-    c = sec('Weather');
-    Object.keys(WEATHERS).forEach(k => btn(c, WEATHERS[k].name, () => { weatherKey = k; weatherT = 300; }, weatherKey === k));
+    const onServer = !!(window.__mpEnv && window.__mpEnv());
+    c = sec('Time of day' + (onServer ? ' (everyone on the server)' : ''));
+    [['Dawn', 6], ['Noon', 12], ['Dusk', 18], ['Midnight', 0]].forEach(([n, h]) => btn(c, n, () => setEnv({ time: h })));
+    c = sec('Weather' + (onServer ? ' (everyone on the server)' : ''));
+    Object.keys(WEATHERS).forEach(k => btn(c, WEATHERS[k].name, () => setEnv({ weather: k }), weatherKey === k));
+    c = sec('Back to normal');
+    btn(c, envOverridden() ? 'Reset time & weather to normal' : 'Time & weather are normal', () => { if (envOverridden()) setEnv({ reset: 1 }); }, envOverridden());
     c = sec('Kraken');
     btn(c, 'Send it after my ship', () => {
       if (!ship) { toast('Ye have no ship yet.'); return; }
@@ -4345,9 +4348,12 @@
   };
   const NEXT_WEATHER = { clear: [['clear', 2], ['cloudy', 5], ['fog', 1.2]], cloudy: [['clear', 3], ['rain', 3], ['storm', 1], ['fog', 1.5]], rain: [['cloudy', 4], ['storm', 2.5], ['rain', 1.5]], storm: [['rain', 6], ['cloudy', 2]], fog: [['clear', 3], ['cloudy', 3]] };
   let weatherKey = WEATHERS[STATE.weather] ? STATE.weather : 'clear', weatherT = 150 + Math.random() * 200;
+  // The natural clock and weather always run underneath; admin changes are overrides on top of them.
+  // Online, the server owns all of this and every player sees the same time and weather.
+  let natTime = gameTime, natWx = weatherKey, timeOff = 0, wxLock = null, envNetSeen = false;
   const Wx = Object.assign({}, WEATHERS[weatherKey]);
   function pickWeather() {
-    const opts = NEXT_WEATHER[weatherKey]; let r = Math.random() * opts.reduce((a, o) => a + o[1], 0);
+    const opts = NEXT_WEATHER[natWx]; let r = Math.random() * opts.reduce((a, o) => a + o[1], 0);
     for (const [k, w] of opts) if ((r -= w) <= 0) return k;
     return 'clear';
   }
@@ -4416,22 +4422,44 @@
   // sleeping in the captain's bed skips to morning
   const nearBed = () => inInterior && interior.title === "Captain's quarters" && Math.hypot(IP.x + 5.1, IP.z - 3.6) < 2.9;
   function sleep() {
+    PLAYER.hp = PLAYER.max;
+    if (window.__mpEnv && window.__mpEnv()) { toast('Ye sleep soundly and wake fully rested. The crew shares one clock, so the world sails on.'); return; }
     if (gameTime >= 7) dayNum++;
-    gameTime = 7; PLAYER.hp = PLAYER.max;
-    if (weatherKey === 'storm' || weatherKey === 'rain') { weatherKey = 'cloudy'; weatherT = 200; }
+    natTime = 7; timeOff = 0; gameTime = 7;
+    if (!wxLock && (natWx === 'storm' || natWx === 'rain')) { natWx = weatherKey = 'cloudy'; weatherT = 200; }
     toast('Ye sleep soundly and wake at dawn, fully rested.');
   }
+  // Admin: change the time or weather, or put both back to normal. Online this goes to the server and changes it for everyone.
+  function setEnv(d) {
+    if (window.__mpAdminEnv && window.__mpAdminEnv(d)) { toast(d.reset ? 'Time and weather are back to normal for everyone.' : 'Changed for everyone on the server.'); return; }
+    if (d.reset) { timeOff = 0; wxLock = null; gameTime = natTime; weatherKey = natWx; toast('Time and weather are back to normal.'); return; }
+    if (typeof d.time === 'number') { let off = d.time - natTime; if (off < 0) off += 24; timeOff = off; gameTime = d.time; }
+    if (d.weather) { wxLock = d.weather; weatherKey = d.weather; }
+  }
+  function envOverridden() { const n = window.__mpEnv && window.__mpEnv(); return n ? !!(n.ot || n.ow) : (timeOff !== 0 || !!wxLock); }
 
   function updateEnvironment(dt) {
-    gameTime += dt * 24 / DAY_LEN;
-    if (gameTime >= 24) { gameTime -= 24; dayNum++; }
-    envSaveT -= dt;
-    if (envSaveT <= 0) { envSaveT = 15; STATE.time = gameTime; STATE.day = dayNum; STATE.weather = weatherKey; save(); }
-    weatherT -= dt;
-    if (weatherT <= 0) {
-      weatherT = 150 + Math.random() * 220;
-      const nx = pickWeather();
-      if (nx !== weatherKey) { weatherKey = nx; toast(`The weather turns: ${WEATHERS[nx].name.toLowerCase()}.`); }
+    const net = window.__mpEnv ? window.__mpEnv() : null;
+    if (net) {
+      // Online: follow the server's shared clock. Run it locally between updates; snap on big jumps (admin, joining).
+      gameTime += dt * 24 / DAY_LEN; if (gameTime >= 24) gameTime -= 24;
+      const target = (net.t + (performance.now() - net.at) / 1000 * 24 / DAY_LEN) % 24;
+      let diff = target - gameTime; diff -= 24 * Math.round(diff / 24);
+      if (Math.abs(diff) > 0.05) gameTime = target;
+      dayNum = net.d;
+      if (WEATHERS[net.w] && net.w !== weatherKey) { weatherKey = net.w; if (envNetSeen) toast(`The weather turns: ${WEATHERS[net.w].name.toLowerCase()}.`); }
+      envNetSeen = true;
+    } else {
+      envNetSeen = false;
+      natTime += dt * 24 / DAY_LEN;
+      if (natTime >= 24) { natTime -= 24; dayNum++; }
+      gameTime = (natTime + timeOff) % 24;
+      envSaveT -= dt;
+      if (envSaveT <= 0) { envSaveT = 15; STATE.time = natTime; STATE.day = dayNum; STATE.weather = natWx; save(); }
+      weatherT -= dt;
+      if (weatherT <= 0) { weatherT = 150 + Math.random() * 220; natWx = pickWeather(); }
+      const want = wxLock || natWx;
+      if (want !== weatherKey) { weatherKey = want; if (!wxLock) toast(`The weather turns: ${WEATHERS[want].name.toLowerCase()}.`); }
     }
     const tgt = WEATHERS[weatherKey], wk = Math.min(1, dt * 0.1);
     for (const key in tgt) if (key !== 'name') Wx[key] += (tgt[key] - Wx[key]) * wk;
@@ -6494,6 +6522,25 @@
         else { const k = 1 - Math.exp(-dt * 6); r.x += (tx - r.x) * k; r.z += (tz - r.z) * k; r.heading += Math.atan2(Math.sin(n.h - r.heading), Math.cos(n.h - r.heading)) * k; }
         return true;
       };
+      // Shared clock and weather from the server.
+      MP.env = null;
+      MP.room.on('env', m => {
+        if (m.peer !== 'server' || !m.data || typeof m.data.t !== 'number') return;
+        const prev = MP.env; MP.env = Object.assign({}, m.data, { at: performance.now() });
+        if (uiOpen === 'admin' && (!prev || prev.w !== MP.env.w || prev.ot !== MP.env.ot || prev.ow !== MP.env.ow)) renderAdmin();
+      });
+      window.__mpEnv = () => (online() && MP.env && performance.now() - MP.env.at < 5000) ? MP.env : null;
+      window.__mpAdminEnv = d => {
+        if (!online()) return false;
+        let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {}
+        MP.lastAdminEnv = d; MP.room.emit('admin_env', Object.assign({}, d, { key })).catch(() => {}); return true;
+      };
+      MP.room.on('admin_denied', m => {
+        if (m.peer !== 'server') return;
+        const k = prompt('This server needs its admin key to change the time and weather for everyone. Enter the key:');
+        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
+        else toast('Not changed: the server needs the admin key.');
+      });
       // Tell the server when our kraken grabs or lets go of a raider, so it stops sailing her.
       MP.krHeld = null;
       MP.syncTick = () => {

@@ -9,12 +9,17 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createSim } = require('./sim');
+const { createEnv } = require('./env');
 
 const PORT = +process.env.PORT || 8080;
 const MAX_PLAYERS = +process.env.MAX_PLAYERS || 16;
 const TICK_MS = 50;          // simulation: 20 ticks a second
 const SNAP_MS = 100;         // world snapshots to browsers: 10 a second
 const PUBLIC = path.join(__dirname, 'public');
+// Admin key for server-wide admin actions (time and weather). Set ADMIN_KEY in Render's Environment tab.
+// If it is not set, any player using the in-game admin account can change the server's time and weather.
+const ADMIN_KEY = process.env.ADMIN_KEY || '';
+const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
 const RELAY_TOPICS = new Set(['fire', 'pvp', 'kraken']);
 
@@ -45,6 +50,8 @@ const sim = createSim({
   broadcast: (topic, data) => broadcastRaw(serverEmit(topic, data)),
 });
 
+const env = createEnv();
+
 const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
 wss.on('connection', ws => {
   let id = null;
@@ -61,7 +68,7 @@ wss.on('connection', ws => {
       players.set(id, { ws, name, p: {} });
       send(ws, { t: 'welcome', id, peers });
       const snap = sim.snapshot();   // so the newcomer sees the world right away
-      send(ws, serverEmit('bsnap', snap.bsnap)); send(ws, serverEmit('rsnap', snap.rsnap));
+      send(ws, serverEmit('bsnap', snap.bsnap)); send(ws, serverEmit('rsnap', snap.rsnap)); send(ws, serverEmit('env', env.snapshot()));
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
       return;
@@ -73,6 +80,12 @@ wss.on('connection', ws => {
       me.p = m.p;
       broadcastRaw({ t: 'pres', id, p: m.p }, id);
     } else if (m.t === 'emit' && typeof m.topic === 'string') {
+      if (m.topic === 'admin_env') {                                    // admin: change time/weather for everyone
+        const d = m.data || {};
+        if (ADMIN_KEY && d.key !== ADMIN_KEY) { send(ws, serverEmit('admin_denied', { what: 'env' })); return; }
+        if (env.admin(d)) { broadcastRaw(serverEmit('env', env.snapshot())); console.log(`admin ${me.name}: ${d.reset ? 'reset time and weather' : JSON.stringify({ time: d.time, weather: d.weather })}`); }
+        return;
+      }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
       if (RELAY_TOPICS.has(m.topic)) broadcastRaw({ t: 'emit', topic: m.topic, data: m.data, from: id }, id);
       // anything else (e.g. a client trying to send bsnap/rsnap/bhit) is dropped
@@ -91,10 +104,13 @@ wss.on('connection', ws => {
 setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; try { ws.ping(); } catch (e) {} } }, 15000);
 
 // ---------- game loop ----------
-let last = Date.now(), snapAcc = 0;
+let last = Date.now(), snapAcc = 0, envAcc = 0;
 setInterval(() => {
   const now = Date.now(), dt = Math.min(0.2, (now - last) / 1000); last = now;
   sim.tick(dt, players);
+  env.tick(dt);
+  envAcc += dt * 1000;
+  if (envAcc >= ENV_MS) { envAcc = 0; if (players.size) broadcastRaw(serverEmit('env', env.snapshot())); }
   snapAcc += dt * 1000;
   if (snapAcc >= SNAP_MS && players.size) {
     snapAcc = 0;
@@ -104,4 +120,4 @@ setInterval(() => {
   }
 }, TICK_MS);
 
-server.listen(PORT, () => console.log(`Pirate server on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Pirate server on http://localhost:${PORT}${ADMIN_KEY ? '' : ' (no ADMIN_KEY set: admin time/weather is open to the admin account)'}`));
