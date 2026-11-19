@@ -6366,8 +6366,10 @@
       if (MP.names[by]) { p.name = MP.names[by]; p.tag.textContent = p.name; mpDrawHud(); }
     } catch (e) {}
   }
+  // Build a remote pirate's look exactly the way playerLook() builds yours (Sword of the Sea wearers get the marine outfit).
+  const remoteLook = d => { const L = Object.assign({}, DEFAULT_LOOK, d.look || {}); if (d.sw !== 'seasword') return lookToChar(L); const c = lookToChar(Object.assign(L, MARINE_LOOK)); c.marine = true; return c; };
   function mpAdd(peer, by, d) {
-    const ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
+    const ch = makeCharacter(remoteLook(d));
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = 'Pirate ' + peer.slice(0, 3); tagLayer.appendChild(tag);
     const p = { peer, ch, tag, name: 'Pirate ' + peer.slice(0, 3), pos: new THREE.Vector3(d.x, d.y, d.z), f: d.f || 0, sp: 0, ship: null, shipKey: null, tgt: d, lookKey: JSON.stringify(d.look || {}) };
     ch.root.position.copy(p.pos); scene.add(ch.root);
@@ -6524,7 +6526,8 @@
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null,
-          md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0 };   // md: on foot and fair game for bandits
+          md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
+          w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0 };   // w: weapon in hand
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0 };   // a: crewed, so raiders will hunt it
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
@@ -6536,7 +6539,7 @@
       const lk = JSON.stringify(d.look || {}), swordId = d.sw || 'rusty';
       if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
         p.lookKey = lk; p.swordKey = swordId; scene.remove(p.ch.root);
-        p.ch = makeCharacter(lookToChar(Object.assign({}, DEFAULT_LOOK, d.look || {})));
+        p.ch = makeCharacter(remoteLook(d));
         // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
         p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
@@ -6548,7 +6551,13 @@
       p.ch.root.position.copy(p.pos); p.ch.root.rotation.y = p.f;
       p.sp += ((d.s || 0) - p.sp) * k;
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
-      try { p.ch.slashP = p.sl; if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null); } catch (e) {}
+      try {
+        p.ch.slashP = p.sl; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null);
+        // ch.update() hides all props, so the weapon has to be shown after it, the same way the local player does.
+        const w = d.w === undefined ? 1 : d.w;
+        if (p.ch.props.blade) p.ch.props.blade.visible = w === 1 || !!d.a;
+        if (p.ch.props.pistol) p.ch.props.pistol.visible = w === 2 && !d.a;
+      } catch (e) {}
       // their ship
       const sh = d.sh;
       // Rebuild remote ships when either their hull type or Sword-of-the-Sea wreck form changes.
