@@ -1610,10 +1610,16 @@
       const zc = (c.z0 + c.z1) / 2, len = c.z1 - c.z0, uMid = Math.max(-1, Math.min(1, zc / (L / 2)));
       const w = F.pt(uMid, 1)[0] * 2 * (c.wk || 0.95);
       const yb = c.on !== undefined ? tops[c.on] : F.sheer(uMid) - S.bulwark;
-      const geo = new THREE.BoxGeometry(w, c.h, len);
+      // The deck curves (the sheer rises toward bow and stern), so a box sized from the deck height at the castle's
+      // middle floats above the deck at its low end and leaves a gap under the front wall. Run the walls down to the
+      // lowest deck point under the castle instead; the extra is hidden below the deck.
+      let ybLow = yb;
+      if (c.on === undefined) for (let k = 0; k <= 12; k++) { const u = Math.max(-1, Math.min(1, (c.z0 + len * k / 12) / (L / 2))); ybLow = Math.min(ybLow, F.sheer(u) - S.bulwark); }
+      const top = yb + c.h, wallH = top - ybLow + 0.05;
+      const geo = new THREE.BoxGeometry(w, wallH, len);
       if (c.front) { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) if (p.getZ(i) > 0) p.setX(i, p.getX(i) * c.front); geo.computeVertexNormals(); }
-      const m = new THREE.Mesh(geo, cMat); m.position.set(0, yb + c.h / 2, zc); g.add(m);
-      const top = yb + c.h; tops[ci] = top;
+      const m = new THREE.Mesh(geo, cMat); m.position.set(0, top - wallH / 2, zc); g.add(m);
+      tops[ci] = top;
       walkCastles.push({ z0: c.z0, z1: c.z1, hw: w / 2, fhw: (c.front ? w * c.front : w) / 2, top });
       const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 0.25, 0.18, len + 0.25), lam(0x9a7046));
       if (c.front) { const p = cap.geometry.attributes.position; for (let i = 0; i < p.count; i++) if (p.getZ(i) > 0) p.setX(i, p.getX(i) * c.front); }
