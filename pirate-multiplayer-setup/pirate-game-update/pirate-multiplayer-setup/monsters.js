@@ -145,7 +145,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     } else if (topic === 'kquest' || (topic === 'kadmin' && adminOk(d))) {
       // a quest (or an admin) calls the Kraken up beside this player's ship
       if (topic === 'kadmin' && d.cmd === 'defeat') { if (K.st === 'engaged') { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); } return; }
-      if (topic === 'kquest' && (K.st === 'engaged' || K.st === 'hunt' || K.st === 'drown')) return;
+      if (topic === 'kquest' && (K.st === 'engaged' || K.st === 'hunt' || K.st === 'drown' || K.st === 'dying' || K.st === 'dead')) return;   // a beaten Kraken stays down until it respawns
       if (!q.p.sh || !q.p.sh.a || !krDeep(q.p.sh.x, q.p.sh.z)) return;
       const s = deepNear(q.p.sh.x, q.p.sh.z, 240, 260); if (!s) return;
       Object.assign(K, { x: s.x, z: s.z, st: 'hunt', tg: { k: 'ship', id: from }, hp: K.max, ally: null, cd: 0, t: 0 });

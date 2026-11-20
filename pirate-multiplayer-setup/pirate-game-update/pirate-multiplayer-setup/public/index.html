@@ -3770,7 +3770,7 @@
       let hit = false;
       if (st.type === 'kill') hit = kind === 'bandit' ? st.what === info : kind === 'raider' && (st.what === 'raider' || (st.what === 'galleon' && info === 'galleon'));
       else if (st.type === 'cargo') hit = kind === 'cargo';
-      else if (st.type === 'kraken') hit = kind === 'kraken' && STATE.qprog[id] === 1;
+      else if (st.type === 'kraken') { const a = st.at(); hit = kind === 'kraken' && (STATE.qprog[id] === 1 || (ship && Math.hypot(ship.x - a.x, ship.z - a.z) < st.r * 4)); }
       if (!hit) continue;
       if (st.type === 'kraken') { advanceQuest(id); continue; }
       STATE.qprog[id] = (STATE.qprog[id] || 0) + 1; save();
@@ -3781,13 +3781,16 @@
   function questTick() {
     for (const id in QUESTS) {
       const st = curStage(id); if (!st) continue;
-      if (st.type === 'kraken' && STATE.qprog[id] === 1 && KR.st !== 'hunt' && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown') { STATE.qprog[id] = 0; save(); }   // it got away (or ye fled): sail back out to call it again
+      // it got away (or ye fled): ye must sail clear of the spot and come back to call it again. A beaten Kraken
+      // (dying or dead) doesn't count as getting away, and it's never called straight back up the moment it sinks
+      if (st.type === 'kraken' && STATE.qprog[id] === 1 && (KR.st === 'roam' || KR.st === 'leaving')) { STATE.qprog[id] = -1; save(); }
+      if (st.type === 'kraken' && STATE.qprog[id] === -1 && ship) { const a = st.at(); if (Math.hypot(ship.x - a.x, ship.z - a.z) > st.r * 2) { STATE.qprog[id] = 0; save(); } }
       if (st.type === 'mats') { if (haveMats(st.mats)) advanceQuest(id); else if (STATE.track === id && qObj.textContent !== stageText(id)) refreshQuestHud(); }
       else if ((st.type === 'sail' || st.type === 'kraken') && ship && sailing && !ship.sinking) {
         const a = st.at(), d = Math.hypot(ship.x - a.x, ship.z - a.z);
         if (d > st.r) continue;
         if (st.type === 'sail') { advanceQuest(id); continue; }
-        if (!STATE.qprog[id] && !ship.submerged && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown' && KR.ally <= 0) {
+        if (!STATE.qprog[id] && !ship.submerged && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown' && KR.st !== 'dying' && KR.st !== 'dead' && KR.ally <= 0) {
           // the Kraken rises to meet ye (online it's the one everyone shares, so the server sends it)
           STATE.qprog[id] = 1; save();
           if (window.__mpKraken && window.__mpKraken()) window.__mpKrSend('kquest', {});
@@ -3795,6 +3798,7 @@
           KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null; }
           SFX.roar(); toast('The water goes still... something vast is rising from the deep!'); refreshQuestHud();
         }
+        else if (!STATE.qprog[id] && (KR.st === 'dying' || KR.st === 'dead') && clock.elapsedTime - (KR.quietT ?? -99) > 30) { KR.quietT = clock.elapsedTime; toast('The deep is quiet. The Kraken is still licking its wounds somewhere below... come back later.'); }
       }
     }
   }
