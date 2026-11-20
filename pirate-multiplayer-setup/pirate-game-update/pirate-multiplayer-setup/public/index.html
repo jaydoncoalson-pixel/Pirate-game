@@ -8095,6 +8095,7 @@
     if (I && I.k === 'yawn') lift = 0.2 * bell;
     const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
     m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
+    const fwdL = SP ? SP.fwd * SC * 6 : 0;   // a lunge thrusts the head forward: the neck stretches with it
     const freq = K.elder ? 1.5 : 2.6, latA = SC * (K.elder ? 0.9 : 0.6) * (0.25 + 0.75 * swim), tailK = Math.floor(m.N * 0.72);
     // sample the trail at an exact distance behind the head, blending between its points, so the body glides
     // smoothly instead of hopping a whole trail step at a time (very visible when he's swimming slowly)
@@ -8113,7 +8114,8 @@
       if (k < K.neckN && lift > 0) y += lift * (K.neckN - k) * K.neck;
       if (k < K.neckN && lift < 0) y += lift * (K.neckN - k) * K.neck * 0.5;                                  // coils down before a strike
       if (I && I.k === 'tail' && k > tailK) y += K.amp * 3.2 * Math.sin(Math.PI * Math.min(1, iu * 1.15)) * ((k - tailK) / (m.N - tailK));   // the tail rises and slaps down
-      m.segs[k].position.set(p.x + dz * lat, y + waveHeight(p.x, p.z, t) * 0.5, p.z - dx * lat);
+      const fk = fwdL && k < K.neckN * 1.5 ? fwdL * Math.pow(1 - k / (K.neckN * 1.5), 1.4) : 0;
+      m.segs[k].position.set(p.x + dz * lat + Math.sin(h) * fk, y + waveHeight(p.x, p.z, t) * 0.5, p.z - dx * lat + Math.cos(h) * fk);
       m.segs[k].rotation.set(0, Math.atan2(dx, dz) + 0.22 * Math.cos(ph) * Math.min(1, k / 6) * (0.3 + 0.7 * swim), 0);
     }
     // the head: bobbing with each stroke, swaying, leaning into turns; reared and thrust forward in a strike
@@ -8325,9 +8327,9 @@
     if ((!krOK && !C.bit) || C.t > CLASH_T) { ELD.clash = null; ELD.clashCd = 12; ELD.st = 'swim'; if (!krNet() && KR.st === 'hunt') { KR.st = 'roam'; KR.tgt = null; } KR.cd = Math.max(KR.cd || 0, 6); return; }
     KR.clashHold = 0.3;   // the Kraken stands and fights
     // he holds his ground facing it, dragged in a little while its tentacles squeeze
-    const pull = C.t > 1.6 && C.t < 5.2 ? 0.86 + 0.06 * Math.sin(C.t * 3.3) : 1, D = clashD(K) * pull;
-    const tx = KR.x + Math.sin(C.a) * D, tz = KR.z + Math.cos(C.a) * D;
-    if (heightAt(tx, tz) < -4.5) { const k = Math.min(1, dt * 2.5); ELD.x += (tx - ELD.x) * k; ELD.z += (tz - ELD.z) * k; }
+    // he closes to striking distance and holds there; he only ever moves forward (backing his head up would fold his body over it)
+    const D = clashD(K), tx = KR.x + Math.sin(C.a) * D, tz = KR.z + Math.cos(C.a) * D, mvx = tx - ELD.x, mvz = tz - ELD.z;
+    if (heightAt(tx, tz) < -4.5 && mvx * Math.sin(ELD.h) + mvz * Math.cos(ELD.h) > 0) { const k = Math.min(1, dt * 2.5); ELD.x += mvx * k; ELD.z += mvz * k; }
     ELD.speed = 0; ELD.h += angDiff(ELD.h, Math.atan2(KR.x - ELD.x, KR.z - ELD.z)) * Math.min(1, dt * 4);
     const T = { kind: 'kraken' };
     if (!C.r1 && C.t > CL.s1 + 0.1) { C.r1 = true; elderRoar(0.6); }

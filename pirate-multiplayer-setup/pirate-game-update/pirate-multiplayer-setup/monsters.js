@@ -132,10 +132,14 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
       if (K.hp <= 0) { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); }
     } else if (topic === 'kclash') {   // a serpent has met it: hold it in place for the fight
       const el = Array.isArray(q.p.el) ? q.p.el : null;
-      if (el && Math.hypot(el[0] - K.x, el[1] - K.z) < 900 && (K.st === 'roam' || K.st === 'hunt') && !(K.clash > 0)) { K.clash = 19.5; K.clashBy = from; }
+      if (el && Math.hypot(el[0] - K.x, el[1] - K.z) < 900 && ['roam', 'hunt', 'engaged', 'leaving'].includes(K.st) && !(K.clash > 0)) {
+        if (K.st !== 'roam') { K.st = 'roam'; K.tg = null; K.t = 0; releaseRaider(); }   // it lets go of whatever it had to face the serpent
+        K.clash = 19.5; K.clashBy = from;
+      }
     } else if (topic === 'kslay') {   // the clash ends with the serpent's killing bite
       const el = Array.isArray(q.p.el) ? q.p.el : null;
-      if (K.clash > 0 && K.clashBy === from && el && Math.hypot(el[0] - K.x, el[1] - K.z) < 900 && (K.st === 'roam' || K.st === 'hunt')) { K.hp = 0; K.st = 'dying'; K.t = 0; K.clash = 0; broadcast('kdead', { by: from }); }
+      const mine = (K.clash > 0 && K.clashBy === from) || (hornOwns && hornOwns(q));
+      if (mine && el && Math.hypot(el[0] - K.x, el[1] - K.z) < 900 && !['dying', 'dead', 'drown'].includes(K.st)) { if (K.st === 'engaged') releaseRaider(); K.hp = 0; K.st = 'dying'; K.t = 0; K.clash = 0; broadcast('kdead', { by: from }); }
     } else if (topic === 'kcall') {
       if (q.p.sw !== 'seasword') return;
       const pick = d.pick && (d.pick.kind === 'player' || d.pick.kind === 'raider') ? { kind: d.pick.kind, peer: d.pick.peer, i: Number.isInteger(d.pick.i) ? d.pick.i : undefined } : { kind: 'raider' };
