@@ -9725,6 +9725,7 @@ window.__pgBoot = () => {
       if (k < K.neckN && lift > 0) y += lift * (K.neckN - k) * K.neck;
       if (k < K.neckN && lift < 0) y += lift * (K.neckN - k) * K.neck * 0.5;                                  // coils down before a strike
       if (I && I.k === 'tail' && k > tailK) y += K.amp * 3.2 * Math.sin(Math.PI * Math.min(1, iu * 1.15)) * ((k - tailK) / (m.N - tailK));   // the tail rises and slaps down
+      if (opts.win) { const [wa, wb] = opts.win, out = wb < 0 ? 99 : k < wa ? wa - k : k > wb ? k - wb : 0; if (out) y -= K.sink * 1.8 * Math.min(1, out / 4); }   // stalking: never the whole of him
       const fk = fwdL && k < K.neckN * 1.5 ? fwdL * Math.pow(1 - k / (K.neckN * 1.5), 1.4) : 0;
       m.segs[k].position.set(p.x + dz * lat + Math.sin(h) * fk, y + waveHeight(p.x, p.z, t) * 0.5, p.z - dx * lat + Math.cos(h) * fk);
       m.segs[k].rotation.set(0, Math.atan2(dx, dz) + 0.22 * Math.cos(ph) * Math.min(1, k / 6) * (0.3 + 0.7 * swim), 0);
@@ -9733,6 +9734,7 @@ window.__pgBoot = () => {
     const fwd = SP ? SP.fwd * SC * 6 : 0, shake = SP && SP.shake ? Math.sin(m.t * 38) * 0.035 : (I && I.k === 'roar' ? Math.sin(m.t * 30) * 0.03 * bell : 0);
     let hy = K.headY + K.headAmp * still * Math.sin(-m.t * freq + 0.5) + lift * K.liftH - sink + waveHeight(x, z, t) * 0.5;
     if (I && I.k === 'dive') hy -= K.sink * 0.2 * bell;
+    if (opts.win && (opts.win[0] > 0 || opts.win[1] < 0)) hy -= K.sink * 1.8;
     m.head.position.set(x + Math.sin(h) * fwd, hy, z + Math.cos(h) * fwd);
     let pitch = SP ? SP.pitch : lift > 0 ? -0.35 * lift : -0.05 + 0.04 * Math.sin(m.t * 0.7);
     if (xPitch) pitch = xPitch;
@@ -10087,6 +10089,8 @@ window.__pgBoot = () => {
     const faceV = (x, z) => Math.atan2(e.x - x, e.z - z);
     const fadeThen = (place) => { S.silT = 0; ELD.speed *= Math.max(0, 1 - dt); elderMove(dt); if (S.t > 1.3) { if (!place()) { S.ph = 'lurk'; S.t = 0; } } };   // vanish into the deep, then turn up somewhere else
     S.sil += (S.silT - S.sil) * Math.min(1, dt * 1.6);
+    const NN = ELD.mesh ? ELD.mesh.N : 84;
+    S.win = S.ph === 'peek' || S.ph === 'behind' ? (S.step ? [0, ELD.K.neckN + 3] : [-1, -1]) : S.ph === 'leap' && S.step ? [0, Math.round(NN * 0.3)] : S.ph === 'rise' && S.step ? [10, 34] : [-1, -1];   // only ever a part of him: head and neck, a stretch of back, never all of him
     if (S.ph === 'dive') {   // the roar, then down he goes head first
       ELD.stkDive = true; ELD.speed *= Math.max(0, 1 - dt); elderMove(dt); ELD.emerge = Math.max(0, 1 - S.t / 2.8);
       if (S.t > 3.2) {
@@ -10147,7 +10151,7 @@ window.__pgBoot = () => {
     if (S.ph === 'rise') {   // right alongside them, his vast body heaves up out of the water... and slowly sinks again
       if (S.step === 0) { fadeThen(() => {
           const sd = Math.random() < 0.5 ? 1 : -1, px = Math.sin(look + sd * Math.PI / 2), pz = Math.cos(look + sd * Math.PI / 2), off = 70 + Math.random() * 25;
-          const q = deepSpotNear(e.x + Math.sin(look) * 160 + px * off, e.z + Math.cos(look) * 160 + pz * off, 0, 40, K.probe * 0.4); if (!q) return false;
+          const q = deepSpotNear(e.x + Math.sin(look) * 460 + px * off, e.z + Math.cos(look) * 460 + pz * off, 0, 40, K.probe * 0.4); if (!q) return false;   // his head far ahead and under: the stretch of back that rises is the bit right beside them
           tpTo(q.x, q.z, look); S.step = 1; S.t = 0; S.calm = true; stalkFire('rise', q.x, q.z); return true; }); return; }
       const up = 2.6, hold = 3.2, down = 2.6;
       ELD.speed += (12 - ELD.speed) * Math.min(1, dt); elderMove(dt); S.silT = 0;
@@ -10297,7 +10301,7 @@ window.__pgBoot = () => {
     if ((ELD.emerge < 1 || ELD.leaving) && ELD.emerge > 0.05 && Math.random() < dt * 14) { const a = Math.random() * 6.28, rr = ELD.K.scale * (4 + Math.random() * 10); wSplash(ELD.x + Math.cos(a) * rr, 2, ELD.z + Math.sin(a) * rr, Math.random() < 0.4); }
     if (!ELD.leaving && ELD.emerge > 0.4 && !ELD.roared) { ELD.roared = true; elderRoar(1.1); }
     const CO = clashOpts(ELD.clash ? ELD.clash.t : -1);
-    poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.clash ? CO.sk : ELD.st === 'strike' ? ELD.sk : -1, clash: CO.clash, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting, idle: ELD.idle, leaving: ELD.leaving || !!ELD.stkDive, sil: ELD.mode === 'stalk' && ELD.stk ? ELD.stk.sil : 0, calm: !!(ELD.mode === 'stalk' && ELD.stk && ELD.stk.calm), stkLift: ELD.mode === 'stalk' && ELD.stk && ELD.stk.calm ? ELD.stk.lift : undefined, stkPitch: ELD.stk ? ELD.stk.pitch : 0, grab: ELD.grab ? ELD.grab.t : -1, ride: RIDE.on, call: ELD.call ? ELD.call.t : -1, devour: ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0 });
+    poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.clash ? CO.sk : ELD.st === 'strike' ? ELD.sk : -1, clash: CO.clash, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting, idle: ELD.idle, leaving: ELD.leaving || !!ELD.stkDive, sil: ELD.mode === 'stalk' && ELD.stk ? ELD.stk.sil : 0, calm: !!(ELD.mode === 'stalk' && ELD.stk && ELD.stk.calm), stkLift: ELD.mode === 'stalk' && ELD.stk && ELD.stk.calm ? ELD.stk.lift : undefined, stkPitch: ELD.stk ? ELD.stk.pitch : 0, win: ELD.mode === 'stalk' && ELD.stk && !ELD.stkDive ? (ELD.stk.win || [-1, -1]) : undefined, grab: ELD.grab ? ELD.grab.t : -1, ride: RIDE.on, call: ELD.call ? ELD.call.t : -1, devour: ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0 });
     if (ELD.clash && ELD.mesh) CLASH_DRAW.unshift({ m: ELD.mesh, K: ELD.K, t: ELD.clash.t, x: ELD.x, z: ELD.z });
     elderSil(ELD.mesh, ELD.mode === 'stalk' && ELD.stk ? ELD.stk.sil : 0, t);
   }
@@ -10442,7 +10446,7 @@ window.__pgBoot = () => {
       const cl = typeof el[13] === 'number' && el[13] >= 0 ? el[13] : -1;
       if (cl >= 0) { E.cl = E.clFrom === el[13] ? (E.cl ?? cl) + dt : cl; E.clFrom = el[13]; if (!(E.lastCl >= 0)) elderRoar(1.3, E.x, E.z, K); } else { E.cl = -1; E.clFrom = null; }
       E.lastCl = cl;
-      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl, devour: el[14] | 0, clash: E.co.clash, sil: typeof el[16] === 'number' ? el[16] : 0, calm: el[24] === 1, stkLift: el[24] === 1 ? el[22] : undefined, stkPitch: el[23] || 0 });
+      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl, devour: el[14] | 0, clash: E.co.clash, sil: typeof el[16] === 'number' ? el[16] : 0, calm: el[24] === 1, stkLift: el[24] === 1 ? el[22] : undefined, stkPitch: el[23] || 0, win: el[17] && typeof el[25] === 'number' ? [el[25], el[26]] : undefined });
       if (E.ct >= 0) CLASH_DRAW.push({ m: E.m, K, t: E.ct, x: E.x, z: E.z });
       elderSil(E.m, typeof el[16] === 'number' ? el[16] : 0, t);
     }
@@ -10981,7 +10985,7 @@ window.__pgBoot = () => {
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
-          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
+          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [] : (ELD.stk.win || [-1, -1]))] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
         else if (GUEST.on && GUEST.p) st.ob = { o: GUEST.p.peer, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };   // ob: aboard a ship (whose, and where on deck)
