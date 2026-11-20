@@ -2541,7 +2541,8 @@
       return;
     }
     ship.lastHit = (ship.lastHit ?? 99) + dt;
-    if (ship.lastHit > 10 && ship.hp < ship.maxHp) ship.hp = Math.min(ship.maxHp, ship.hp + 2 * dt);
+    { const tide = STATE.sword === 'tidecaller';   // Tidecaller: the hull mends three times as fast, and sooner after a hit
+      if (ship.lastHit > (tide ? 4 : 10) && ship.hp < ship.maxHp) ship.hp = Math.min(ship.maxHp, ship.hp + (tide ? 6 : 2) * dt); }
     // Smoothly ease the ship toward its selected underwater depth and surface state.
     ship.diveTarget = ship.diveTarget ?? ship.diveDepth ?? -22;
     ship.diveDepth = ship.diveDepth ?? -22;
@@ -4377,11 +4378,12 @@
     saber:    { name: 'Navy Saber', desc: 'Forged from captured raider steel. Fine, balanced and deadly.', dmg: 42, cool: 0.45, reach: 3.1, arc: 0.15, cost: { steel: 4, iron: 2 }, gold: 250, look: { style: 'saber', blade: 0xc8d4e0, guard: 0x2f5d8a, len: 1.1, curve: 0.25, width: 0.1, basket: true } },
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
-    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Its edge glows like moonlit water.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
+    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, yer cannons hit 50% harder, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
-  const curSword = () => SWORDS[STATE.sword] || SWORDS.rusty;
+  const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
+    return STATE.sword === 'tidecaller' && night ? Object.assign({}, s, { dmg: Math.round(s.dmg * 1.3) }) : s; };   // Tidecaller: moonlit edge
   function addMat(k, n) { STATE.mats[k] = (STATE.mats[k] || 0) + n; save(); SFX.pickup(); toast(`+${n} ${MATS[k].name}`); }
   // the Sword of the Sea: a wave-shaped blade that runs from deep ocean blue at the hilt to sea-foam at the tip,
   // a guard of branching coral with a scallop shell, a grip wrapped in seaweed and a pearl for a pommel
@@ -8055,6 +8057,103 @@
     }
   }
 
+  // ---------- Tidecaller: the mermaid's blade ----------
+  // Passives while it's in yer hand:
+  //   Mermaid's grace: swim 60% faster, and the sea heals ye (4 health a second) while ye swim
+  //   Tidebound hull: yer ship knits itself together three times faster, and starts sooner after a hit
+  //   Moonlit edge: the blade cuts 30% deeper at night
+  // Actives:
+  //   R  Tidal Wave: a wall of water surges out the way ye face, smashing ships, serpents and the Kraken (25 s)
+  //   G  Whirlpool: opens a maelstrom ahead that drags ships in and grinds them for 8 s (45 s)
+  const TIDE = { waveCd: 0, poolCd: 0, waves: [], pools: [], WAVE_CD: 25, POOL_CD: 45 };
+  const tideOn = () => STATE.sword === 'tidecaller';
+  const tideHud = document.createElement('div');
+  tideHud.style.cssText = 'position:absolute;right:16px;bottom:96px;color:#dffcff;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:none;text-align:right;line-height:1.5';
+  document.body.appendChild(tideHud);
+  const tideFoam = new THREE.MeshBasicMaterial({ color: 0xe8fdff, transparent: true, opacity: 0.85, depthWrite: false });
+  const tideWater = new THREE.MeshBasicMaterial({ color: 0x3ec8e0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+  const swirlTex = canvasTex(256, 256, (g, w, h) => {
+    g.translate(w / 2, h / 2);
+    for (let arm = 0; arm < 5; arm++) for (let i = 0; i < 120; i++) { const t = i / 120, a = arm / 5 * Math.PI * 2 + t * 7, r = t * 120; g.fillStyle = `rgba(${200 + 55 * t | 0},${245},${255},${0.9 * (1 - t * 0.6)})`; g.beginPath(); g.arc(Math.cos(a) * r, Math.sin(a) * r, 3 + t * 6, 0, Math.PI * 2); g.fill(); }
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 40); gr.addColorStop(0, 'rgba(4,30,50,1)'); gr.addColorStop(1, 'rgba(4,30,50,0)'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 40, 0, Math.PI * 2); g.fill();
+  });
+  // where an ability comes from and which way it goes: off the bow side ye're looking at the wheel, or the way ye face on foot
+  function tideAim() {
+    if (sailing && ship) { const fx = -Math.sin(yaw), fz = -Math.cos(yaw); return { x: ship.x + fx * ship.T.L * 0.3, z: ship.z + fz * ship.T.L * 0.3, h: Math.atan2(fx, fz) }; }
+    return { x: P.pos.x, z: P.pos.z, h: P.facing };
+  }
+  // everything a tide can hurt, with its position and how to hurt it
+  function tideTargets() {
+    const out = [];
+    for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') out.push({ e: r, ship: true, hit: n => damageShip(r, n) });
+    for (const s of SERP) if (serpAlive(s)) out.push({ e: s, hit: n => serpentHurt(s, n, { x: s.x, y: 2, z: s.z }) });
+    if (KR.st === 'grip' || KR.st === 'attack' || KR.st === 'hunt') if (!(KR.ally > 0)) out.push({ e: KR, hit: n => krHurt(n) });
+    return out;
+  }
+  function tideWave() {
+    if (!tideOn() || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
+    if (TIDE.waveCd > 0) { toast(`The tide is still gathering... (${Math.ceil(TIDE.waveCd)}s)`); return; }
+    const A = tideAim(), mesh = new THREE.Group();
+    // a curved wall of water with foam along its crest
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true, -0.65, 1.3), tideWater); wall.rotation.y = 0; mesh.add(wall);
+    const crest = [];   // foam riding the top of the wave
+    for (let i = 0; i < 22; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 5), tideFoam); f.userData.a = -0.65 + 1.3 * i / 21; mesh.add(f); crest.push(f); }
+    mesh.position.set(A.x, 0, A.z); mesh.rotation.y = A.h; scene.add(mesh);   // the wall's open arc faces +z, turned to face the way ye aim
+    TIDE.waves.push({ mesh, wall, crest, x: A.x, z: A.z, h: A.h, t: 0, hit: new Set() });
+    TIDE.waveCd = TIDE.WAVE_CD; SFX.splash({ x: A.x, z: A.z }, true); SFX.roar();
+    toast('Ye raise Tidecaller... and the sea rises with it!');
+  }
+  function tideWhirlpool() {
+    if (!tideOn() || talk || uiOpen || STOM.on || MERM.held || inInterior) return;
+    if (TIDE.poolCd > 0) { toast(`The deep needs time before it turns again... (${Math.ceil(TIDE.poolCd)}s)`); return; }
+    const A = tideAim(); let x = A.x + Math.sin(A.h) * 150, z = A.z + Math.cos(A.h) * 150;
+    if (heightAt(x, z) > -4) { toast('The whirlpool needs open water ahead of ye.'); return; }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(75, 48), new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, opacity: 0, depthWrite: false }));
+    disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.6, z); scene.add(disc);
+    TIDE.pools.push({ disc, x, z, t: 0, tick: 0 }); TIDE.poolCd = TIDE.POOL_CD;
+    SFX.splash({ x, z }, true); toast('The sea begins to turn... a whirlpool opens before ye!');
+  }
+  function updateTide(dt, t) {
+    TIDE.waveCd = Math.max(0, TIDE.waveCd - dt); TIDE.poolCd = Math.max(0, TIDE.poolCd - dt);
+    // the HUD
+    const hud = tideOn() && !inInterior ? `<b>R</b> Tidal Wave ${TIDE.waveCd > 0 ? '(' + Math.ceil(TIDE.waveCd) + 's)' : '· ready'} &nbsp; <b>G</b> Whirlpool ${TIDE.poolCd > 0 ? '(' + Math.ceil(TIDE.poolCd) + 's)' : '· ready'}${isNight() ? '<br><span style="color:#bff8ff">Moonlit edge: +30% damage</span>' : ''}` : '';
+    if (tideHud.innerHTML !== hud) tideHud.innerHTML = hud;
+    // passives: the sea heals a swimmer; the hull mends itself (the faster mending is in updateShip)
+    if (tideOn() && krSwimming() && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 4 * dt);
+    // waves race outward for 2 s, 300 m, hitting each thing once
+    for (let i = TIDE.waves.length - 1; i >= 0; i--) {
+      const W = TIDE.waves[i]; W.t += dt;
+      const d = 25 + W.t * 150, hgt = 9 * Math.sin(Math.min(1, W.t / 2) * Math.PI) + 2;
+      W.wall.scale.set(d, hgt, d); W.wall.position.y = hgt / 2 - 1.5;
+      for (const f of W.crest) { const a = f.userData.a, sc = 2.2 + d * 0.012; f.position.set(Math.sin(a) * d, hgt - 1.2 + Math.sin(a * 9 + W.t * 6) * 0.6, Math.cos(a) * d); f.scale.set(sc * 1.8, sc * 0.7, sc); }
+      W.wall.material.opacity = 0.55 * (1 - Math.max(0, W.t - 1.5) / 0.5);
+      for (const T of tideTargets()) {
+        if (W.hit.has(T.e)) continue;
+        const dx = T.e.x - W.x, dz = T.e.z - W.z, dist = Math.hypot(dx, dz); if (Math.abs(dist - d) > 30) continue;
+        if (Math.abs(angDiff(W.h, Math.atan2(dx, dz))) > 0.7) continue;
+        W.hit.add(T.e); T.hit(T.ship ? 40 : 70); wSplash(T.e.x, 2, T.e.z, true);
+        if (T.ship && !T.e.net) { T.e.speed = -6; T.e.x += dx / dist * 12; T.e.z += dz / dist * 12; T.e.roll = (T.e.roll || 0) + 0.25; }   // shoved back and heeled over
+      }
+      if (Math.random() < dt * 30) { const a = W.h + (Math.random() - 0.5) * 1.3; wSplash(W.x + Math.sin(a) * d, hgt, W.z + Math.cos(a) * d, false); }
+      if (W.t > 2) { scene.remove(W.mesh); TIDE.waves.splice(i, 1); }
+    }
+    // whirlpools turn for 8 s, dragging ships toward the eye and grinding anything caught in them
+    for (let i = TIDE.pools.length - 1; i >= 0; i--) {
+      const Pl = TIDE.pools[i]; Pl.t += dt; Pl.tick -= dt;
+      const life = Pl.t < 1 ? Pl.t : Pl.t > 7 ? Math.max(0, 8 - Pl.t) : 1;
+      Pl.disc.material.opacity = 0.85 * life; Pl.disc.rotation.z += dt * 2.2; Pl.disc.position.y = 0.6 + waveHeight(Pl.x, Pl.z, t) * 0.5;
+      const grind = Pl.tick <= 0; if (grind) Pl.tick = 1;
+      for (const T of tideTargets()) {
+        const dx = Pl.x - T.e.x, dz = Pl.z - T.e.z, dist = Math.hypot(dx, dz); if (dist > 110) continue;
+        if (T.ship && !T.e.net && dist > 4) { const pull = Math.min(dist, 18 * dt) * life; T.e.x += dx / dist * pull + dz / dist * pull * 0.8; T.e.z += dz / dist * pull - dx / dist * pull * 0.8; T.e.heading += dt * 0.9 * life; }   // dragged round and in
+        if (grind && dist < 80) T.hit(T.ship ? 14 : 18);
+      }
+      if (Math.random() < dt * 10 * life) { const a = Math.random() * 6.28, r = 20 + Math.random() * 55; wSplash(Pl.x + Math.cos(a) * r, 1, Pl.z + Math.sin(a) * r, false); }
+      if (Pl.t > 8) { scene.remove(Pl.disc); Pl.disc.geometry.dispose(); TIDE.pools.splice(i, 1); }
+    }
+  }
+  addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; const k = e.key.toLowerCase(); if (!tideOn()) return; if (k === 'r') tideWave(); if (k === 'g') tideWhirlpool(); });
+
   // ---------- Loop ----------
   // ---------- Multiplayer (room presence) ----------
   const MP = { me: null, room: null, peers: new Map(), names: {}, sendT: 0, user: null, label: null };
@@ -8376,6 +8475,7 @@
     updateShip(dt, t);
     updateCrew(dt);
     tickSeaBlades(t);
+    updateTide(dt, t);
     updateElder(dt, t); if (MP.room) updateRemoteElders(dt, t);
     mpUpdate(dt, t);
     if (STOM.on) {
@@ -8416,7 +8516,7 @@
     const g = groundAt(P.pos.x, P.pos.z);
     const swimY = waveHeight(P.pos.x, P.pos.z, t) - 0.45;
     const swimming = !onDock(P.pos.x, P.pos.z) && g < swimY - 0.85;
-    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) : (keys['shift'] ? 11 : 5.5)) : 0;
+    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : 1) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace
     P.speed += (want - P.speed) * Math.min(1, dt * 10);
     if (ml > 0) { mx /= ml; mz /= ml; P.facing = angLerp(P.facing, Math.atan2(mx, mz), Math.min(1, dt * 12)); }
     const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
