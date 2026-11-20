@@ -2948,6 +2948,50 @@
     if (exact && navClear(out[out.length - 1] || dest, { x: tx, z: tz })) out.push({ x: tx, z: tz });
     return { pts: out, dest: out[out.length - 1], snapped: !exact };
   }
+  // ---- Ship-to-ship collisions: hulls are solid. Each hull is a chain of three overlapping circles along her keel;
+  // when yer ship touches another (a player's, a raider, a wreck) she's shoved clear and loses way, and a hard hit
+  // stoves in planks on both. Each captain's game resolves their own ship, so both sides bounce off each other.
+  function hullCircles(x, z, h, L, B, out) {
+    const sx = Math.sin(h), sz = Math.cos(h), r = B * 0.55;
+    out.length = 0; for (const f of [-0.33, 0, 0.33]) out.push([x + sx * L * f, z + sz * L * f, f === 0 ? r : r * 0.85]);
+    return out;
+  }
+  const _hcA = [], _hcB = [];
+  function shipCollisions(dt) {
+    if (!ship || ship.sinking || ship.submerged) return;
+    const others = [];
+    for (const p of MP.peers.values()) if (p.ship && p.ship.group.parent && p.tgt && p.tgt.sh) others.push({ e: p.ship, x: p.ship.x, z: p.ship.z, h: p.ship.heading, L: p.ship.T.L, B: p.ship.T.B, vx: p.shipVx || 0, vz: p.shipVz || 0, name: `${p.name}'s ship`, peer: p.peer });
+    for (const r of raiders) if (r.group && r.group.parent && r.state !== 'gone' && r.state !== 'sinking') others.push({ e: r, x: r.x, z: r.z, h: r.heading, L: r.T.L, B: r.T.B, vx: Math.sin(r.heading) * (r.speed || 0), vz: Math.cos(r.heading) * (r.speed || 0), name: r.galleon ? 'a Blackwater galleon' : 'a Blackwater raider', raider: r });
+    const A = hullCircles(ship.x, ship.z, ship.heading, ship.T.L, ship.T.B, _hcA);
+    for (const o of others) {
+      if (Math.hypot(o.x - ship.x, o.z - ship.z) > (ship.T.L + o.L) * 0.6) continue;
+      const Bc = hullCircles(o.x, o.z, o.h, o.L, o.B, _hcB);
+      let px = 0, pz = 0, hit = false;
+      for (const a of A) for (const b of Bc) {
+        const dx = a[0] - b[0], dz = a[1] - b[1], d = Math.hypot(dx, dz), m = a[2] + b[2];
+        if (d < m) { hit = true; const n = d > 1e-3 ? 1 / d : 0; px += dx * n * (m - d); pz += dz * n * (m - d); }
+      }
+      if (!hit) continue;
+      const pl = Math.hypot(px, pz) || 1, nx = px / pl, nz = pz / pl, push = Math.min(pl, 6);
+      const tx = ship.x + nx * push, tz = ship.z + nz * push;
+      if (!shipBlocked(tx, tz, ship.heading)) { ship.x = tx; ship.z = tz; }
+      // how hard did we meet? (closing speed along the line between us)
+      const vx = Math.sin(ship.heading) * ship.speed, vz = Math.cos(ship.heading) * ship.speed, vn = (vx - o.vx) * nx + (vz - o.vz) * nz;
+      if (vn < 0) {
+        ship.speed *= 0.35;
+        ship.heading += Math.max(-0.08, Math.min(0.08, (nx * Math.cos(ship.heading) - nz * Math.sin(ship.heading)) * 0.08));   // glance off
+        const impact = -vn;
+        if (impact > 5 && clock.elapsedTime - (ship.bumpT ?? -9) > 1.2) {
+          ship.bumpT = clock.elapsedTime; SFX.crash({ x: ship.x, z: ship.z }); ship.krJolt = Math.max(ship.krJolt || 0, Math.min(1.2, impact / 12));
+          const dmg = Math.min(30, Math.round(impact * 1.1));
+          if (!ship.wraith) { ship.hp = Math.max(0, ship.hp - dmg); ship.lastHit = 0; }
+          if (o.raider) damageShip(o.raider, dmg);   // ramming hurts them too
+          toast(`Ye collide with ${o.name}! ${ship.wraith ? '' : dmg + ' hull damage.'}`);
+          if (ship.hp <= 0) sinkPlayerShip();
+        }
+      }
+    }
+  }
   function updateShip(dt, t) {
     if (!ship) return;
     const T = ship.T;
@@ -3074,6 +3118,7 @@
       }
       ship.speed *= -0.18;
     }
+    shipCollisions(dt);
     // A collision with an offshore reef damages the hull and knocks the ship back.
     if (!ship.submerged) {
       const now = performance.now() / 1000;
@@ -3119,8 +3164,8 @@
   const wheelHint = 'W to sail &middot; S to slow down &middot; A / D to steer &middot; Space to fire the cannons on the side ye\'re looking &middot; E to step away from the wheel';
   const PL = new THREE.Vector3(), PS = { facing: 0, vy: 0, grounded: true };
   let onShip = false;
-  function shipFloor(lx, lz) {
-    const W = ship.walk;
+  function shipFloor(lx, lz, S = ship) {
+    const W = S.walk;
     if (Math.abs(lz) > W.L / 2 - 0.8) return null;
     const half = W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45;
     if (half <= 0.3 || Math.abs(lx) > half) return null;
@@ -3131,8 +3176,8 @@
     }
     return y;
   }
-  function shipBlockedAt(lx, lz, y) {
-    return ship.walk.obstacles.some(o => Math.abs(y - o.y) < 0.5 && Math.abs(lx - o.x) < o.hw + 0.22 && Math.abs(lz - o.z) < o.hd + 0.22);
+  function shipBlockedAt(lx, lz, y, S = ship) {
+    return S.walk.obstacles.some(o => Math.abs(y - o.y) < 0.5 && Math.abs(lx - o.x) < o.hw + 0.22 && Math.abs(lz - o.z) < o.hd + 0.22);
   }
   function attachToShip(lx, ly, lz, facing) {
     scene.remove(player.root); ship.group.add(player.root);
@@ -3166,16 +3211,16 @@
     dist = Math.min(dist, 30);
     hudHint.innerHTML = deckHint;
   }
-  function detach() {
-    ship.group.updateMatrixWorld();
+  function detach(S = ship) {
+    S.group.updateMatrixWorld();
     player.root.getWorldPosition(P.pos);
-    ship.group.remove(player.root); scene.add(player.root); player.root.scale.setScalar(1);
-    P.facing = PS.facing + ship.heading; P.vy = PS.vy * ship.K; P.grounded = false;
-    onShip = false; sailing = false;
+    if (player.root.parent) player.root.parent.remove(player.root); scene.add(player.root); player.root.scale.setScalar(1);
+    P.facing = PS.facing + S.heading; P.vy = PS.vy * S.K; P.grounded = false;
+    onShip = false; sailing = false; GUEST.on = false; GUEST.p = null; GUEST.S = null;
     hudHint.innerHTML = walkHint;
   }
-  function shipWalk(dt) {
-    const K = ship.K, W = ship.walk;
+  function shipWalk(dt, S = ship) {
+    const K = S.K, W = S.walk;
     let fwd = 0, side = 0;
     if (!talk && !uiOpen) {
       fwd = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
@@ -3184,21 +3229,21 @@
     let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side;
     const ml = Math.hypot(mx, mz);
     P.speed += ((ml > 0 ? (keys['shift'] ? 9 : 5) : 0) - P.speed) * Math.min(1, dt * 10);
-    const h = ship.heading, ch = Math.cos(h), sh = Math.sin(h);
+    const h = S.heading, ch = Math.cos(h), sh = Math.sin(h);
     if (ml > 0) { mx /= ml; mz /= ml; PS.facing = angLerp(PS.facing, Math.atan2(mx * ch - mz * sh, mx * sh + mz * ch), Math.min(1, dt * 12)); }
     if (P.speed > 0.05) {
       const step = P.speed / K * dt, dx = Math.sin(PS.facing) * step, dz = Math.cos(PS.facing) * step;
-      const ok = (x, z) => { const f = shipFloor(x, z); return f !== null && f <= PL.y + 3.1 && !shipBlockedAt(x, z, f); };
+      const ok = (x, z) => { const f = shipFloor(x, z, S); return f !== null && f <= PL.y + 3.1 && !shipBlockedAt(x, z, f, S); };
       if (ok(PL.x + dx, PL.z + dz)) { PL.x += dx; PL.z += dz; }
-      else if (!PS.grounded && shipFloor(PL.x + dx, PL.z + dz) === null) { PL.x += dx * 3; PL.z += dz * 3; player.root.position.copy(PL); detach(); return; }
+      else if (!PS.grounded && shipFloor(PL.x + dx, PL.z + dz, S) === null) { PL.x += dx * 3; PL.z += dz * 3; player.root.position.copy(PL); detach(S); return; }
       else if (ok(PL.x + dx, PL.z)) PL.x += dx;
       else if (ok(PL.x, PL.z + dz)) PL.z += dz;
       for (const m of W.masts) {
         const ddz = PL.z - m.z, d = Math.hypot(PL.x, ddz), rr = m.r + 0.35;
-        if (d < rr && d > 1e-4) { const nx = PL.x / d * rr, nz = m.z + ddz / d * rr; if (shipFloor(nx, nz) !== null) { PL.x = nx; PL.z = nz; } }
+        if (d < rr && d > 1e-4) { const nx = PL.x / d * rr, nz = m.z + ddz / d * rr; if (shipFloor(nx, nz, S) !== null) { PL.x = nx; PL.z = nz; } }
       }
     }
-    const fl = shipFloor(PL.x, PL.z), floor = fl === null ? W.F.deckY(PL.z) : fl;
+    const fl = shipFloor(PL.x, PL.z, S), floor = fl === null ? W.F.deckY(PL.z) : fl;
     if (PS.grounded && keys[' '] && !talk && !uiOpen) { PS.vy = 8 / K; PS.grounded = false; }
     if (!PS.grounded) {
       PS.vy -= 22 / K * dt; PL.y += PS.vy * dt;
@@ -3210,7 +3255,46 @@
     player.update(dt, P.speed, !PS.grounded, false, PLAYER.slashT > 0 ? 'slash' : null);
     if (PLAYER.slashT > 0) player.props.blade.visible = true;
     if (PS.grounded) stepSound(false, true);
-    ship.group.updateMatrixWorld(); player.root.getWorldPosition(P.pos);
+    S.group.updateMatrixWorld(); player.root.getWorldPosition(P.pos);
+  }
+  // ---- Aboard another captain's ship ----
+  // Walk up to any other player's ship (from a dock, the water or yer own deck) and press E to climb aboard. Ye walk
+  // her decks as she sails, everyone sees ye standing aboard, and E (or jumping over the rail) takes ye off again.
+  const GUEST = { on: false, p: null, S: null };
+  function nearRemoteShip() {
+    if (GUEST.on || sailing || inInterior || RIDE.on || !MP.room) return null;
+    let best = null, bd = 1e9;
+    for (const p of MP.peers.values()) {
+      const S = p.ship; if (!S || !S.group.parent || !p.tgt || !p.tgt.sh) continue;
+      const dx = P.pos.x - S.x, dz = P.pos.z - S.z, h = S.heading, lx = dx * Math.cos(h) - dz * Math.sin(h), lz = dx * Math.sin(h) + dz * Math.cos(h);
+      if (Math.abs(lx) < S.T.B / 2 + 4 && Math.abs(lz) < S.T.L / 2 + 4) { const d = Math.hypot(dx, dz); if (d < bd) { bd = d; best = p; } }
+    }
+    return best;
+  }
+  function guestBoard(p) {
+    const S = p.ship;
+    if (onShip) detach();   // stepping across from yer own deck
+    S.group.updateMatrixWorld();
+    const loc = S.group.worldToLocal(P.pos.clone()), W = S.walk;
+    const lz = Math.max(-W.L * 0.38, Math.min(W.L * 0.3, loc.z)), half = W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45, lx = Math.max(-half * 0.7, Math.min(half * 0.7, loc.x));
+    if (player.root.parent) player.root.parent.remove(player.root); S.group.add(player.root); player.root.scale.setScalar(1 / S.K);
+    PL.set(lx, shipFloor(lx, lz, S) ?? W.F.deckY(lz), lz); PS.facing = lx > 0 ? -Math.PI / 2 : Math.PI / 2; PS.vy = 0; PS.grounded = true;
+    GUEST.on = true; GUEST.p = p; GUEST.S = S;
+    dist = Math.min(Math.max(dist, 14), 30);
+    hudHint.innerHTML = 'WASD to walk the deck &middot; Space to jump &middot; E to go ashore (or jump over the rail)';
+    toast(`Ye climb aboard ${p.name}'s ${S.T.name}.`);
+  }
+  function guestLeave(msg) {
+    const S = GUEST.S;
+    if (S && S.group) { detach(S); if (msg) toast(msg); }
+    else { if (player.root.parent) player.root.parent.remove(player.root); scene.add(player.root); player.root.scale.setScalar(1); GUEST.on = false; GUEST.p = null; GUEST.S = null; P.grounded = false; if (msg) toast(msg); }
+    hudHint.innerHTML = walkHint;
+  }
+  function guestUpdate(dt) {
+    const p = GUEST.p, S = GUEST.S;
+    // her captain left, she sank, or she was swapped for another ship: ye're in the water
+    if (!p || !MP.peers.has(p.peer) || p.ship !== S || !S.group.parent || !p.tgt || !p.tgt.sh) { guestLeave("The ship's gone from under ye! Ye're in the water."); return; }
+    shipWalk(dt, S);
   }
 
   // ---------- Ship interiors ----------
@@ -4775,6 +4859,7 @@
       if (nearLadder()) goUp(); else if (nearBed()) sleep(); else if (nearWardrobe()) openUI('custom', 'pirate'); else if (nearTrophies()) showTrophies(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
+    if (GUEST.on) { guestLeave(); return; }
     if (nearWheel()) { takeWheel(); return; }
     if (nearHorn()) { takeHorn(); return; }
     if (nearEmptyPedestal()) { toast(`The pedestal is empty. Ye already carry a horn; Captain ${HORN.owner} holds the true one.`); return; }
@@ -4790,6 +4875,7 @@
       else { const q = npcs.includes(n) ? questTalk(n.def.name) : null; talk = { npc: n, line: 0, lines: q ? q.lines : null, end: q ? q.end : null }; if ((talk.lines || n.def.lines).length) showLine(); else talk = null; }
       return;
     }
+    const rs = nearRemoteShip(); if (rs && !(!onShip && nearShip() && Math.hypot(ship.x - P.pos.x, ship.z - P.pos.z) < Math.hypot(rs.ship.x - P.pos.x, rs.ship.z - P.pos.z))) { guestBoard(rs); return; }
     if (!onShip && nearShip()) board();
   }
   addEventListener('keydown', e => {
@@ -5385,7 +5471,7 @@
     }
   }
   SITES.forEach(S => { if (S.kind === 'camp') raiderCamp(S); });
-  const playerTargetable = () => !RIDE.on && !onShip && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
+  const playerTargetable = () => !RIDE.on && !onShip && !GUEST.on && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
   function updateBandits(dt) {
     let can = playerTargetable();
     for (const b of bandits) {
@@ -7376,7 +7462,7 @@
     return T.ent.state !== 'sinking' && T.ent.state !== 'gone';
   }
   function krSwimming() {
-    if (onShip || sailing || inInterior || STOM.on || STOM.done || MERM.held) return false;
+    if (onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held) return false;
     return !onDock(P.pos.x, P.pos.z) && krDeep(P.pos.x, P.pos.z) && P.pos.y < 1.5;
   }
   function krFindTarget() {
@@ -9425,7 +9511,7 @@
   }
   function mpRemove(peer) {
     const p = MP.peers.get(peer); if (!p) return;
-    scene.remove(p.ch.root); p.tag.remove();
+    if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root); p.tag.remove();
     if (p.ship) scene.remove(p.ship.group);
     if (p.elder) scene.remove(p.elder.m.g);
     if (p.brood) p.brood.forEach(b => scene.remove(b.m.g));
@@ -9639,6 +9725,8 @@
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
           el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1] : 0,
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
+        if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
+        else if (GUEST.on && GUEST.p) st.ob = { o: GUEST.p.peer, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };   // ob: aboard a ship (whose, and where on deck)
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0, gm: r(gunMul()) };   // a: crewed, so raiders will hunt it; gm: heavy cannons
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
@@ -9649,17 +9737,29 @@
       const d = p.tgt; if (!d) continue;
       const lk = JSON.stringify(d.look || {}), swordId = d.sw || 'rusty';
       if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
-        p.lookKey = lk; p.swordKey = swordId; scene.remove(p.ch.root);
+        p.lookKey = lk; p.swordKey = swordId; if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root);
         p.ch = makeCharacter(remoteLook(d));
         // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
         p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
         scene.add(p.ch.root);
       }
-      const dx = d.x - p.pos.x, dz = d.z - p.pos.z;
-      if (dx * dx + dz * dz > 40000) p.pos.set(d.x, d.y, d.z); else { p.pos.x += dx * k; p.pos.y += (d.y - p.pos.y) * k; p.pos.z += dz * k; }
-      let df = d.f - p.f; df = Math.atan2(Math.sin(df), Math.cos(df)); p.f += df * k;
-      p.ch.root.position.copy(p.pos); p.ch.root.rotation.y = p.f;
+      // standing aboard a ship (theirs, mine or someone else's): glue them to that ship's deck, so they ride her smoothly
+      const ob = d.ob && typeof d.ob.x === 'number' ? d.ob : null;
+      const host = ob ? (ob.o === MP.me ? (ship && !ship.sinking ? ship : null) : (MP.peers.get(ob.o) || {}).ship) : null;
+      if (host && host.group && host.group.parent) {
+        if (p.ch.root.parent !== host.group) { if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root); host.group.add(p.ch.root); p.ch.root.scale.setScalar(1 / host.K); p.lp = new THREE.Vector3(ob.x, ob.y, ob.z); p.lf = ob.f; }
+        p.lp.x += (ob.x - p.lp.x) * k; p.lp.y += (ob.y - p.lp.y) * k; p.lp.z += (ob.z - p.lp.z) * k;
+        let dlf = ob.f - p.lf; dlf = Math.atan2(Math.sin(dlf), Math.cos(dlf)); p.lf += dlf * k;
+        p.ch.root.position.copy(p.lp); p.ch.root.rotation.set(0, p.lf, 0);
+        host.group.updateMatrixWorld(); p.ch.root.getWorldPosition(p.pos);
+      } else {
+        if (p.ch.root.parent !== scene) { if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root); scene.add(p.ch.root); p.ch.root.scale.setScalar(1); p.pos.set(d.x, d.y, d.z); }
+        const dx = d.x - p.pos.x, dz = d.z - p.pos.z;
+        if (dx * dx + dz * dz > 40000) p.pos.set(d.x, d.y, d.z); else { p.pos.x += dx * k; p.pos.y += (d.y - p.pos.y) * k; p.pos.z += dz * k; }
+        let df = d.f - p.f; df = Math.atan2(Math.sin(df), Math.cos(df)); p.f += df * k;
+        p.ch.root.position.copy(p.pos); p.ch.root.rotation.y = p.f;
+      }
       p.sp += ((d.s || 0) - p.sp) * k;
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
       try {
@@ -9749,6 +9849,8 @@
       player.update(dt, 0, false, false);
     } else if (inInterior) {
       interiorWalk(dt, t);
+    } else if (GUEST.on) {
+      guestUpdate(dt);
     } else if (onShip) {
       shipWalk(dt);
     } else {
@@ -9867,7 +9969,8 @@
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
     else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
     else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
-    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
+    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
+    if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
 
