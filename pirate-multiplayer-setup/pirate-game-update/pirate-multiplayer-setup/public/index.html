@@ -168,7 +168,7 @@
     wanted = { url, name }; let first = true;
     const open = () => {
       try { ws = new WebSocket(url); } catch (e) { banner('Bad server address'); return; }
-      ws.onopen = () => { retry = 0; banner(''); let acct = ''; try { const A = JSON.parse(localStorage.getItem('gull-island-accounts-v1') || 'null'); const a = A && A.list && (A.list.find(x => x.id === A.active) || A.list[0]); acct = a ? a.name : ''; } catch (e) {} ws.send(JSON.stringify({ t: 'hello', name, acct })); };
+      ws.onopen = () => { retry = 0; banner(''); ws.send(JSON.stringify({ t: 'hello', name, token: (window.__pgAuth || {}).token || '' })); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.t === 'welcome') { if (m.build) { window.__pgBuild = window.__pgBuild || m.build; if (window.__pgBuild !== m.build) setTimeout(() => banner('The game has been updated. Refresh the page to get the latest version.'), 50); }
@@ -178,30 +178,91 @@
         else if (m.t === 'left') { peers.delete(m.id); firePeers(); }
         else if (m.t === 'emit') { (topics[m.topic] || []).forEach(f => { try { f({ topic: m.topic, data: m.data, peer: m.from, by: m.from, isMe: false, sameTab: false, kind: 'viewer', guest: false }); } catch (e) {} }); }
         else if (m.t === 'full') banner('Server is full');
+        if (m.t === 'emit' && m.topic === 'dup' && m.from === 'server') { wanted = null; banner('Ye logged in somewhere else, so this window was disconnected. Refresh to play here.'); }
       };
       ws.onclose = () => { const keep = peers.get(me); peers.clear(); if (keep) peers.set(me, keep); firePeers(); if (!wanted) return; retry++; banner('Disconnected, retrying…'); setTimeout(open, Math.min(8000, 1000 * retry)); };
     };
     open();
+  }
+  // ---- start-up: log in (or create an account) on the server, then load that captain's save and start the game ----
+  const ACC_KEY = 'gull-island-accounts-v1', SAVE_PFX = 'gull-island-save-v1:';
+  const boot = () => { window.__pgCanStart = true; if (window.__pgBoot) { const b = window.__pgBoot; window.__pgBoot = null; b(); } };
+  const apiBase = u => u.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:').replace(/\/+$/, '');
+  async function apiCall(base, path, body, token) {
+    const r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}), body: body ? JSON.stringify(body) : undefined });
+    let j = {}; try { j = await r.json(); } catch (e) {} if (!r.ok && !j.err) j.err = 'The server said no (' + r.status + ').'; return j;
+  }
+  // put the server's copy of this captain where the game reads its save, then start
+  function startOnline(auth, url) {
+    const key = auth.name.toLowerCase().replace(/[^a-z0-9]/g, '_'), id = 'srv_' + key;
+    let A = null; try { A = JSON.parse(localStorage.getItem(ACC_KEY) || 'null'); } catch (e) {}
+    if (!A || !Array.isArray(A.list)) A = { active: id, list: [] };
+    if (!A.list.some(a => a.id === id)) A.list.push({ id, name: auth.name });
+    A.active = id;
+    try {
+      if (auth.save) localStorage.setItem(SAVE_PFX + id, JSON.stringify(auth.save));
+      else if (!localStorage.getItem(SAVE_PFX + id)) {   // a brand-new server account: bring over this browser's progress for a captain of the same name, if any
+        const old = A.list.find(a => a.id !== id && a.name.trim().toLowerCase() === auth.name.toLowerCase()), sv = old && localStorage.getItem(SAVE_PFX + old.id);
+        if (sv) localStorage.setItem(SAVE_PFX + id, sv);
+      }
+      localStorage.setItem(ACC_KEY, JSON.stringify(A));
+      localStorage.setItem('pg_token', auth.token); localStorage.setItem('pg_tokname', auth.name);
+    } catch (e) {}
+    window.__pgAuth = { token: auth.token, name: auth.name, api: apiBase(url), fresh: !auth.save };
+    boot(); connect(url, auth.name);
   }
   function ui() {
     const http = location.protocol.startsWith('http');
     const def = http ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host : (localStorage.getItem('pg_server') || 'wss://');
     const o = document.createElement('div');
     o.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);font-family:Georgia,serif';
-    o.innerHTML = '<div style="background:#f4e4c1;border:3px solid #6b4423;border-radius:12px;padding:20px;width:min(420px,90vw);color:#2a1a0c"><h2 style="margin:0 0 10px;font-weight:normal;color:#6b2a14">Join the crew</h2><label style="font-size:13px">Pirate name</label><input id="pgName" maxlength="16" style="width:100%;box-sizing:border-box;margin:4px 0 10px;padding:7px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><label style="font-size:13px">Server address</label><input id="pgUrl" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:7px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0"><div style="display:flex;gap:8px"><button id="pgGo" style="flex:1;padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#6b4423;color:#fff3d6;cursor:pointer">Join server</button><button id="pgOff" style="padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#f4e4c1;color:#2a1a0c;cursor:pointer">Play offline</button></div></div>';
+    const inp = 'width:100%;box-sizing:border-box;margin:4px 0 10px;padding:7px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:#fff6e0';
+    const btn = (bg, fg) => `padding:9px;font:inherit;border:2px solid #6b4423;border-radius:6px;background:${bg};color:${fg};cursor:pointer`;
+    o.innerHTML = `<div style="background:#f4e4c1;border:3px solid #6b4423;border-radius:12px;padding:20px;width:min(420px,90vw);color:#2a1a0c"><h2 style="margin:0 0 4px;font-weight:normal;color:#6b2a14">Join the crew</h2>
+      <div style="font-size:12px;opacity:.75;margin-bottom:10px">Yer captain and all yer progress are saved on the server, so ye can play from any device.</div>
+      <label style="font-size:13px">Captain name</label><input id="pgName" maxlength="16" autocomplete="username" style="${inp}">
+      <label style="font-size:13px">Password</label><input id="pgPass" type="password" maxlength="64" autocomplete="current-password" style="${inp}">
+      <div id="pgUrlBox" style="display:${http ? 'none' : 'block'}"><label style="font-size:13px">Server address</label><input id="pgUrl" style="${inp}"></div>
+      <div id="pgMsg" style="min-height:18px;font-size:13px;color:#8e1f1f;margin:-4px 0 8px"></div>
+      <div style="display:flex;gap:8px"><button id="pgGo" style="flex:1;${btn('#6b4423', '#fff3d6')}">Log in</button><button id="pgNew" style="flex:1;${btn('#8a5a33', '#fff3d6')}">Create account</button></div>
+      <div style="text-align:center;margin-top:10px"><button id="pgOff" style="${btn('#f4e4c1', '#2a1a0c')};padding:6px 12px;font-size:13px">Play offline</button></div></div>`;
     document.body.appendChild(o);
-    const nm = o.querySelector('#pgName'), ur = o.querySelector('#pgUrl');
-    nm.value = localStorage.getItem('pg_name') || ''; ur.value = def;
-    o.querySelector('#pgGo').onclick = () => { const n = nm.value.trim() || 'Pirate', u = ur.value.trim(); localStorage.setItem('pg_name', n); if (!http) localStorage.setItem('pg_server', u); o.remove(); connect(u, n); };
-    o.querySelector('#pgOff').onclick = () => { o.remove(); resolveRoom(null); };
+    const nm = o.querySelector('#pgName'), pw = o.querySelector('#pgPass'), ur = o.querySelector('#pgUrl'), msg = o.querySelector('#pgMsg');
+    nm.value = localStorage.getItem('pg_tokname') || ''; ur.value = def;
+    [nm, pw, ur].forEach(el => ['keydown', 'keyup'].forEach(ev => el.addEventListener(ev, e => { e.stopPropagation(); if (ev === 'keydown' && e.key === 'Enter') go(false); })));
+    let busy = false;
+    async function go(create) {
+      if (busy) return; const u = ur.value.trim(), n = nm.value.trim(), p = pw.value;
+      if (!n || !p) { msg.textContent = 'Enter yer captain name and a password.'; return; }
+      busy = true; msg.style.color = '#2a1a0c'; msg.textContent = create ? 'Creating yer captain…' : 'Logging in…';
+      let r; try { r = await apiCall(apiBase(u), create ? '/api/register' : '/api/login', { name: n, password: p }); } catch (e) { r = { err: "Couldn't reach the server." }; }
+      busy = false;
+      if (r.err) { msg.style.color = '#8e1f1f'; msg.textContent = r.err; return; }
+      if (!http) localStorage.setItem('pg_server', u);
+      o.remove(); startOnline(r, u);
+    }
+    o.querySelector('#pgGo').onclick = () => go(false);
+    o.querySelector('#pgNew').onclick = () => go(true);
+    o.querySelector('#pgOff').onclick = () => { o.remove(); boot(); resolveRoom(null); };
+    setTimeout(() => nm.value ? pw.focus() : nm.focus(), 50);
   }
-  if (document.body) ui(); else document.addEventListener('DOMContentLoaded', ui);
+  // already logged in on this device: carry straight on
+  async function auto() {
+    const tok = localStorage.getItem('pg_token'), http = location.protocol.startsWith('http');
+    const url = http ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host : localStorage.getItem('pg_server');
+    if (tok && url) {
+      try { const r = await apiCall(apiBase(url), '/api/me', null, tok); if (!r.err && r.token) { startOnline(r, url); return; } } catch (e) {}
+    }
+    ui();
+  }
+  window.__pgLogout = async () => { const a = window.__pgAuth; try { if (a) await apiCall(a.api, '/api/logout', { token: a.token }, a.token); } catch (e) {} localStorage.removeItem('pg_token'); location.reload(); };
+  if (document.body) auto(); else document.addEventListener('DOMContentLoaded', auto);
 })();
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-(() => {
+window.__pgBoot = () => {
   if (!window.THREE) { document.getElementById('err').style.display = 'flex'; return; }
 
   let renderer;
@@ -234,7 +295,16 @@
     const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (sv) { Object.assign(STATE, sv); STATE.look = Object.assign({}, DEFAULT_LOOK, sv.look || {}); STATE.quests = sv.quests || {}; STATE.unlocked = sv.unlocked || {}; STATE.shipStyle = sv.shipStyle || {}; STATE.mats = sv.mats || {}; STATE.swords = sv.swords || ['rusty']; STATE.sword = sv.sword || 'rusty'; }
   } catch (e) {}
-  function save() { if (window.__accLock) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(STATE)); } catch (e) {} }
+  let srvSaveT = null;
+  const pushSave = () => { srvSaveT = null; const a = window.__pgAuth; if (!a) return; fetch(a.api + '/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + a.token }, body: JSON.stringify({ save: STATE }) }).catch(() => {}); };
+  function save() {
+    if (window.__accLock) return;
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(STATE)); } catch (e) {}
+    if (window.__pgAuth && !srvSaveT) srvSaveT = setTimeout(pushSave, 3000);   // to the server, a few seconds later (batched)
+  }
+  const saveOnExit = () => { const a = window.__pgAuth; if (!a || window.__accLock) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(STATE)); navigator.sendBeacon(a.api + '/api/save', new Blob([JSON.stringify({ token: a.token, save: STATE })], { type: 'application/json' })); } catch (e) {} };
+  addEventListener('pagehide', saveOnExit); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveOnExit(); });
+  if (window.__pgAuth && window.__pgAuth.fresh) setTimeout(pushSave, 500);   // a new server account: store its starting save right away
   const lookToChar = L => ({ coat: L.coat, shirt: L.shirt, pants: L.pants, skin: L.skin, hair: L.hair, beard: L.beardOn ? L.hair : undefined, eyepatch: L.eyepatch,
     hat: L.hat === 'none' ? undefined : L.hat, hatColor: L.hatColor, feather: L.hat === 'tricorn' ? L.feather : undefined, sword: true, belt: 0x1e140c });
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1.0, 14000);
@@ -4505,6 +4575,7 @@
   }
   const accMsg = (m, bad) => { acctMsg.textContent = m; acctMsg.style.color = bad ? '#8e1f1f' : ''; };
   function accAdd(name, data) {
+    if (name.trim().toLowerCase() === HORN_ACCOUNT) { accMsg('That name is reserved.', true); return; }
     let id; do { id = 'a' + Math.random().toString(36).slice(2, 8); } while (ACC.list.some(a => a.id === id));
     ACC.list.push({ id, name });
     if (data) try { localStorage.setItem(LEGACY + ':' + id, JSON.stringify(data)); } catch (e) {}
@@ -4512,6 +4583,15 @@
   }
   function renderAcct() {
     acctList.innerHTML = '';
+    const online = window.__pgAuth;
+    document.getElementById('acctNew').style.display = acctName.style.display = online ? 'none' : '';
+    if (online) {   // logged in on the server: one captain, saved there
+      const row = document.createElement('div'); row.className = 'row';
+      const lab = document.createElement('div'); lab.style.flex = '1'; lab.style.fontWeight = 'bold'; lab.textContent = online.name;
+      const sub = document.createElement('span'); sub.style.cssText = 'display:block;font-size:12px;font-weight:normal;opacity:.7'; sub.textContent = `${(STATE.gold || 0).toLocaleString()} gold · saved on the server`; lab.appendChild(sub); row.appendChild(lab);
+      const b = document.createElement('button'); b.textContent = 'Log out'; b.onclick = () => { save(); pushSave(); setTimeout(() => window.__pgLogout(), 400); }; row.appendChild(b);
+      acctList.appendChild(row); return;
+    }
     ACC.list.forEach(a => {
       let info = 'New game';
       try { const s = a.id === ACC.active ? STATE : JSON.parse(localStorage.getItem(LEGACY + ':' + a.id) || 'null'); if (s) info = `${(s.gold || 0).toLocaleString()} gold · day ${s.day || 1}`; } catch (e) {}
@@ -4543,7 +4623,16 @@
     try { await navigator.clipboard.writeText(acctCode.value); ok = true; } catch (e) { try { ok = document.execCommand('copy'); } catch (e2) {} }
     accMsg(ok ? 'Copied to the clipboard.' : 'Select the code and copy it by hand (Ctrl+C).', !ok);
   };
-  document.getElementById('acctLoad').onclick = () => { const r = decodeSave(acctCode.value); if (r.err) return accMsg(r.err, true); accAdd(r.name, r.data); };
+  document.getElementById('acctLoad').onclick = () => {
+    const r = decodeSave(acctCode.value); if (r.err) return accMsg(r.err, true);
+    if (window.__pgAuth) {   // online: the code replaces this captain's progress (on the server too)
+      if (!confirm(`Replace ${window.__pgAuth.name}'s progress with this save code? This can't be undone.`)) return;
+      window.__accLock = true; try { localStorage.setItem(SAVE_KEY, JSON.stringify(r.data)); } catch (e) {}
+      const a = window.__pgAuth; fetch(a.api + '/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + a.token }, body: JSON.stringify({ save: r.data }) }).finally(() => location.reload());
+      return;
+    }
+    accAdd(r.name, r.data);
+  };
   [acctName, acctCode].forEach(el => ['keydown', 'keyup'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation())));   // typing must not trigger game hotkeys
 
   // ---------- Admin tools (the account named "bob3") ----------
@@ -10066,7 +10155,8 @@
   refreshQuestHud();
   if (!STATE.seen) { STATE.seen = true; save(); setTimeout(() => toast('Talk to the townsfolk for work, and sail through floating cargo for gold!'), 1500); }
   tick();
-})();
+};
+if (window.__pgCanStart) { const b = window.__pgBoot; window.__pgBoot = null; b(); }
 </script>
 </body>
 </html>

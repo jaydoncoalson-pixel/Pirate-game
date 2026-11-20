@@ -11,6 +11,7 @@ const { WebSocketServer } = require('ws');
 const { createSim } = require('./sim');
 const { createEnv } = require('./env');
 const W = require('./world');
+const { createAccounts } = require('./accounts');
 
 const PORT = +process.env.PORT || 8080;
 const MAX_PLAYERS = +process.env.MAX_PLAYERS || 16;
@@ -26,12 +27,45 @@ const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite']);
 // which version of the game page this server is handing out: browsers still running an older page are told to refresh
 const BUILD = (() => { try { return crypto.createHash('sha1').update(fs.readFileSync(path.join(__dirname, 'public', 'index.html'))).digest('hex').slice(0, 10); } catch (e) { return ''; } })();
 
+// ---------- accounts: saved on the server (see accounts.js; set DATA_DIR to a persistent disk on Render) ----------
+// The horn owner's name ("bob3") can only ever belong to one account. Set OWNER_PASSWORD in Render's Environment tab
+// and only someone who knows it can create that account; if it isn't set, whoever creates it first owns it.
+const OWNER_NAME = (process.env.HORN_OWNER || 'bob3').toLowerCase();
+const accounts = createAccounts({ dir: process.env.DATA_DIR || path.join(__dirname, 'data'), reserved: { [OWNER_NAME]: process.env.OWNER_PASSWORD || null, bob3: process.env.OWNER_PASSWORD || null } });
+const authTries = new Map();   // ip -> { n, t }: a brake on password guessing
+function authLimited(ip) { const now = Date.now(), r = authTries.get(ip) || { n: 0, t: now }; if (now - r.t > 10 * 60000) { r.n = 0; r.t = now; } r.n++; authTries.set(ip, r); return r.n > 30; }
+function readBody(req, max, cb) {
+  let size = 0, chunks = [];
+  req.on('data', c => { size += c.length; if (size > max) { req.destroy(); return; } chunks.push(c); });
+  req.on('end', () => { let j = null; try { j = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch (e) {} cb(j); });
+}
+function api(req, res, p) {
+  const json = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (p === '/api/me' && req.method === 'GET') { const r = accounts.me(bearer); return r ? json(200, r) : json(401, { err: 'Not logged in.' }); }
+  if (req.method !== 'POST') return json(405, { err: 'POST only' });
+  readBody(req, 600 * 1024, b => {
+    if (!b) return json(400, { err: 'Bad request.' });
+    if (p === '/api/register' || p === '/api/login') {
+      if (authLimited(ip)) return json(429, { err: 'Too many tries. Wait a few minutes.' });
+      const r = p === '/api/register' ? accounts.register(b.name, b.password) : accounts.login(b.name, b.password);
+      if (!r.err) console.log(`${p === '/api/register' ? 'new account' : 'login'}: ${r.name}`);
+      return json(r.err ? 400 : 200, r);
+    }
+    if (p === '/api/save') { const r = accounts.save(bearer || b.token, b.save); return json(r.err ? 400 : 200, r); }
+    if (p === '/api/logout') { accounts.logout(bearer || b.token); return json(200, { ok: true }); }
+    json(404, { err: 'Unknown' });
+  });
+}
+
 // ---------- static files ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
 const server = http.createServer((req, res) => {
   let p = (req.url || '/').split('?')[0];
   try { p = decodeURIComponent(p); } catch (e) { res.writeHead(400); return res.end(); }
   if (p === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }   // Render health check
+  if (p.startsWith('/api/')) return api(req, res, p);
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(PUBLIC, p));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
@@ -88,9 +122,11 @@ wss.on('connection', ws => {
     if (m.t === 'hello' && !id) {
       if (players.size >= MAX_PLAYERS) { send(ws, { t: 'full' }); return ws.close(); }
       id = crypto.randomBytes(6).toString('hex');
-      const name = String(m.name || 'Pirate').replace(/[<>&]/g, '').slice(0, 16) || 'Pirate';
+      // who they are comes from their login token, never from what the page claims: a guest has no account (no admin, no horn)
+      const acct = accounts.nameFor(m.token) || '';
+      const name = acct || ('Guest ' + String(m.name || 'Pirate').replace(/[<>&]/g, '').slice(0, 10));
+      for (const [pid, q] of players) if (acct && q.acct === acct) { send(q.ws, serverEmit('dup', {})); try { q.ws.close(); } catch (e) {} }   // the same captain logged in somewhere else: the old session ends
       const peers = [...players].map(([pid, q]) => ({ id: pid, name: q.name, p: q.p }));
-      const acct = String(m.acct || '').trim().slice(0, 24);   // the game account the player is using (bob3 holds the Serpent Horn)
       players.set(id, { ws, name, acct, p: {} });
       send(ws, { t: 'welcome', id, peers, build: BUILD });
       const snap = sim.snapshot();   // so the newcomer sees the world right away
@@ -172,4 +208,5 @@ setInterval(() => {
   }
 }, TICK_MS);
 
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { accounts.flushSync(); process.exit(0); });   // never lose the last few saves on shutdown
 server.listen(PORT, () => console.log(`Pirate server on http://localhost:${PORT}${ADMIN_KEY ? '' : ' (no ADMIN_KEY set: admin time/weather is open to the admin account)'}`));

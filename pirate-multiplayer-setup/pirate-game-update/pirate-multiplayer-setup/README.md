@@ -29,3 +29,16 @@ Open http://localhost:8080 (or your server's address) in each browser. The join 
 | PvP sword hits and broadsides | relayed player to player |
 
 If you edit the islands in `index.html`, make the same change in `world.js`.
+
+## Accounts (saved on the server)
+
+Players log in with a captain name and password; their progress is saved on the server, so they can play from any device.
+Names are unique (case-insensitive). Where accounts are stored:
+
+- **Upstash Redis (recommended, free):** create a free database at upstash.com, then set `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN` in Render's Environment tab.
+- **Otherwise a file** in `DATA_DIR` (default `./data`). On Render this is wiped on every deploy, restart and free-plan
+  sleep unless `DATA_DIR` points at a persistent disk.
+
+`OWNER_PASSWORD`: only someone who knows it can create the `bob3` account (the admin / Serpent Horn owner).
+If it isn't set, whoever creates `bob3` first owns it.
