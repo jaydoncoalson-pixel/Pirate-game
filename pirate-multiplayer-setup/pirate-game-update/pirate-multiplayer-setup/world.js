@@ -80,8 +80,8 @@ const SITES = [
   { i: 3, kind: 'camp', name: 'Blackwater raider', a: 2.6, f: 0.66, r: 36, n: 4 },
   { i: 7, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 34, n: 3 },
   { i: 5, kind: 'camp', name: 'Blackwater raider', a: -2.4, f: 0.5, r: 36, n: 4 },
-  { i: 4, kind: 'camp', name: 'Blackwater raider', a: 1.6, f: 0.35, r: 34, n: 4 },
   { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
+  { i: 4, kind: 'fort', name: 'Blackwater soldier', a: 0, f: 0, r: 108, n: 12 },   // Skull Isle: the Blackwater fortress, crowning the hill
 ];
 ISLANDS.forEach(I => I.sites = []);
 SITES.forEach(S => {
@@ -223,10 +223,17 @@ function siteCamp(S) {
   for (let i = 0; i < S.n; i++) { const a = i / S.n * 6.28; out.push({ name: S.name, home: { x: c.x, z: c.z }, x: c.x + Math.cos(a) * 5, z: c.z + Math.sin(a) * 5, facing: a }); }
   return out;
 }
+// the fortress garrison: soldiers posted round the courtyard, on the gate and by the keep (same spots as the game's buildFort)
+function fortGarrison(S) {
+  const out = [];
+  for (let i = 0; i < S.n; i++) { const a = i / S.n * 6.28 + 0.3, r = i % 3 === 0 ? 62 : i % 3 === 1 ? 40 : 24; out.push({ name: S.name, home: { x: S.x, z: S.z }, x: S.x + Math.cos(a) * r, z: S.z + Math.sin(a) * r, facing: a }); }
+  return out;
+}
 const BANDIT_SPAWNS = [
   ...campBandits({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }, 4, 'Bandit'),
   ...campBandits({ x: SPOT_X.x + 14, z: SPOT_X.z + 10 }, 3, 'Blackwater thug'),
   ...SITES.filter(S => S.kind === 'camp').flatMap(siteCamp),
+  ...SITES.filter(S => S.kind === 'fort').flatMap(fortGarrison),
 ];
 
 // --- Raiders: same order as the client's raider list ---
