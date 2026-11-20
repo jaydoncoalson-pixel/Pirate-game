@@ -308,13 +308,16 @@
 
   // ---------- Island ----------
   const colliders = [];
-  const ISLAND = new THREE.Vector2(-150, -320);   // centre (x, z)
-  const R = 300;                                    // radius
+  // The archipelago: islands spread WS times further apart than the original chart and IRS times bigger.
+  // KEEP IN STEP WITH world.js (the server builds the very same terrain).
+  const WS = 2.2, IRS = 2.5, HILLS = 2.2;
+  const ISLAND = new THREE.Vector2(-150 * WS, -320 * WS);   // centre (x, z)
+  const R = 300 * IRS;                                        // radius
   const DOCK_DIR = new THREE.Vector2(-ISLAND.x, -ISLAND.y).normalize(); // points from island toward start
   const PERP = new THREE.Vector2(-DOCK_DIR.y, DOCK_DIR.x);
-  const TOWN = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.52);
-  const DOCK_BASE = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.8);
-  const DOCK_LEN = 78, DECK_Y = 3.6;
+  const DOCK_BASE = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.94 - 20);   // on the beach, just above the waterline
+  const TOWN = DOCK_BASE.clone().addScaledVector(DOCK_DIR, -95);               // the town plaza, up the street from the dock
+  const DOCK_LEN = 130, DECK_Y = 3.6, DOCK_HW = 5, DOCK_HEAD = 22, DOCK_HEADLEN = 14;   // a long pier with a broad T-head
   const local = (u, v) => TOWN.clone().addScaledVector(DOCK_DIR, u).addScaledVector(PERP, v); // town frame
 
   const nperm = new Uint8Array(512);
@@ -336,18 +339,20 @@
   }
   const TOWN_BACK = local(-34, 0);
   const ISLANDS = [
-    { name: 'Gull Island', c: ISLAND, r: R, kind: 'home', hill: 60, seed: 5, palms: 70, rocks: 30, rough: 0.38 },
+    { name: 'Gull Island', c: ISLAND, r: R, kind: 'home', hill: 95, seed: 5, palms: 70, rocks: 30, rough: 0.38 },
     { name: 'Palm Key', c: new THREE.Vector2(1900, 500), r: 128, kind: 'sandbar', hill: 6, seed: 11, palms: 20, rocks: 8, aspect: 2.3, rot: 0.6 },
     { name: 'Jungle Isle', c: new THREE.Vector2(-3000, 1100), r: 420, kind: 'jungle', hill: 110, seed: 23, palms: 130, rocks: 24, aspect: 1.45, rot: -0.4 },
     { name: 'Smoke Peak', c: new THREE.Vector2(-1700, -3500), r: 400, kind: 'volcano', hill: 0, seed: 37, palms: 36, rocks: 50, aspect: 1.15, rot: 0.9, rough: 0.3 },
     { name: 'Skull Isle', c: new THREE.Vector2(2700, -3100), r: 230, kind: 'skull', hill: 40, seed: 51, palms: 16, rocks: 34, aspect: 1.5, rot: 1.2 },
-    { name: 'Port Coral', c: new THREE.Vector2(4200, -700), r: 340, kind: 'port', hill: 70, seed: 63, palms: 55, rocks: 20, rough: 0.4 },
+    { name: 'Port Coral', c: new THREE.Vector2(4200, -700), r: 340, kind: 'port', hill: 90, seed: 63, palms: 55, rocks: 20, rough: 0.4 },
     { name: 'Gull Rocks', c: new THREE.Vector2(900, -1500), r: 85, kind: 'islet', hill: 16, seed: 71, palms: 6, rocks: 16, aspect: 1.6, rot: 0.3 },
     { name: 'Turtle Cay', c: new THREE.Vector2(-1300, -1600), r: 100, kind: 'islet', hill: 10, seed: 77, palms: 10, rocks: 8, aspect: 1.4, rot: -0.8 },
     { name: 'Mermaid Cove', c: new THREE.Vector2(1100, 4200), r: 270, kind: 'cove', hill: 22, seed: 83, palms: 34, rocks: 22, aspect: 1.15, rot: 0.5, rough: 0.16 },
     { name: 'Driftwood Isle', c: new THREE.Vector2(-3600, -1900), r: 170, kind: 'sandbar', hill: 18, seed: 89, palms: 24, rocks: 10, aspect: 1.3, rot: 0.2 },
   ];
   ISLANDS.forEach(I => {
+    if (I.kind !== 'home') { I.c.multiplyScalar(WS); I.r *= IRS; }
+    I.hill *= HILLS; I.palms = Math.round(I.palms * 3); I.rocks = Math.round(I.rocks * 3);
     I.group = new THREE.Group(); scene.add(I.group);
     I.cs = Math.cos(I.rot || 0); I.sn = Math.sin(I.rot || 0); I.nf = 1.6 / I.r; I.rough = I.rough ?? 0.42;
     I.toHome = ISLAND.clone().sub(I.c); if (I.toHome.lengthSq() > 1) I.toHome.normalize(); else I.toHome.copy(DOCK_DIR);
@@ -360,7 +365,7 @@
     [1400, -520], [1750, -2050], [-820, -650], [-2200, -2600],
     [3050, -1850], [760, 2350], [-2250, 1050], [3300, 1150],
     [900, -2450], [-700, -2650], [2250, 1500], [-3900, -900]
-  ];
+  ].map(([x, z]) => [x * WS, z * WS]);
   const reefRockMat = new THREE.MeshStandardMaterial({ color: 0x555b5a, roughness: 1 });
   const rockWetMat = new THREE.MeshStandardMaterial({ color: 0x303b3b, roughness: 0.95 });
   ROCK_SITES.forEach(([rx, rz], ri) => {
@@ -384,12 +389,47 @@
   });
   // Port Coral faces back toward Gull Island: a town street running down to its own dock
   const PORT = ISLANDS[5];
-  const PORT_FRAME = { origin: PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.45), dir: PORT.toHome.clone(), perp: new THREE.Vector2(-PORT.toHome.y, PORT.toHome.x) };
-  const PORT_DOCK_BASE = PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.8);
+  const PORT_DOCK_BASE = PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.94 - 20), PORT_DOCK_LEN = 100;
+  const PORT_FRAME = { origin: PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, -95), dir: PORT.toHome.clone(), perp: new THREE.Vector2(-PORT.toHome.y, PORT.toHome.x) };
   const PORT_BACK = PORT_FRAME.origin.clone().addScaledVector(PORT.toHome, -30);
-  const PORT_DOCK_FAR = PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, 130);
+  const PORT_DOCK_FAR = PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, PORT_DOCK_LEN + 60);
   const DOCK_FAR = DOCK_BASE.clone().addScaledVector(DOCK_DIR, DOCK_LEN + 60);
-  function islandHeight(I, x, z) {
+  // ---- Sites: towns, villages and raider camps. The ground is levelled under each one (also on the server). ----
+  // a: angle turned from the island's side facing Gull Island; f: how far out from the centre (fraction of the radius)
+  const SITES = [
+    { i: 0, kind: 'town', name: 'Gull Town', u: 5, r: 96 },
+    { i: 5, kind: 'town', name: 'Port Coral', u: 5, r: 96 },
+    { i: 0, kind: 'village', name: 'Brackenford', a: 2.3, f: 0.5, r: 64 },
+    { i: 2, kind: 'village', name: 'Vinehollow', a: 0.6, f: 0.5, r: 64 },
+    { i: 9, kind: 'village', name: 'Saltmarsh', a: 1.5, f: 0.45, r: 60 },
+    { i: 3, kind: 'village', name: 'Ashfall', a: -0.35, f: 0.7, r: 60 },
+    { i: 8, kind: 'village', name: 'Shellharbor', a: 1.9, f: 0.8, r: 58 },
+    { i: 5, kind: 'village', name: 'Coral Heights', a: 2.8, f: 0.45, r: 62 },
+    { i: 0, kind: 'camp', name: 'Blackwater raider', a: -2.2, f: 0.45, r: 36, n: 4 },
+    { i: 2, kind: 'camp', name: 'Blackwater raider', a: -2.0, f: 0.35, r: 36, n: 5 },
+    { i: 3, kind: 'camp', name: 'Blackwater raider', a: 2.6, f: 0.66, r: 36, n: 4 },
+    { i: 7, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 34, n: 3 },
+    { i: 5, kind: 'camp', name: 'Blackwater raider', a: -2.4, f: 0.5, r: 36, n: 4 },
+    { i: 4, kind: 'camp', name: 'Blackwater raider', a: 1.6, f: 0.35, r: 34, n: 4 },
+    { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
+  ];
+  ISLANDS.forEach(I => I.sites = []);
+  SITES.forEach(S => {
+    const I = ISLANDS[S.i];
+    if (S.kind === 'town') {
+      const F = S.i === 0 ? { origin: TOWN, dir: DOCK_DIR, perp: PERP } : PORT_FRAME;
+      S.F = F; S.x = F.origin.x + F.dir.x * S.u; S.z = F.origin.y + F.dir.y * S.u; S.h = 4.2;
+    } else {
+      const ca = Math.cos(S.a), sa = Math.sin(S.a), dx = I.toHome.x * ca - I.toHome.y * sa, dz = I.toHome.x * sa + I.toHome.y * ca;
+      let f = S.f, x = I.c.x + dx * I.r * f, z = I.c.y + dz * I.r * f;
+      for (; f > 0.08 && islandHeight(I, x, z, true) < 5; f -= 0.02) { x = I.c.x + dx * I.r * f; z = I.c.y + dz * I.r * f; }
+      S.x = x; S.z = z; S.h = Math.max(5.5, Math.min(40, islandHeight(I, x, z, true)));
+      const ox = x - I.c.x, oz = z - I.c.y, ol = Math.hypot(ox, oz) || 1;   // the main street runs out toward the sea
+      S.F = { origin: new THREE.Vector2(x, z), dir: new THREE.Vector2(ox / ol, oz / ol), perp: new THREE.Vector2(-oz / ol, ox / ol) };
+    }
+    I.sites.push(S);
+  });
+  function islandHeight(I, x, z, raw) {
     const dx = x - I.c.x, dz = z - I.c.y;
     if (dx * dx + dz * dz > I.r * I.r * 3.4) return -7;
     // stretched, rotated outline, then roughened with fractal noise for bays, capes and points
@@ -402,9 +442,10 @@
     if (I.kind === 'cove') s = (0.24 - Math.abs(d - 0.74)) * 1.7;   // a ring of land around a lagoon
     let h = -7 + 11 * sstep(-0.15, 0.2, s);
     h += I.hill * Math.pow(Math.max(0, s - 0.3), 1.4) * (0.5 + 1.0 * fbm(x * 0.006 + I.seed, z * 0.006));
+    if (I.kind !== 'volcano' && I.kind !== 'cove') h += I.hill * 0.75 * Math.pow(Math.max(0, fbm(x * 0.003 + I.seed * 1.7, z * 0.003 - I.seed) - 0.35), 1.2) * sstep(0.12, 0.45, s);   // rolling hills
     if (I.kind === 'volcano') {
-      h += 140 * Math.pow(Math.max(0, s - 0.22), 1.7);
-      h -= 600 * Math.pow(Math.max(0, s - 0.86), 1.2);
+      h += 300 * Math.pow(Math.max(0, s - 0.22), 1.7);
+      h -= 1300 * Math.pow(Math.max(0, s - 0.86), 1.2);
     }
     h += (vnoise(x * 0.08, z * 0.08) - 0.5) * 1.2 * sstep(0, 0.2, s);
     if (I.kind === 'cove') {
@@ -421,6 +462,10 @@
     if (I.kind === 'port') {
       const dd = distToSeg(x, z, PORT_BACK, PORT_DOCK_BASE), w = sstep(46, 34, dd) * sstep(-3, 1.5, h);
       h += (4.2 - h) * w;
+    }
+    if (!raw && I.sites) for (const S of I.sites) {   // level ground for towns, villages and camps
+      const dd = Math.hypot(x - S.x, z - S.z);
+      if (dd < S.r + 30) { const w = sstep(S.r + 30, S.r, dd) * sstep(-3, 1.5, h); h += (S.h - h) * w; }
     }
     return h;
   }
@@ -470,18 +515,32 @@
   }
   function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
+  // the streets and lanes of each town and village, in its own frame (u along the main street, v across it)
+  function siteRoads(S) {
+    if (S.kind === 'town') return [[-62, -44, 62, -44, 4], [-62, 44, 62, 44, 4], [-45, -44, -45, 44, 3.5], [35, -44, 35, 44, 3.5], [-70, 0, -34, 0, 4]];
+    if (S.kind === 'village') return [[-48, 0, 48, 0, 4], [0, -42, 0, 42, 3.5], [-48, -26, -48, 26, 2.5]];
+    return [];
+  }
+  function onSiteRoad(I, x, z) {
+    for (const S of I.sites) {
+      const dx = x - S.x, dz = z - S.z; if (dx * dx + dz * dz > (S.r + 20) * (S.r + 20)) continue;
+      const ox = x - S.F.origin.x, oz = z - S.F.origin.y, u = ox * S.F.dir.x + oz * S.F.dir.y, v = ox * S.F.perp.x + oz * S.F.perp.y;
+      for (const [u0, v0, u1, v1, w] of siteRoads(S)) { const du = u1 - u0, dv = v1 - v0, t = Math.max(0, Math.min(1, ((u - u0) * du + (v - v0) * dv) / (du * du + dv * dv))); if (Math.hypot(u - u0 - du * t, v - v0 - dv * t) < w) return true; }
+    }
+    return false;
+  }
   const PALETTES = {
-    home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 22 },
+    home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 125 },
     sandbar: { sand: 0xf0dfae, wet: 0xd2bd88, grass: 0x8fb85a, dark: 0x6f9a45, rock: 0x9a9080, rockH: 99 },
-    jungle:  { sand: 0xe2cd92, wet: 0xc4ad76, grass: 0x3f8a3a, dark: 0x1f5a28, rock: 0x6f6a5e, rockH: 36 },
-    volcano: { sand: 0x5e5550, wet: 0x463f3b, grass: 0x5d8a3e, dark: 0x45683a, rock: 0x4a423d, rockH: 11 },
-    skull:   { sand: 0xd9c9a0, wet: 0xb8a882, grass: 0x8a9a5a, dark: 0x6b7448, rock: 0xa8a294, rockH: 9 },
-    port:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x6aa84f, dark: 0x467f38, rock: 0x8a8378, rockH: 26 },
-    cove:    { sand: 0xf4e6bc, wet: 0xd8c592, grass: 0x58a84a, dark: 0x3c8a3c, rock: 0x9a958c, rockH: 20 },
-    islet:   { sand: 0xf0dfae, wet: 0xd2bd88, grass: 0x8fb85a, dark: 0x6f9a45, rock: 0x8f877c, rockH: 12 },
+    jungle:  { sand: 0xe2cd92, wet: 0xc4ad76, grass: 0x3f8a3a, dark: 0x1f5a28, rock: 0x6f6a5e, rockH: 120 },
+    volcano: { sand: 0x5e5550, wet: 0x463f3b, grass: 0x5d8a3e, dark: 0x45683a, rock: 0x4a423d, rockH: 45 },
+    skull:   { sand: 0xd9c9a0, wet: 0xb8a882, grass: 0x8a9a5a, dark: 0x6b7448, rock: 0xa8a294, rockH: 40 },
+    port:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x6aa84f, dark: 0x467f38, rock: 0x8a8378, rockH: 125 },
+    cove:    { sand: 0xf4e6bc, wet: 0xd8c592, grass: 0x58a84a, dark: 0x3c8a3c, rock: 0x9a958c, rockH: 45 },
+    islet:   { sand: 0xf0dfae, wet: 0xd2bd88, grass: 0x8fb85a, dark: 0x6f9a45, rock: 0x8f877c, rockH: 30 },
   };
   for (const I of ISLANDS) {
-    const size = I.r * 3.6, seg = Math.min(230, Math.max(48, Math.round(size / 3.6)));
+    const size = I.r * 3.6, seg = Math.min(400, Math.max(48, Math.round(size / 5)));
     const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2); geo.translate(I.c.x, 0, I.c.y);
     const pos0 = geo.attributes.position;
@@ -511,6 +570,7 @@
       else c.copy(grass).lerp(darkGrass, vnoise(cx * 0.05, cz * 0.05));
       if (I.kind === 'home' && cy > 3 && distToSeg(cx, cz, TOWN_BACK, DOCK_BASE) < 5.5) c.copy(road);
       if (I.kind === 'port' && cy > 3 && distToSeg(cx, cz, PORT_BACK, PORT_DOCK_BASE) < 5.5) c.copy(road);
+      if (cy > 3 && onSiteRoad(I, cx, cz)) c.copy(road);
       if (cy > P_.rockH || slope > 0.35) c.copy(rock);
       if (I.kind === 'volcano' && cy > 30) c.set(0x2f2926);
       c.offsetHSL(0, 0, (rand() - 0.5) * 0.04);
@@ -523,44 +583,112 @@
   const lam = col => new THREE.MeshLambertMaterial({ color: col });
   const WOOD = lam(0x8a5a33), DARK_WOOD = lam(0x5b3a22), PLANK = lam(0xa8774a);
 
-  // ---------- Dock ----------
-  const dock = new THREE.Group();
-  dock.position.set(DOCK_BASE.x, 0, DOCK_BASE.y);
-  dock.rotation.y = Math.atan2(DOCK_DIR.x, DOCK_DIR.y); // local +z points out to sea
-  for (let z = 0; z < DOCK_LEN; z += 1.6) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 1.45), z % 3.2 < 1.6 ? PLANK : WOOD);
-    p.position.set((rand() - 0.5) * 0.15, DECK_Y, z); dock.add(p);
-  }
-  const head = new THREE.Mesh(new THREE.BoxGeometry(26, 0.5, 9), PLANK); // T-shaped end
-  head.position.set(0, DECK_Y, DOCK_LEN + 3.5); dock.add(head);
+  // ---------- Docks ----------
+  // A proper timber pier: decking laid across heavy stringers on paired pilings with cross-bracing, a curb along each
+  // edge, iron bollards, ladders down to the water, lamp posts, a broad T-head with a cargo crane, stacked cargo, rope
+  // coils, nets drying on a rack and boats tied alongside. Local frame: +z runs out to sea, x across (dockWorld).
   const postGeo = new THREE.CylinderGeometry(0.45, 0.5, 14, 6);
-  const addPost = (x, z, extra = 0) => { const p = new THREE.Mesh(postGeo, DARK_WOOD); p.position.set(x, DECK_Y - 6 + extra, z); dock.add(p); };
-  for (let z = 4; z <= DOCK_LEN; z += 8) { addPost(-4.2, z); addPost(4.2, z); }
-  for (let x = -12.5; x <= 12.5; x += 8.33) { addPost(x, DOCK_LEN - 0.5, 1.2); addPost(x, DOCK_LEN + 7.5, 1.2); }
-  // lanterns
   const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffd27a });
-  [[-12.5, DOCK_LEN + 7.5], [12.5, DOCK_LEN + 7.5], [-4.2, 20], [4.2, 44]].forEach(([x, z]) => {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5, 5), DARK_WOOD); pole.position.set(x, DECK_Y + 2.5, z); dock.add(pole);
-    const l = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1, 0.8), lanternMat); l.position.set(x, DECK_Y + 5.3, z); dock.add(l);
-  });
-  // crates & barrels
-  const crate = lam(0xb7894f), barrel = lam(0x7a4b2a);
-  [[2.5, 30], [2.6, 31.4], [-11, DOCK_LEN + 2], [-9.6, DOCK_LEN + 2]].forEach(([x, z], i) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), crate); m.position.set(x, DECK_Y + 0.95 + (i === 1 ? 1.4 : 0), z - (i === 1 ? 1.4 : 0)); m.rotation.y = rand(); dock.add(m);
-  });
-  [[2.5, 30], [2.6, 30], [-11, DOCK_LEN + 2], [-9.6, DOCK_LEN + 2], [-2.8, 12], [-2.6, 13.4], [10, DOCK_LEN + 1.5]].forEach(([x, z]) => {
-    const w = DOCK_BASE.clone().addScaledVector(DOCK_DIR, z).addScaledVector(PERP, -x); colliders.push({ x: w.x, z: w.y, r: 0.95 });
-  });
-  [[-2.8, 12], [-2.6, 13.4], [10, DOCK_LEN + 1.5]].forEach(([x, z]) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 1.6, 10), barrel); m.position.set(x, DECK_Y + 1.05, z); dock.add(m);
-  });
-  // small rowboat tied up
-  const boat = new THREE.Group();
-  const hull = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 7, 10, 1, true, 0, Math.PI), lam(0x6d4a2b));
-  hull.material.side = THREE.DoubleSide; hull.rotation.z = Math.PI / 2; hull.rotation.y = Math.PI / 2; boat.add(hull);
-  boat.position.set(-6.8, 0.3, 50); dock.add(boat);
-  scene.add(dock);
+  const DK = { plankA: lam(0xa8774a), plankB: lam(0x94673e), plankC: lam(0xb58552), beam: lam(0x5b3a22), pile: lam(0x4a3220), iron: lam(0x2b2b2e), rope: lam(0xc9b48a), crate: lam(0xb7894f), crate2: lam(0x8e6a3c), barrel: lam(0x7a4b2a), hoop: lam(0x3a3a3a), net: lam(0x6b5a3a), sail: lam(0xe6dcc0) };
+  const DK_PLANK = new THREE.BoxGeometry(1, 0.16, 0.44), DK_PILE = new THREE.CylinderGeometry(0.34, 0.4, 1, 7).translate(0, -0.5, 0), DK_BEAM = new THREE.BoxGeometry(1, 1, 1);
+  function instanced(geo, mat, mats, parent) { if (!mats.length) return; const im = new THREE.InstancedMesh(geo, mat, mats.length); mats.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; parent.add(im); }
+  const dkE = new THREE.Euler(), dkQ = new THREE.Quaternion(), dkV = new THREE.Vector3(), dkS = new THREE.Vector3();
+  const dkM = (x, y, z, sx, sy, sz, rx, ry, rz) => { dkE.set(rx, ry, rz); dkQ.setFromEuler(dkE); return new THREE.Matrix4().compose(dkV.set(x, y, z), dkQ, dkS.set(sx, sy, sz)); };
+  function buildDock(D, parent) {
+    const g = new THREE.Group(); g.position.set(D.base.x, 0, D.base.y); g.rotation.y = Math.atan2(D.dir.x, D.dir.y); parent.add(g);
+    const W = (lx, lz) => D.base.clone().addScaledVector(D.dir, lz).addScaledVector(D.perp, -lx);   // dock -> world
+    const col = (lx, lz, r) => { const w = W(lx, lz); colliders.push({ x: w.x, z: w.y, r }); };
+    const top = DECK_Y + 0.25, hw = D.hw, L = D.len, HH = D.head, HL = D.headLen;
+    // decking: planks laid across, each a touch different, with hairline gaps
+    const pl = [[], [], []];
+    for (let z = -2.6; z < L; z += 0.5) pl[(Math.random() * 3) | 0].push(dkM((Math.random() - 0.5) * 0.08, DECK_Y + 0.17, z, hw * 2, 1, 1, 0, (Math.random() - 0.5) * 0.012, 0));
+    for (let z = L - 1; z < L + HL; z += 0.5) pl[(Math.random() * 3) | 0].push(dkM(0, DECK_Y + 0.17, z, HH * 2, 1, 1, 0, (Math.random() - 0.5) * 0.008, 0));
+    instanced(DK_PLANK, DK.plankA, pl[0], g); instanced(DK_PLANK, DK.plankB, pl[1], g); instanced(DK_PLANK, DK.plankC, pl[2], g);
+    const beams = [], piles = [], braces = [];
+    // stringers under the deck, and caps across each bent of piles
+    [-hw + 0.5, 0, hw - 0.5].forEach(x => beams.push(dkM(x, DECK_Y - 0.25, (L - 3) / 2, 0.35, 0.45, L + 3, 0, 0, 0)));
+    for (let x = -HH + 0.6; x <= HH - 0.6; x += (HH * 2 - 1.2) / 6) beams.push(dkM(x, DECK_Y - 0.25, L + HL / 2 - 0.5, 0.35, 0.45, HL, 0, 0, 0));
+    // edge curbs (rub rails)
+    [-hw + 0.15, hw - 0.15].forEach(x => beams.push(dkM(x, DECK_Y + 0.38, (L - 3) / 2, 0.3, 0.25, L - 3, 0, 0, 0)));
+    beams.push(dkM(0, DECK_Y + 0.38, L + HL - 0.85, HH * 2, 0.25, 0.3, 0, 0, 0));
+    [-HH + 0.15, HH - 0.15].forEach(x => beams.push(dkM(x, DECK_Y + 0.38, L + HL / 2 - 0.5, 0.3, 0.25, HL, 0, 0, 0)));
+    // pilings: paired bents every 5 m with X-bracing between, a grid under the head
+    const pile = (x, z, ex = 0) => piles.push(dkM(x, DECK_Y - 0.05 + ex, z, 1, 12 + ex, 1, (Math.random() - 0.5) * 0.04, 0, (Math.random() - 0.5) * 0.04));
+    for (let z = 1; z <= L; z += 5) {
+      pile(-hw - 0.1, z); pile(hw + 0.1, z);
+      beams.push(dkM(0, DECK_Y - 0.55, z, hw * 2 + 0.8, 0.4, 0.4, 0, 0, 0));
+      if (((z - 1) / 5) % 2 === 0) [1, -1].forEach(sd => braces.push(dkM(0, DECK_Y - 2.4, z, 0.18, Math.hypot(hw * 2, 3.4), 0.18, 0, 0, sd * Math.atan2(hw * 2, 3.4))));
+    }
+    for (let x = -HH; x <= HH + 0.01; x += HH / 3) for (let z = L; z <= L + HL; z += HL / 2) pile(x, z, (Math.abs(x) > HH - 1 || z > L + HL - 1) ? 0.9 : 0);   // corner piles stand proud as posts
+    instanced(DK_BEAM, DK.beam, beams, g); instanced(DK_BEAM, DK.beam, braces, g); instanced(DK_PILE, DK.pile, piles, g);
+    // bollards along the edges and the head
+    const bol = [], bolCap = [];
+    const bollard = (x, z) => { bol.push(dkM(x, top + 0.35, z, 1, 1, 1, 0, 0, 0)); bolCap.push(dkM(x, top + 0.75, z, 1, 1, 1, 0, 0, 0)); };
+    for (let z = 12; z < L - 4; z += 18) { bollard(-hw + 0.5, z); bollard(hw - 0.5, z + 9); }
+    for (let x = -HH + 1.5; x <= HH - 1.5; x += (HH * 2 - 3) / 4) bollard(x, L + HL - 1.2);
+    instanced(new THREE.CylinderGeometry(0.28, 0.34, 0.7, 8), DK.iron, bol, g); instanced(new THREE.CylinderGeometry(0.42, 0.42, 0.14, 8), DK.iron, bolCap, g);
+    // ladders down to the water
+    [[hw + 0.35, L * 0.4], [-HH - 0.35, L + HL * 0.5]].forEach(([x, z]) => {
+      const lg = new THREE.Group(); lg.position.set(x, 0, z); g.add(lg);
+      [-0.45, 0.45].forEach(o => { const r = new THREE.Mesh(new THREE.BoxGeometry(0.12, 6, 0.12), DK.beam); r.position.set(0, DECK_Y - 2.2, o); lg.add(r); });
+      for (let y = DECK_Y - 4.8; y < DECK_Y + 0.3; y += 0.5) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.9), DK.beam); r.position.set(0, y, 0); lg.add(r); }
+    });
+    // lamp posts: a post, a bracket arm and a glowing lantern
+    const lamp = (x, z, side) => {
+      const lp = new THREE.Group(); lp.position.set(x, top, z); g.add(lp);
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), DK.beam); pole.position.y = 2.3; lp.add(pole);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 0.12), DK.beam); arm.position.set(-side * 0.5, 4.4, 0); lp.add(arm);
+      const cage = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.65, 0.5), DK.iron); cage.position.set(-side * 0.95, 3.95, 0); lp.add(cage);
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.5, 0.38), lanternMat); glow.position.copy(cage.position); lp.add(glow);
+      col(x, z, 0.35);
+    };
+    for (let z = 8, k = 0; z < L - 6; z += 24, k++) lamp(k % 2 ? hw - 0.45 : -hw + 0.45, z, k % 2 ? 1 : -1);
+    lamp(-HH + 0.5, L + HL - 0.6, -1); lamp(HH - 0.5, L + HL - 0.6, 1);
+    // cargo: stacked crates, barrels with iron hoops, sacks and rope coils, kept to the sides so the walkway stays clear
+    const crate = (x, z, y = 0, s = 1.3, m = DK.crate) => { const c = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), m); c.position.set(x, top + s / 2 + y, z); c.rotation.y = (Math.random() - 0.5) * 0.3; g.add(c);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(s + 0.04, 0.12, s + 0.04), DK.beam); band.position.copy(c.position); band.rotation.y = c.rotation.y; g.add(band); };
+    const barrel = (x, z) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.3, 12), DK.barrel); b.position.set(x, top + 0.65, z); g.add(b);
+      [-0.4, 0.4].forEach(o => { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.57, 0.57, 0.08, 12), DK.hoop); h.position.set(x, top + 0.65 + o, z); g.add(h); }); };
+    const coil = (x, z) => { const c = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.14, 6, 14), DK.rope); c.rotation.x = Math.PI / 2; c.position.set(x, top + 0.14, z); g.add(c); const c2 = c.clone(); c2.scale.setScalar(0.75); c2.position.y += 0.2; g.add(c2); };
+    const pile3 = (x, z) => { crate(x, z); crate(x + 1.35, z, 0, 1.3, DK.crate2); crate(x + 0.65, z + 0.1, 1.3, 1.2); col(x + 0.65, z, 1.5); };
+    for (let z = 22; z < L - 10; z += 31) { pile3(hw - 3.3, z); barrel(-hw + 1, z + 6); barrel(-hw + 1, z + 7.2); barrel(-hw + 2.1, z + 6.6); col(-hw + 1.5, z + 6.6, 1.4); coil(hw - 1.2, z + 12); }
+    pile3(-HH + 2, L + 3); pile3(-HH + 2, L + 6); barrel(HH - 7, L + 2); barrel(HH - 8.2, L + 2.4); barrel(HH - 7.4, L + 3.4); col(HH - 7.6, L + 2.6, 1.6);
+    coil(-HH + 6, L + HL - 2.5); coil(HH - 11, L + HL - 2.4);
+    // a cargo crane at the end of the head: mast, boom, rope and hook, with a crate swinging under it
+    {
+      const cr = new THREE.Group(); cr.position.set(HH - 3.5, top, L + HL - 3.5); g.add(cr);
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7.5, 0.5), DK.beam); mast.position.y = 3.75; cr.add(mast);
+      [[-0.9, 0], [0.9, 0], [0, -0.9]].forEach(([x, z]) => { const st = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.18), DK.beam); st.position.set(x * 0.6, 1.05, z * 0.6); st.rotation.set(-z * 0.5, 0, x * 0.5); cr.add(st); });
+      const boom = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 7), DK.beam); boom.position.set(0, 7, 3.2); boom.rotation.x = -0.15; cr.add(boom);
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 4.5, 4), DK.rope); rope.position.set(0, 5.4, 6.3); cr.add(rope);
+      const hook = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.06, 5, 10, Math.PI * 1.4), DK.iron); hook.position.set(0, 3.1, 6.3); cr.add(hook);
+      const load = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), DK.crate); load.position.set(0, 2.2, 6.3); cr.add(load);
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.2, 10), DK.beam); wheel.rotation.z = Math.PI / 2; wheel.position.set(0.4, 1.4, 0); cr.add(wheel);
+      col(HH - 3.5, L + HL - 3.5, 1.2);
+    }
+    // nets drying on a rack by the head
+    {
+      const nr = new THREE.Group(); nr.position.set(-HH + 7, top, L + HL - 1.6); g.add(nr);
+      [-2, 2].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.4, 0.16), DK.beam); p.position.set(x, 1.2, 0); nr.add(p); });
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.12, 0.12), DK.beam); bar.position.y = 2.35; nr.add(bar);
+      const net = new THREE.Mesh(new THREE.PlaneGeometry(3.9, 2, 10, 5), new THREE.MeshLambertMaterial({ color: 0x6b5a3a, wireframe: true })); net.position.set(0, 1.3, 0.02); nr.add(net);
+      col(-HH + 5, L + HL - 1.6, 0.4); col(-HH + 9, L + HL - 1.6, 0.4);
+    }
+    // boats: rowboats tied up along the pier
+    const boatMat = lam(0x6d4a2b); boatMat.side = THREE.DoubleSide;
+    [[-hw - 2.2, L * 0.3], [hw + 2.2, L * 0.62], [-hw - 2.2, L * 0.78]].forEach(([x, z], k) => {
+      const b = new THREE.Group(); b.position.set(x, 0.25, z); b.rotation.y = (k % 2 ? 0.05 : -0.05); g.add(b);
+      const hull = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 5.2, 10, 1, true, 0, Math.PI), boatMat); hull.rotation.x = Math.PI / 2; hull.rotation.z = Math.PI; b.add(hull);
+      [-1.2, 0.6].forEach(o => { const th = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.08, 0.4), DK.beam); th.position.set(0, -0.15, o); b.add(th); });
+      const oar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 3.4), DK.beam); oar.position.set(0.3, 0, 0); oar.rotation.y = 0.15; b.add(oar);
+      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 4), DK.rope); line.position.set(x > 0 ? -1.1 : 1.1, 1.6, 2.2); line.rotation.z = (x > 0 ? 1 : -1) * 1.0; b.add(line);
+    });
+    return g;
+  }
+  const dock = buildDock({ base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, hw: DOCK_HW, head: DOCK_HEAD, headLen: DOCK_HEADLEN }, scene);
 
+  // the lighthouse stands on the shore beside the harbour
+  const LIGHTHOUSE_POS = (() => { let p = DOCK_BASE.clone().addScaledVector(PERP, 70); for (let k = 0; k < 40 && heightAt(p.x, p.y) < 3; k++) p.addScaledVector(DOCK_DIR, -4); return p; })();
   let decoParent = null;
   const frameLocal = (f, u, v) => f.origin.clone().addScaledVector(f.dir, u).addScaledVector(f.perp, v);
 
@@ -626,7 +754,7 @@
   }
   // lighthouse on the point next to the harbour
   {
-    const p = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.72).addScaledVector(PERP, 46);
+    const p = LIGHTHOUSE_POS;
     const y = heightAt(p.x, p.y);
     const lh = new THREE.Group();
     const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.4, 20, 10), lam(0xf4efe6)); tower.position.y = 10; lh.add(tower);
@@ -783,12 +911,232 @@
     [[1.2, 0], [1.6, 0.3]].forEach(([x, z]) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), lam(0xa57b4a)); c.position.set(x, 1.25, z); sg.add(c); });
     colliders.push({ x: st.x, z: st.y, r: 2.3 });
     QUINT_POS = frameLocal(F, 6, 3.9);
-    const dk = new THREE.Group(); dk.position.set(PORT_DOCK_BASE.x, 0, PORT_DOCK_BASE.y); dk.rotation.y = Math.atan2(I.toHome.x, I.toHome.y); I.group.add(dk);
-    for (let z = 0; z < 60; z += 1.6) { const q = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 1.45), z % 3.2 < 1.6 ? PLANK : WOOD); q.position.set(0, DECK_Y, z); dk.add(q); }
-    const hd = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 9), PLANK); hd.position.set(0, DECK_Y, 63.5); dk.add(hd);
-    for (let z = 4; z <= 60; z += 8) [-4.2, 4.2].forEach(x => { const q = new THREE.Mesh(postGeo, DARK_WOOD); q.position.set(x, DECK_Y - 6, z); dk.add(q); });
-    [[-9.5, 67.5], [9.5, 67.5], [-4.2, 30]].forEach(([x, z]) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5, 5), DARK_WOOD); pole.position.set(x, DECK_Y + 2.5, z); dk.add(pole); const l = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1, 0.8), lanternMat); l.position.set(x, DECK_Y + 5.3, z); dk.add(l); });
+    buildDock({ base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 }, I.group);
   }
+  // ---------- Towns and villages ----------
+  // Bigger, livelier settlements: two-storey houses with jettied upper floors, cottages, a chapel with a bell tower,
+  // warehouses, a market with striped awnings, wells, lamp posts, carts and hay, fenced gardens and crop fields, and
+  // the folk who live there. Everything is laid out in each settlement's own frame (u along the main street, v across).
+  const VILLAGE_NPCS = [];
+  const pickV = a => a[Math.floor(rand() * a.length)];
+  const VB = { timber: lam(0x4b3020), stone: lam(0x8a847a), stoneD: lam(0x6e6960), plaster: lam(0xefe4cc), thatch: lam(0xc9a25a), slate: lam(0x55606b), tile: lam(0xa9472e), wood: lam(0x8a5a33), dark: lam(0x5b3a22), hay: lam(0xd9b85a), soil: lam(0x6b4a2e), crop: lam(0x5f9e3a), crop2: lam(0x8fb84a), white: lam(0xf4efe6), bell: lam(0xb08a3a) };
+  const vAt = (F, u, v) => frameLocal(F, u, v);
+  const yaw3 = (F, facing) => Math.atan2(F.dir.x, F.dir.y) + facing;
+  function place(F, obj, u, v, facing = 0, dy = 0) { const p = vAt(F, u, v); obj.position.set(p.x, heightAt(p.x, p.y) + dy, p.y); obj.rotation.y = yaw3(F, facing); (decoParent || scene).add(obj); return obj; }
+  // a two-storey townhouse: stone ground floor, plastered and timber-framed upper floor jutting out over the street,
+  // a steep tiled roof with a dormer, shutters, a hanging sign on some, and a chimney
+  function townhouse(F, u, v, facing, w = 7.5, d = 8) {
+    const g = new THREE.Group(), h1 = 3.6, h2 = 3.4;
+    const gf = new THREE.Mesh(new THREE.BoxGeometry(w, h1, d), Math.random() < 0.5 ? VB.stone : VB.stoneD); gf.position.y = h1 / 2; g.add(gf);
+    const uf = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, h2, d + 0.8), lam(WALLS[(rand() * WALLS.length) | 0])); uf.position.set(0, h1 + h2 / 2, 0.3); g.add(uf);
+    for (let x = -w / 2 - 0.3; x <= w / 2 + 0.31; x += (w + 0.6) / 4) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, h2, 0.15), VB.timber); b.position.set(x, h1 + h2 / 2, d / 2 + 0.72); g.add(b); }
+    [h1 + 0.1, h1 + h2 - 0.1].forEach(y => { const b = new THREE.Mesh(new THREE.BoxGeometry(w + 0.7, 0.2, 0.15), VB.timber); b.position.set(0, y, d / 2 + 0.72); g.add(b); });
+    const dg = new THREE.Mesh(new THREE.BoxGeometry(0.15, h2 * 0.9, 0.12), VB.timber); dg.position.set(-w * 0.18, h1 + h2 / 2, d / 2 + 0.74); dg.rotation.z = 0.6; g.add(dg);
+    const roofM = Math.random() < 0.6 ? VB.tile : VB.slate, rw = w + 1.4, rd = d + 1.8, rh = 3.4;
+    const roofShape = new THREE.Shape(); roofShape.moveTo(-rw / 2, 0); roofShape.lineTo(0, rh); roofShape.lineTo(rw / 2, 0); roofShape.lineTo(-rw / 2, 0);
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(roofShape, { depth: rd, bevelEnabled: false }), roofM); roof.position.set(0, h1 + h2, -rd / 2 + 0.3); g.add(roof);
+    const dorm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.4), lam(0xefe4cc)); dorm.position.set(w * 0.15, h1 + h2 + 1.0, d / 2 - 0.2); g.add(dorm);
+    const dormR = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.9, 4), roofM); dormR.rotation.y = Math.PI / 4; dormR.position.set(w * 0.15, h1 + h2 + 2.05, d / 2 - 0.2); g.add(dormR);
+    const chim = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3, 0.9), VB.stoneD); chim.position.set(-w * 0.3, h1 + h2 + 2.2, -d * 0.2); g.add(chim);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.4, 0.15), doorMat); door.position.set(w * 0.22, 1.2, d / 2 + 0.06); g.add(door);
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.3, 0.3), VB.stoneD); arch.position.set(w * 0.22, 2.55, d / 2 + 0.1); g.add(arch);
+    [[-w * 0.22, 1.8], [-w * 0.3, h1 + 1.7], [w * 0.05, h1 + 1.7], [w * 0.33, h1 + 1.7]].forEach(([x, y]) => {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.12), winMat); win.position.set(x, y, (y > h1 ? d / 2 + 0.75 : d / 2 + 0.06)); g.add(win);
+      [-1, 1].forEach(sd => { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.08), lam(0x3f5a4a)); sh.position.set(x + sd * 0.75, y, win.position.z + 0.04); g.add(sh); });
+    });
+    if (rand() < 0.4) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1.3), VB.dark); arm.position.set(w * 0.42, 3.1, d / 2 + 0.7); g.add(arm); const sg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 1.0), lam(pickV([0xd8b25c, 0x8a3a2a, 0x2c5f8a]))); sg.position.set(w * 0.42, 2.55, d / 2 + 0.9); g.add(sg); }
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.6, d + 0.5), VB.stoneD); foot.position.y = 0.05; g.add(foot);
+    place(F, g, u, v, facing, -0.25);
+    colliders.push({ box: true, x: g.position.x, z: g.position.z, hw: w / 2 + 0.2, hd: d / 2 + 0.3, rot: g.rotation.y });
+    return g;
+  }
+  // a low thatched cottage with whitewashed walls, a little porch and a garden fence
+  function cottage(F, u, v, facing, w = 6.5, d = 5.5) {
+    const g = new THREE.Group(), h = 3;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), VB.white); body.position.y = h / 2; g.add(body);
+    const rs = new THREE.Shape(); rs.moveTo(-w / 2 - 0.8, 0); rs.lineTo(0, 3.2); rs.lineTo(w / 2 + 0.8, 0); rs.lineTo(-w / 2 - 0.8, 0);
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(rs, { depth: d + 1.4, bevelEnabled: false }), VB.thatch); roof.position.set(0, h - 0.1, -d / 2 - 0.7); g.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.1, 0.12), doorMat); door.position.set(0, 1.05, d / 2 + 0.06); g.add(door);
+    [-w * 0.3, w * 0.3].forEach(x => { const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.12), winMat); win.position.set(x, 1.7, d / 2 + 0.06); g.add(win); });
+    [-0.9, 0.9].forEach(x => { const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), VB.timber); post.position.set(x, 1.2, d / 2 + 1.2); g.add(post); });
+    const porch = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 1.5), VB.thatch); porch.position.set(0, 2.45, d / 2 + 0.75); porch.rotation.x = 0.25; g.add(porch);
+    const chim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.7), VB.stone); chim.position.set(w * 0.3, h + 1.6, 0); g.add(chim);
+    // a fenced garden behind
+    for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 5) { const fp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), VB.wood); fp.position.set(x, 0.45, -d / 2 - 4); g.add(fp); }
+    [0.35, 0.75].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, 0.06), VB.wood); r.position.set(0, y, -d / 2 - 4); g.add(r); [-1, 1].forEach(sd => { const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 4), VB.wood); r2.position.set(sd * w / 2, y, -d / 2 - 2); g.add(r2); }); });
+    for (let i = 0; i < 3; i++) { const row = new THREE.Mesh(new THREE.BoxGeometry(w - 1, 0.25, 0.6), VB.soil); row.position.set(0, 0.12, -d / 2 - 1 - i * 1.1); g.add(row);
+      for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(BUSH_GEO, i % 2 ? VB.crop : VB.crop2); c.scale.setScalar(0.3); c.position.set(-w / 2 + 1 + k * (w - 2) / 5, 0.4, row.position.z); g.add(c); } }
+    place(F, g, u, v, facing, -0.15);
+    colliders.push({ box: true, x: g.position.x, z: g.position.z, hw: w / 2 + 0.2, hd: d / 2 + 0.2, rot: g.rotation.y });
+    return g;
+  }
+  // a stone chapel with a square bell tower and a bell
+  function chapel(F, u, v, facing) {
+    const g = new THREE.Group(), w = 9, d = 16, h = 7;
+    const nave = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), VB.stone); nave.position.y = h / 2; g.add(nave);
+    const rs = new THREE.Shape(); rs.moveTo(-w / 2 - 0.6, 0); rs.lineTo(0, 4.5); rs.lineTo(w / 2 + 0.6, 0); rs.lineTo(-w / 2 - 0.6, 0);
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(rs, { depth: d + 1, bevelEnabled: false }), VB.slate); roof.position.set(0, h, -d / 2 - 0.5); g.add(roof);
+    const tw = new THREE.Mesh(new THREE.BoxGeometry(4.4, 15, 4.4), VB.stoneD); tw.position.set(0, 7.5, d / 2 + 1.6); g.add(tw);
+    const belfry = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.4, 4.8), VB.stone); belfry.position.set(0, 15.2, d / 2 + 1.6); g.add(belfry);
+    [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]].forEach(([x, z]) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3, 0.6), VB.stone); c.position.set(x, 16.9, d / 2 + 1.6 + z); g.add(c); });
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 1.3, 10, 1, true), VB.bell); bell.material.side = THREE.DoubleSide; bell.position.set(0, 16.9, d / 2 + 1.6); g.add(bell);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(3.4, 6, 4), VB.slate); spire.rotation.y = Math.PI / 4; spire.position.set(0, 21.4, d / 2 + 1.6); g.add(spire);
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.6, 0.2), VB.bell); cross.position.set(0, 25.1, d / 2 + 1.6); g.add(cross);
+    const crossB = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.2), VB.bell); crossB.position.set(0, 25.3, d / 2 + 1.6); g.add(crossB);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 3.2, 0.2), doorMat); door.position.set(0, 1.6, d / 2 + 3.85); g.add(door);
+    for (let k = -1; k <= 1; k += 2) for (let z = -5; z <= 3; z += 4) { const win = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 1), winMat); win.position.set(k * (w / 2 + 0.05), 3.8, z); g.add(win); }
+    place(F, g, u, v, facing, -0.2);
+    colliders.push({ box: true, x: g.position.x, z: g.position.z, hw: w / 2 + 0.2, hd: d / 2 + 0.2, rot: g.rotation.y });
+    const tp = g.localToWorld(new THREE.Vector3(0, 0, d / 2 + 1.6)); colliders.push({ x: tp.x, z: tp.z, r: 3.2 });
+    return g;
+  }
+  // a big timber warehouse with loading doors and a hoist beam
+  function warehouse(F, u, v, facing, w = 14, d = 10) {
+    const g = new THREE.Group(), h = 7;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), VB.wood); body.position.y = h / 2; g.add(body);
+    for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 6) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, h, 0.2), VB.dark); b.position.set(x, h / 2, d / 2 + 0.1); g.add(b); }
+    const rs = new THREE.Shape(); rs.moveTo(-w / 2 - 0.5, 0); rs.lineTo(0, 3.5); rs.lineTo(w / 2 + 0.5, 0); rs.lineTo(-w / 2 - 0.5, 0);
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(rs, { depth: d + 1, bevelEnabled: false }), VB.slate); roof.position.set(0, h, -d / 2 - 0.5); g.add(roof);
+    const dr = new THREE.Mesh(new THREE.BoxGeometry(4, 4.5, 0.2), VB.dark); dr.position.set(0, 2.25, d / 2 + 0.12); g.add(dr);
+    const loft = new THREE.Mesh(new THREE.BoxGeometry(2, 1.8, 0.2), VB.dark); loft.position.set(0, 6, d / 2 + 0.12); g.add(loft);
+    const hoist = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 2), VB.dark); hoist.position.set(0, 7.3, d / 2 + 1); g.add(hoist);
+    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), DK.crate); c.position.set(-w / 2 + 1 + (i % 2) * 1.3, 0.6 + Math.floor(i / 2) * 1.2, d / 2 + 1.2); g.add(c); }
+    place(F, g, u, v, facing, -0.2);
+    colliders.push({ box: true, x: g.position.x, z: g.position.z, hw: w / 2 + 0.2, hd: d / 2 + 1.8, rot: g.rotation.y });
+    return g;
+  }
+  // a market stall with a striped awning and goods on the counter
+  function stall(F, u, v, facing, col) {
+    const g = new THREE.Group();
+    const tbl = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1, 1.4), VB.wood); tbl.position.y = 0.5; g.add(tbl);
+    [[-1.6, -0.6], [1.6, -0.6], [-1.6, 0.8], [1.6, 0.8]].forEach(([x, z]) => { const q = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.8, 0.12), VB.dark); q.position.set(x, 1.4, z); g.add(q); });
+    for (let i = 0; i < 5; i++) { const aw = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.06, 2.2), lam(i % 2 ? 0xf2ead8 : col)); aw.position.set(-1.45 + i * 0.72, 2.85, 0.15); aw.rotation.x = 0.18; g.add(aw); }
+    const goods = pickV([[0xf08a24, 'sph'], [0xc0392b, 'sph'], [0x8fb84a, 'sph'], [0xd8c8a0, 'box'], [0x6a8aa8, 'fish']]);
+    for (let i = 0; i < 10; i++) { const m = goods[1] === 'box' ? new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), lam(goods[0])) : goods[1] === 'fish' ? new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 5), lam(goods[0])) : new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 5), lam(goods[0]));
+      if (goods[1] === 'fish') m.rotation.z = Math.PI / 2; m.position.set(-1.3 + (i % 5) * 0.65, 1.15, -0.3 + Math.floor(i / 5) * 0.55); g.add(m); }
+    const bk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.5, 8), VB.thatch); bk.position.set(1.9, 0.25, 0.9); g.add(bk);
+    place(F, g, u, v, facing);
+    const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 1.9 });
+  }
+  function well(F, u, v) {
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.55, 1.1, 14), VB.stone); ring.position.y = 0.55; g.add(ring);
+    const water = new THREE.Mesh(new THREE.CircleGeometry(1.15, 14), lam(0x2a4a5a)); water.rotation.x = -Math.PI / 2; water.position.y = 0.95; g.add(water);
+    [-1.2, 1.2].forEach(x => { const q = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.8, 0.22), VB.dark); q.position.set(x, 1.9, 0); g.add(q); });
+    const ax = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.6, 6), VB.dark); ax.rotation.z = Math.PI / 2; ax.position.y = 2.6; g.add(ax);
+    const rf = new THREE.Mesh(new THREE.ConeGeometry(2.1, 1.3, 4), VB.thatch); rf.rotation.y = Math.PI / 4; rf.position.y = 3.6; g.add(rf);
+    const bk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.4, 8), VB.wood); bk.position.set(0, 1.6, 0); g.add(bk);
+    place(F, g, u, v); const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 1.7 });
+  }
+  function lampPost(F, u, v) {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 0.2), VB.dark); pole.position.y = 2; g.add(pole);
+    const cage = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), DK.iron); cage.position.y = 4.2; g.add(cage);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.45, 0.38), lanternMat); gl.position.y = 4.2; g.add(gl);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.4, 4), DK.iron); cap.rotation.y = Math.PI / 4; cap.position.y = 4.7; g.add(cap);
+    place(F, g, u, v); const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 0.3 });
+  }
+  function cart(F, u, v, facing) {
+    const g = new THREE.Group();
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 3), VB.wood); bed.position.y = 1.0; g.add(bed);
+    [-1, 1].forEach(sd => { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.15, 12), VB.dark); wh.rotation.z = Math.PI / 2; wh.position.set(sd * 1.0, 0.75, -0.3); g.add(wh); });
+    [-0.35, 0.35].forEach(x => { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 2.2), VB.dark); sh.position.set(x, 0.8, 2.4); sh.rotation.x = 0.25; g.add(sh); });
+    const hay = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, 2.6), VB.hay); hay.position.y = 1.6; g.add(hay);
+    place(F, g, u, v, facing); const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 1.7 });
+  }
+  function haystack(F, u, v) { const h = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3, 9), VB.hay); h.position.y = 1.4; const g = new THREE.Group(); g.add(h); place(F, g, u, v); const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 1.6 }); }
+  // a fenced crop field: rows of green, a scarecrow in the middle
+  function field(F, u0, v0, u1, v1) {
+    const g = new THREE.Group(); const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, W = Math.abs(v1 - v0), Lu = Math.abs(u1 - u0);
+    const soil = new THREE.Mesh(new THREE.BoxGeometry(W, 0.12, Lu), VB.soil); soil.position.y = 0.06; g.add(soil);
+    for (let k = 0; k < Math.floor(W / 1.4); k++) { const row = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, Lu - 1), k % 2 ? VB.crop : VB.crop2); row.position.set(-W / 2 + 0.9 + k * 1.4, 0.35, 0); g.add(row); }
+    for (let x = -W / 2; x <= W / 2 + 0.01; x += W / Math.ceil(W / 3)) [-Lu / 2, Lu / 2].forEach(z => { const fp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), VB.wood); fp.position.set(x, 0.55, z); g.add(fp); });
+    [-W / 2, W / 2].forEach(x => { for (let z = -Lu / 2; z <= Lu / 2 + 0.01; z += Lu / Math.ceil(Lu / 3)) { const fp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), VB.wood); fp.position.set(x, 0.55, z); g.add(fp); } });
+    [0.45, 0.9].forEach(y => { [-Lu / 2, Lu / 2].forEach(z => { const r = new THREE.Mesh(new THREE.BoxGeometry(W, 0.07, 0.07), VB.wood); r.position.set(0, y, z); g.add(r); }); [-W / 2, W / 2].forEach(x => { const r = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, Lu), VB.wood); r.position.set(x, y, 0); g.add(r); }); });
+    const sc = new THREE.Group(); const sp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), VB.dark); sp.position.y = 1.3; sc.add(sp);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.1), VB.dark); arm.position.y = 2; sc.add(arm);
+    const coat = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1, 0.35), lam(0x6b3a2a)); coat.position.y = 1.7; sc.add(coat);
+    const hd = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), VB.hay); hd.position.y = 2.5; sc.add(hd);
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.4, 8), VB.thatch); hat.position.y = 2.8; sc.add(hat);
+    g.add(sc);
+    place(F, g, cu, cv);
+  }
+  function fenceRun(F, u0, v0, u1, v1) {
+    const g = new THREE.Group(), L = Math.hypot(u1 - u0, v1 - v0), n = Math.max(1, Math.round(L / 2.5));
+    for (let i = 0; i <= n; i++) { const fp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), VB.wood); fp.position.set(0, 0.55, -L / 2 + i * L / n); g.add(fp); }
+    [0.45, 0.9].forEach(y => { const r = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, L), VB.wood); r.position.set(0, y, 0); g.add(r); });
+    place(F, g, (u0 + u1) / 2, (v0 + v1) / 2, Math.atan2(v1 - v0, u1 - u0) * -1 + 0);
+    // (fence is purely decorative: no collider, so it never traps anyone)
+  }
+  const VILLAGER_LINES = [
+    ["Fair winds to ye. Mind the raiders up in the hills, they come down at night."],
+    ["The harvest's been good this year. The rain's been kind."],
+    ["Ye've the look of a sailor. Plenty of work on the docks if yer short of coin."],
+    ["My husband fishes the reef. Says he saw a serpent the size of a church last week."],
+    ["Don't go near the camp past the ridge. Blackwater men, the lot of 'em."],
+    ["The chapel bell rings at dawn. Gets us all out of bed, whether we like it or not."],
+    ["They say there's treasure buried on every island in these parts. I've only ever dug up turnips."],
+  ];
+  const V_SHIRTS = [0xe9e2d0, 0xb03a2e, 0x2c5f8a, 0xd9c7a0, 0x5d6d3e, 0x8a5a9a, 0xc98a3a], V_PANTS = [0x3a3226, 0x2d2a33, 0x4f3a28, 0x5a5a5a, 0x2f4050], V_SKINS = [0xf0c8a0, 0xe0ac7e, 0xc98f62, 0xa8714f, 0x8d5a3b, 0x6b4430], V_HAIRS = [0x1a1a1a, 0x3b2414, 0x6b3a1f, 0xb5651d, 0xd0d0d0];
+  const villagerLook = () => ({ shirt: pickV(V_SHIRTS), pants: pickV(V_PANTS), skin: pickV(V_SKINS), hair: pickV(V_HAIRS), hat: pickV([undefined, 'straw', 'cap', 'bandana']), hatColor: pickV([0xc9b078, 0x5d6d3e, 0x8e1f1f, 0x2c5f8a]), ...(rand() < 0.4 ? { dress: pickV([0x6c3483, 0x2b6cb0, 0x9a5b48, 0x5d6d3e]), longHair: true } : {}) });
+  const VILLAGER_NAMES = ['Ned', 'Hester', 'Wat', 'Agnes', 'Cobb', 'Mabel', 'Tam', 'Ida', 'Jory', 'Bess', 'Abel', 'Nell', 'Osric', 'Win', 'Hob', 'Peg', 'Dunstan', 'Ivy'];
+  function addVillagers(F, n, uR, vR) {
+    for (let i = 0; i < n; i++) VILLAGE_NPCS.push({ name: VILLAGER_NAMES[(VILLAGE_NPCS.length) % VILLAGER_NAMES.length], wander: true, speed: 1.6,
+      area: () => frameLocal(F, (rand() - 0.5) * 2 * uR, (rand() - 0.5) * 2 * vR), look: villagerLook(), lines: VILLAGER_LINES[(VILLAGE_NPCS.length + i) % VILLAGER_LINES.length] });
+  }
+  // the two big towns grow outward: side lanes lined with townhouses, a chapel behind the tavern, a market, warehouses
+  // by the harbour, lamp posts down the main street, and gardens on the edge of town
+  function growTown(S) {
+    const F = S.F, I = ISLANDS[S.i]; decoParent = I.group;
+    for (const sd of [-1, 1]) {
+      for (let u = -56; u <= 52; u += 12) {
+        if (Math.abs(u + 45) < 6 || Math.abs(u - 35) < 6) continue;
+        (rand() < 0.75 ? townhouse : cottage)(F, u, sd * 35, sd > 0 ? Math.PI / 2 : -Math.PI / 2);   // facing the side lane
+        (rand() < 0.5 ? townhouse : cottage)(F, u, sd * 54, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
+      }
+      for (let u = 40; u <= 74; u += 11) townhouse(F, u, sd * 15, sd > 0 ? Math.PI / 2 : -Math.PI / 2, 7.5, 7.5);   // down toward the harbour
+      warehouse(F, 80, sd * 34, sd > 0 ? Math.PI / 2 : -Math.PI / 2);
+      for (let u = -20; u <= 80; u += 20) lampPost(F, u, sd * 9.5);
+      lampPost(F, -45, sd * 22); lampPost(F, 35, sd * 22);
+      stall(F, 30, sd * 6.5, sd > 0 ? Math.PI / 2 : -Math.PI / 2, pickV([0xb03a2e, 0x2c5f8a, 0x5d6d3e]));
+      stall(F, 36, sd * 6.5, sd > 0 ? Math.PI / 2 : -Math.PI / 2, pickV([0xb03a2e, 0x2c5f8a, 0xc98a3a]));
+      fenceRun(F, -60, sd * 64, 50, sd * 64);
+      cart(F, -40, sd * 44, Math.PI / 2 * sd);
+    }
+    chapel(F, -60, 0, 0);
+    well(F, 24, 0);
+    addVillagers(F, 4, 55, 40);
+    decoParent = null;
+  }
+  // a new village: a main street down to the sea, a cross street, a plaza with a well and market, a chapel at the top
+  // of the street, cottages and townhouses, a barn with fields and haystacks on the edge of town
+  function buildVillage(S) {
+    const F = S.F, I = ISLANDS[S.i]; decoParent = I.group;
+    for (const sd of [-1, 1]) {
+      for (const u of [-38, -26, 16, 28, 40]) (rand() < 0.5 ? townhouse : cottage)(F, u, sd * 12, sd > 0 ? Math.PI / 2 : -Math.PI / 2);
+      for (const v of [24, 36]) (rand() < 0.5 ? cottage : townhouse)(F, sd * 12, v * (rand() < 0.5 ? 1 : -1) * 0 + (sd > 0 ? v : -v), sd > 0 ? Math.PI : 0);
+      lampPost(F, -20, sd * 6.5); lampPost(F, 22, sd * 6.5);
+    }
+    chapel(F, -58, 0, 0);
+    well(F, 0, 0);
+    stall(F, 6, 6, Math.PI / 2, pickV([0xb03a2e, 0x2c5f8a, 0x5d6d3e])); stall(F, -6, -6, -Math.PI / 2, pickV([0xb03a2e, 0xc98a3a, 0x8a5a9a]));
+    warehouse(F, 36, -34, -Math.PI / 2, 12, 9);
+    field(F, 20, 24, 44, 46);
+    haystack(F, 50, -20); haystack(F, 47, -24); haystack(F, 52, -26);
+    cart(F, 30, -22, 0.4);
+    addVillagers(F, 3, 40, 10);
+    decoParent = null;
+  }
+  for (const S of SITES) {
+    if (S.kind === 'town') growTown(S); else if (S.kind === 'village') buildVillage(S);
+    SPOTS.push({ x: S.x, z: S.z, r: S.r + 6 });
+  }
+
+  // ---------- Forests: broad-leaved trees in the lowlands, pines up on the hills ----------
+  const OAK_TRUNK_GEO = new THREE.CylinderGeometry(0.35, 0.6, 1, 6).translate(0, 0.5, 0), CROWN_GEO = new THREE.IcosahedronGeometry(1, 1);
+  const PINE_GEO = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
+  const oakLeafM = lam(0x3f7f34), oakLeafM2 = lam(0x58913f), pineM = lam(0x2f5f36), barkM = lam(0x5a4130);
+  const TREE_K = { home: 1, port: 0.8, jungle: 2.2, volcano: 0.5, skull: 0.35, sandbar: 0.25, islet: 0.3, cove: 0.6 };
   for (const I of ISLANDS) {
     floraBin = { trunks: [], leaves: [], rocks: [], darkRocks: [], bushes: [] };
     const nPalms = Math.round(I.palms * 2.6), maxH = I.kind === 'volcano' ? 14 : 26;
@@ -818,6 +1166,30 @@
       const sc = (1.5 + rand() * 3.5) * (I.kind === 'skull' || I.kind === 'volcano' ? 1.4 : 1);
       floraBin[I.kind === 'volcano' ? 'darkRocks' : 'rocks'].push(placed(x, h + sc * 0.3, z, sc, sc, sc, rand() * 3, rand() * 3, rand() * 3));
       colliders.push({ x, z, r: sc * 0.85 }); n++;
+    }
+    // forests: clumped by noise, oaks below, pines on the high ground
+    {
+      const trunks = [], crowns = [], crowns2 = [], pines = [], pineTrunks = [];
+      const nT = Math.round(I.r * I.r / 1500 * (TREE_K[I.kind] || 0.5)), P_ = PALETTES[I.kind];
+      for (let tries = 0, n = 0; tries < nT * 12 && n < nT; tries++) {
+        const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * I.r * 1.2;
+        const x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z);
+        if (h < 7 || h > P_.rockH * 1.6 || (I.kind === 'volcano' && h > 60) || nearTown(x, z, 10) || !clear(x, z)) continue;
+        if (vnoise(x * 0.012 + I.seed * 2, z * 0.012) < 0.42) continue;   // woods and glades
+        const pine = h > P_.rockH * 0.55 || (I.kind !== 'jungle' && rand() < 0.25);
+        if (pine) {
+          const ht = 10 + rand() * 9, rr = 2.2 + rand() * 1.2;
+          pineTrunks.push(placed(x, h - 0.3, z, 0.8, ht * 0.35, 0.8, 0, 0, 0));
+          for (let k = 0; k < 3; k++) pines.push(placed(x, h + ht * (0.2 + k * 0.24), z, rr * (1 - k * 0.27), ht * 0.42, rr * (1 - k * 0.27), 0, rand() * 6, 0));
+        } else {
+          const ht = 4 + rand() * 3, cr = 2.6 + rand() * 1.8;
+          trunks.push(placed(x, h - 0.3, z, 1.1, ht + cr * 0.5, 1.1, (rand() - 0.5) * 0.1, 0, (rand() - 0.5) * 0.1));
+          for (let k = 0; k < 3; k++) { const ox = (rand() - 0.5) * cr, oz = (rand() - 0.5) * cr; (k % 2 ? crowns2 : crowns).push(placed(x + ox, h + ht + cr * (0.5 + rand() * 0.5), z + oz, cr * (0.8 + rand() * 0.4), cr * (0.7 + rand() * 0.3), cr * (0.8 + rand() * 0.4), rand(), rand() * 6, 0)); }
+        }
+        colliders.push({ x, z, r: 0.8 }); n++;
+      }
+      const mk = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; I.group.add(im); };
+      mk(OAK_TRUNK_GEO, barkM, trunks); mk(OAK_TRUNK_GEO, barkM, pineTrunks); mk(CROWN_GEO, oakLeafM, crowns); mk(CROWN_GEO, oakLeafM2, crowns2); mk(PINE_GEO, pineM, pines);
     }
     flushFlora(I);
   }
@@ -1235,21 +1607,22 @@
   // ---------- Walkable ground ----------
   const DOCK_TOP = DECK_Y + 0.25;
   const DOCKS = [
-    { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, head: 13, headLen: 8 },
-    { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: 60, head: 10, headLen: 8 },
+    { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, hw: DOCK_HW, head: DOCK_HEAD, headLen: DOCK_HEADLEN },
+    { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 },
   ];
+  DOCKS.forEach(d => d.rr = Math.pow(d.len + d.headLen + d.head + 8, 2));
   function onDock(x, z) {
     for (const d of DOCKS) {
       const px = x - d.base.x, pz = z - d.base.y;
-      if (px * px + pz * pz > 12000) continue;
+      if (px * px + pz * pz > d.rr) continue;
       const lx = -(px * d.perp.x + pz * d.perp.y), lz = px * d.dir.x + pz * d.dir.y;
-      if ((Math.abs(lx) <= 4 && lz >= -3 && lz <= d.len + 1) || (Math.abs(lx) <= d.head && lz >= d.len - 1 && lz <= d.len + d.headLen)) return true;
+      if ((Math.abs(lx) <= d.hw && lz >= -3 && lz <= d.len + 1) || (Math.abs(lx) <= d.head && lz >= d.len - 1 && lz <= d.len + d.headLen)) return true;
     }
     return false;
   }
   const groundAt = (x, z) => onDock(x, z) ? Math.max(heightAt(x, z), DOCK_TOP) : heightAt(x, z);
-  const walkable = (x, z) => { if (onDock(x, z)) return true; const h = heightAt(x, z); return h > 0.6 && h < 50; };
-  const playerOK = (x, z) => onDock(x, z) || heightAt(x, z) < 50;
+  const walkable = (x, z) => { if (onDock(x, z)) return true; const h = heightAt(x, z); return h > 0.6 && h < 300; };
+  const playerOK = (x, z) => onDock(x, z) || heightAt(x, z) < 300;   // the hills are there to be climbed
   function waveHeight(x, z, t) {
     let y = 0;
     for (let i = 0; i < WAVE_N; i++) { const w = waveUniform[i], k = 2 * Math.PI / w.w, c = Math.sqrt(9.8 / k); y += (w.z / k) * Math.sin(k * (w.x * x + w.y * z - c * t) + wavePhase[i]); }
@@ -1596,7 +1969,7 @@
       lines: ["Welcome to the Salty Gull! Best grog on the island.", "...Only grog on the island, too.", "Captain Blackwater drank here once. Left without payin'. Typical."] },
     { name: 'Rosa', at: local(1, 7), face: PERP.clone().negate(), look: { shirt: 0xc0392b, dress: 0x6c3483, pants: 0x6c3483, hair: 0x1a1a1a, longHair: true, skin: 0xa8714f },
       lines: ["Fresh oranges! Rope! Slightly used cannonballs!", "Come back when ye've got some coins, love."] },
-    { name: 'Silas', at: ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.68).addScaledVector(PERP, 40), face: DOCK_DIR, look: { coat: 0x2c3e50, shirt: 0xdcdcdc, pants: 0x34495e, hat: 'cap', hatColor: 0x2c3e50, beard: 0xbfbfbf, skin: 0xe0b48e },
+    { name: 'Silas', at: local(52, 26), face: DOCK_DIR, look: { coat: 0x2c3e50, shirt: 0xdcdcdc, pants: 0x34495e, hat: 'cap', hatColor: 0x2c3e50, beard: 0xbfbfbf, skin: 0xe0b48e },
       lines: ["Forty years I've kept that light burnin'.", "Storms past the reef have sunk many a ship. Mind the rocks, captain."] },
     { name: 'Elsie', wander: true, look: { shirt: 0xf5e6c8, dress: 0x3c8d6e, pants: 0x3c8d6e, hair: 0xb5651d, longHair: true, skin: 0xf0c8a0 },
       lines: ["Lovely day, isn't it?", "My husband's out fishin'. Should be back by sundown."] },
@@ -1625,6 +1998,7 @@
     { name: 'Old Pavo', at: frameLocal(PORT_FRAME, 27, -5), face: PORT_FRAME.dir, look: { shirt: 0x7c6a45, pants: 0x39332e, beard: 0xb4a58d, hair: 0xb4a58d, skin: 0xc28d6b }, lines: ["The sea leaves things behind. Some are worth finding."] },
     { name: 'Sera the navigator', at: frameLocal(PORT_FRAME, -27, 5), face: PORT_FRAME.dir, look: { shirt: 0x4d6680, dress: 0x40546b, hair: 0x5a3425, longHair: true, skin: 0xd6a17b }, lines: ["Charts are only guesses until someone sails the route."] },
   ];
+  NPC_DEFS.push(...VILLAGE_NPCS);   // the folk of the towns and villages
   const tagLayer = document.getElementById('tags');
   const hudTitle = document.querySelector('#hud h1');
   const npcs = NPC_DEFS.map(def => {
@@ -2471,7 +2845,7 @@
     if (ship && onShip) detach();
     if (ship && ship.crew) ship.crew.forEach(c => c.tag.remove());
     if (ship) scene.remove(ship.group);
-    const m = buildPlayerShip(key), at = dockWorld(0, DOCK_LEN + 8 + m.T.B / 2 + 2.5);
+    const m = buildPlayerShip(key), at = dockWorld(0, DOCK_LEN + DOCK_HEADLEN + m.T.B / 2 + 3);
     ship = Object.assign(m, { x: at.x, z: at.y, heading: Math.atan2(PERP.x, PERP.y), speed: 0, steer: 0, pitch: 0, roll: 0, diveDepth: -22, sailSet: 0.12, sailTarget: 0.12, hp: shipMaxHp(m, key), maxHp: shipMaxHp(m, key), reload: { 1: 0, '-1': 0 } });
     STATE.shipKey = key; save();
     spawnCrew();
@@ -3661,7 +4035,7 @@
   //   sail   - sail yer ship to a spot at sea
   //   kraken - sail to a spot in deep water, then drive off the Kraken when it comes
   const isNight = () => gameTime >= 20 || gameTime < 5;
-  const SEA_W1 = { x: -900, z: -2700 }, SEA_W2 = { x: 1500, z: -2600 }, SEA_W3 = { x: 3300, z: -1900 }, KRAKEN_DEEP = { x: 1100, z: 3300 };
+  const SEA_W1 = { x: -900 * WS, z: -2700 * WS }, SEA_W2 = { x: 1500 * WS, z: -2600 * WS }, SEA_W3 = { x: 3300 * WS, z: -1900 * WS }, KRAKEN_DEEP = { x: 1100 * WS, z: 3300 * WS };
   const COVE_SHORE = beachSpot(ISLANDS[8], -1, 2.2, 0.9);
   const matList = m => Object.entries(m).map(([k, n]) => `${n} ${MATS[k].name.toLowerCase()}`).join(' and ');
   const QUESTS = {
@@ -3979,10 +4353,10 @@
   const lootMatB = lam(0x7a4b2a), lootMatC = lam(0xa57b4a);
   function lootSpot() {
     for (let i = 0; i < 80; i++) {
-      const x = -4500 + Math.random() * 9500, z = -4300 + Math.random() * 9000;
+      const x = (-4500 + Math.random() * 9500) * WS, z = (-4300 + Math.random() * 9000) * WS;
       if (heightAt(x, z) <= -6.9 && Math.hypot(x - DOCK_BASE.x, z - DOCK_BASE.y) > 160) return { x, z };
     }
-    return { x: 600, z: -600 };
+    return { x: 600 * WS, z: -600 * WS };
   }
   for (let i = 0; i < 46; i++) {
     const q = lootSpot(), barrel = i % 2 === 0;
@@ -4249,6 +4623,14 @@
       if (x < -80 || x > W + 80 || y < -80 || y > H + 80) continue;
       if (big || r > 5) { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = big ? '13px Georgia' : '10px Georgia'; ctx.textAlign = 'center'; ctx.strokeText(I.name, x, y - r * 1.15 - 4); ctx.fillText(I.name, x, y - r * 1.15 - 4); }
     }
+    // towns and villages (a little roof) and raider camps (a red skull-and-crossed mark)
+    for (const St of SITES) {
+      const [x, y] = S(St.x, St.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
+      const k = big ? 1 : 0.8;
+      if (St.kind === 'camp') { ctx.strokeStyle = '#b3261e'; ctx.lineWidth = 2 * k; ctx.beginPath(); ctx.moveTo(x - 3.5 * k, y - 3.5 * k); ctx.lineTo(x + 3.5 * k, y + 3.5 * k); ctx.moveTo(x + 3.5 * k, y - 3.5 * k); ctx.lineTo(x - 3.5 * k, y + 3.5 * k); ctx.stroke(); }
+      else { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - 4 * k, y + 3 * k); ctx.lineTo(x - 4 * k, y - 1 * k); ctx.lineTo(x, y - 5 * k); ctx.lineTo(x + 4 * k, y - 1 * k); ctx.lineTo(x + 4 * k, y + 3 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (big && St.kind === 'village') { ctx.fillStyle = '#fff3d6'; ctx.strokeStyle = 'rgba(20,14,8,.6)'; ctx.lineWidth = 3; ctx.font = 'italic 10px Georgia'; ctx.textAlign = 'center'; ctx.strokeText(St.name, x, y + 14); ctx.fillText(St.name, x, y + 14); } }
+    }
     { const [x, y] = S(MIST.x, MIST.z), r = MIST.r / scale;
       if (x > -r - 80 && x < W + r + 80 && y > -r - 80 && y < H + r + 80) {
         const gr = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.15); gr.addColorStop(0, 'rgba(225,230,233,0.42)'); gr.addColorStop(1, 'rgba(225,230,233,0)');
@@ -4284,7 +4666,7 @@
     const mp = mapPos(); drawMapTo(mctx, 200, 200, mp.x, mp.z, 18, false);
     if (uiOpen === 'map') drawBigMap();
   }
-  const BIG = { cx: 300, cz: 0, s: 15.5 };
+  const BIG = { cx: 900, cz: 450, s: 31 };   // the chart frames the whole archipelago
   const STATE_unknown = { out: false };   // the chart shows the home waters, as it always has
   function drawBigMap() { drawMapTo(bctx, 640, 640, BIG.cx, BIG.cz, BIG.s, true); drawRouteOverlay(); }
   function drawRouteOverlay() {
@@ -4382,6 +4764,7 @@
     if (nearEmptyPedestal()) { toast(`The pedestal is empty. Ye already carry a horn; Captain ${HORN.owner} holds the true one.`); return; }
     const qs = nearQSpot(); if (qs) { qs.act(); return; }
     const nd = nearNode(); if (nd) { gather(nd); return; }
+    const cc = nearCampChest(); if (cc) { lootCampChest(cc); return; }
     if (nearSwordStone()) { summonMermaid(); return; }
     const n = nearestNpc();
     if (n) {
@@ -4748,10 +5131,10 @@
       NODES.push({ kind, g, x: q.x, z: q.z, respawn: 0, label: { wood: 'Gather hardwood', pearl: 'Pry open the oyster', gem: 'Chip out the fire gem' }[kind] });
     }
   }
-  addNodes(ISLANDS[2], 'wood', 9, 4.5, 30); addNodes(ISLANDS[9], 'wood', 4, 4.5, 20); addNodes(ISLANDS[7], 'wood', 2, 4, 12);
-  [1, 6, 7].forEach(i => addNodes(ISLANDS[i], 'pearl', 3, -0.5, 1.6));
-  addNodes(ISLANDS[8], 'pearl', 10, -0.5, 1.6);
-  addNodes(ISLANDS[3], 'gem', 5, 3.5, 10);
+  addNodes(ISLANDS[2], 'wood', 22, 4.5, 60); addNodes(ISLANDS[9], 'wood', 9, 4.5, 30); addNodes(ISLANDS[7], 'wood', 5, 4, 20); addNodes(ISLANDS[0], 'wood', 8, 6, 80); addNodes(ISLANDS[5], 'wood', 6, 6, 80);
+  [1, 6, 7, 0, 9].forEach(i => addNodes(ISLANDS[i], 'pearl', 6, -0.5, 1.6));
+  addNodes(ISLANDS[8], 'pearl', 22, -0.5, 1.6);
+  addNodes(ISLANDS[3], 'gem', 12, 3.5, 14);
   function nearNode() { if (onShip || sailing || inInterior) return null; return NODES.find(n => n.respawn <= 0 && Math.hypot(n.x - P.pos.x, n.z - P.pos.z) < 3.6) || null; }
   function gather(n) {
     SFX[n.kind === 'wood' ? 'chop' : n.kind === 'gem' ? 'ping' : 'shell']();
@@ -4760,6 +5143,7 @@
     else if (n.kind === 'pearl') { if (Math.random() < 0.65) addMat('pearl', 1); else toast('Just an empty shell this time.'); }
     else addMat('gem', 1);
   }
+  function updateCampChests(dt) { for (const C of CAMP_CHESTS) if (C.cd > 0) C.cd -= dt; }
   function updateNodes(dt) { for (const n of NODES) if (n.respawn > 0) { n.respawn -= dt; if (n.respawn <= 0) n.g.visible = true; } }
 
   // talking to Tom and Quint
@@ -4914,6 +5298,77 @@
   }
   makeCamp(ISLANDS[9], { x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }, 4, 'Bandit');
   makeCamp(ISLANDS[4], { x: SPOT_X.x + 14, z: SPOT_X.z + 10 }, 3, 'Blackwater thug');
+  // Blackwater raider camps up in the hills: a palisade of sharpened logs with a gate, a watchtower, big canvas tents,
+  // a fire, stacked plunder and a black flag. Same order and spots as the server (world.js CAMP_TENTS), so bandits match.
+  const CAMP_TENTS = [[9, 3], [-8, 6], [2, -10], [-7, -7]];
+  // each camp guards a plunder chest: clear the camp, then help yerself (it fills up again in a while)
+  const CAMP_CHESTS = [];
+  const campCleared = C => !bandits.some(b => b.home.x === C.home.x && b.home.z === C.home.z && b.state !== 'dead' && b.state !== 'gone');
+  function nearCampChest() { if (onShip || sailing || inInterior) return null; return CAMP_CHESTS.find(C => Math.hypot(C.x - P.pos.x, C.z - P.pos.z) < 3) || null; }
+  function lootCampChest(C) {
+    if (C.cd > 0) { toast("The chest's empty. The raiders will have stashed more by and by."); return; }
+    if (!campCleared(C)) { toast("Not with raiders still standin' guard! Deal with 'em first."); return; }
+    C.cd = 600; SFX.coin && SFX.coin();
+    addGold(250 + Math.floor(crand() * 350), 'Raider plunder'); addMat('iron', 2); if (crand() < 0.35) addMat('pearl', 1 + (crand() < 0.3 ? 1 : 0));
+  }
+  function raiderCamp(S) {
+    const I = ISLANDS[S.i], g = I.group, c = { x: S.x, z: S.z }, y = heightAt(c.x, c.z), F = S.F;
+    const logM = lam(0x6b4a2e), logD = lam(0x4a3220), canvas = lam(0x9a8a6a), canvas2 = lam(0x7a6a4a);
+    // palisade: a ring of pointed logs, open at the gate (facing down toward the sea)
+    const logs = [], tips = [], RP = 19;
+    const gateA = Math.atan2(F.dir.y, F.dir.x);
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+      const da = Math.atan2(Math.sin(a - gateA), Math.cos(a - gateA)); if (Math.abs(da) < 0.17) continue;
+      const x = c.x + Math.cos(a) * RP, z = c.z + Math.sin(a) * RP, hy = heightAt(x, z), ht = 4.2 + Math.sin(a * 7) * 0.4;
+      logs.push(dkM(x, hy - 0.5, z, 0.42, ht, 0.42, 0, 0, (Math.random() - 0.5) * 0.06)); tips.push(dkM(x, hy - 0.5 + ht, z, 0.42, 0.9, 0.42, 0, 0, 0));
+      if (Math.round(a / 0.05) % 3 === 0) colliders.push({ x, z, r: 0.9 });
+    }
+    instanced(new THREE.CylinderGeometry(1, 1, 1, 6).translate(0, 0.5, 0), logM, logs, g); instanced(new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0), logD, tips, g);
+    // gate posts and a crossbeam with a skull
+    [-0.2, 0.2].forEach(o => { const a = gateA + o, x = c.x + Math.cos(a) * RP, z = c.z + Math.sin(a) * RP; const gp = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 7, 6), logD); gp.position.set(x, heightAt(x, z) + 3, z); g.add(gp); colliders.push({ x, z, r: 0.8 }); });
+    { const x = c.x + Math.cos(gateA) * RP, z = c.z + Math.sin(gateA) * RP; const cb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 8.6), logD); cb.position.set(x, heightAt(x, z) + 6.2, z); cb.rotation.y = -gateA; g.add(cb);
+      const sk = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), lam(0xd9d2bf)); sk.position.set(x, heightAt(x, z) + 5.6, z); g.add(sk); }
+    // watchtower inside the wall, opposite the gate
+    { const a = gateA + Math.PI * 0.8, x = c.x + Math.cos(a) * (RP - 5), z = c.z + Math.sin(a) * (RP - 5), ty = heightAt(x, z), tw = new THREE.Group(); tw.position.set(x, ty, z); g.add(tw);
+      [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]].forEach(([dx, dz]) => { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 9, 6), logD); l.position.set(dx, 4.5, dz); tw.add(l); });
+      const fl = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.3, 4.4), logM); fl.position.y = 8.6; tw.add(fl);
+      [[0, 2.1, 4.4, 0.15], [0, -2.1, 4.4, 0.15], [2.1, 0, 0.15, 4.4], [-2.1, 0, 0.15, 4.4]].forEach(([dx, dz, w, d]) => { const r = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), logM); r.position.set(dx, 9.3, dz); tw.add(r); });
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(3.4, 2, 4), canvas2); rf.rotation.y = Math.PI / 4; rf.position.y = 12.2; tw.add(rf);
+      [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]].forEach(([dx, dz]) => { const l = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.4, 0.15), logD); l.position.set(dx, 10.4, dz); tw.add(l); });
+      for (let k = 0; k < 9; k++) { const rung = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), logD); rung.position.set(0, 0.6 + k * 0.95, 2.2); tw.add(rung); }
+      colliders.push({ x, z, r: 2.6 }); }
+    // tents: big ridge tents with a pole at each end
+    CAMP_TENTS.forEach(([dx, dz], k) => {
+      const tx = c.x + dx, tz = c.z + dz, t = new THREE.Group(); t.position.set(tx, heightAt(tx, tz), tz); t.rotation.y = 0.4 + k * 1.3; g.add(t);
+      const sh = new THREE.Shape(); sh.moveTo(-2.4, 0); sh.lineTo(0, 3); sh.lineTo(2.4, 0); sh.lineTo(-2.4, 0);
+      const cv = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 4.5, bevelEnabled: false }), k % 2 ? canvas : canvas2); cv.position.z = -2.25; t.add(cv);
+      [-2.4, 2.4].forEach(z => { const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.4, 5), logD); pl.position.set(0, 1.7, z); t.add(pl); });
+      const flap = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2), lam(0x2a2620)); flap.position.set(0, 0.9, 2.26); t.add(flap);
+      colliders.push({ x: tx, z: tz, r: 2.6 });
+    });
+    // the fire pit with logs and a spit
+    [0, 1, 2].forEach(i => { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.8, 6), logD); l.position.set(c.x, y + 0.2, c.z); l.rotation.set(Math.PI / 2, i * 1.05, 0); g.add(l); });
+    for (let i = 0; i < 8; i++) { const st = new THREE.Mesh(ROCK_GEO, rockMat); st.scale.setScalar(0.35); const a = i / 8 * 6.28; st.position.set(c.x + Math.cos(a) * 1.3, y + 0.15, c.z + Math.sin(a) * 1.3); g.add(st); }
+    [-1.4, 1.4].forEach(o => { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 0.1), logD); sp.position.set(c.x + o, y + 0.8, c.z); g.add(sp); });
+    const spit = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 4), DK.iron); spit.rotation.z = Math.PI / 2; spit.position.set(c.x, y + 1.55, c.z); g.add(spit);
+    const fire = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff7a2a, transparent: true, depthWrite: false })); fire.position.set(c.x, y + 0.9, c.z); fire.scale.set(2.4, 2.8, 1); g.add(fire); campFires.push(fire);
+    colliders.push({ x: c.x, z: c.z, r: 1.4 });
+    // plunder: crates, barrels and a chest by the tents; a black flag on a tall pole
+    [[5, -4], [6, -2.6], [-3, 11]].forEach(([dx, dz]) => { const cr = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), DK.crate); cr.position.set(c.x + dx, heightAt(c.x + dx, c.z + dz) + 0.65, c.z + dz); cr.rotation.y = Math.random(); g.add(cr); colliders.push({ x: c.x + dx, z: c.z + dz, r: 1 }); });
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 0.9), lam(0x6b3a1f)); chest.position.set(c.x - 4, y + 0.45, c.z - 1.5); g.add(chest);
+    CAMP_CHESTS.push({ x: c.x - 4, z: c.z - 1.5, home: c, cd: 0, lidM: null });
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.4, 8, 1, false, 0, Math.PI), lam(0x6b3a1f)); lid.rotation.z = Math.PI / 2; lid.position.set(c.x - 4, y + 0.9, c.z - 1.5); g.add(lid);
+    { const fx = c.x - Math.cos(gateA) * 12, fz = c.z - Math.sin(gateA) * 12, fy = heightAt(fx, fz); const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 11, 6), logD); pole.position.set(fx, fy + 5.5, fz); g.add(pole);
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2), new THREE.MeshLambertMaterial({ map: flagTex('jolly'), side: THREE.DoubleSide })); flag.position.set(fx + 1.6, fy + 9.8, fz); g.add(flag); colliders.push({ x: fx, z: fz, r: 0.4 }); }
+    // the raiders themselves
+    for (let i = 0; i < S.n; i++) {
+      const ch = makeCharacter(banditLook()); addProp(ch, 'blade'); scene.add(ch.root);
+      const a = i / S.n * 6.28, hx = c.x + Math.cos(a) * 5, hz = c.z + Math.sin(a) * 5;
+      const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = `${S.name}<div class="ehp"><div></div></div>`; tagLayer.appendChild(tag);
+      bandits.push({ ch, tag, bar: tag.querySelector('.ehp div'), name: S.name, home: { x: c.x, z: c.z }, pos: new THREE.Vector3(hx, heightAt(hx, hz), hz), facing: a, hp: 50, max: 50, state: 'idle', atkT: 0, slashT: 0, hitAt: 0, target: null, wait: crand() * 3, deadT: 0 });
+    }
+  }
+  SITES.forEach(S => { if (S.kind === 'camp') raiderCamp(S); });
   const playerTargetable = () => !RIDE.on && !onShip && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
   function updateBandits(dt) {
     let can = playerTargetable();
@@ -5166,7 +5621,7 @@
   const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
   // pick somewhere new to sail to, anywhere on the open sea
   function raiderWaypoint(r) {
-    for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = 600 + Math.random() * 1800, x = r.x + Math.sin(a) * d, z = r.z + Math.cos(a) * d; if (raidSea(x, z)) { r.wpt = { x, z }; return; } }
+    for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = (600 + Math.random() * 1800) * 1.6, x = r.x + Math.sin(a) * d, z = r.z + Math.cos(a) * d; if (raidSea(x, z)) { r.wpt = { x, z }; return; } }
     r.wpt = { x: r.home.x, z: r.home.z };
   }
   function spawnRaider(r) {
@@ -5179,7 +5634,7 @@
     r.heading = Math.random() * 6.28; r.speed = 10; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0; r.pitch = 0; r.roll = 0;
     r.group.rotation.set(0, r.heading, 0); scene.add(r.group);
   }
-  [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']].forEach(([x, z, kind]) => {
+  [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']].map(([x, z, k]) => [x * WS, z * WS, k]).forEach(([x, z, kind]) => {
     const gal = kind === 'galleon';
     const m = makeShip(kind, { sail: 0x2a2a2a, hull: 0x2a2421, trim: 0x8e1f1f, flag: 'jolly' });
     m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
@@ -5289,7 +5744,7 @@
         if (ship.reload[side] <= 0) { ship.reload[side] = 4; fireBroadside(ship, side, false); autoFireT = 2.2; toast('Enemy spotted! Your gunners are returning fire!'); }
       }
     }
-    updateBalls(dt, t); updateFx(dt); updateNodes(dt); updateFlameBlade(dt);
+    updateBalls(dt, t); updateFx(dt); updateNodes(dt); updateCampChests(dt); updateFlameBlade(dt);
     campFires.forEach((f, i) => { const s = 2.2 + Math.sin(t * 9 + i * 2) * 0.35; f.scale.set(s, s * 1.25, 1); });
     hpFill.style.width = Math.max(0, PLAYER.hp / PLAYER.max * 100) + '%';
     if (ship) {
@@ -5422,7 +5877,7 @@
     boltGeo.attributes.position.needsUpdate = true; flashT = 0.24; SFX.thunder(d);
   }
   // the lighthouse sweeps its beam at night
-  const LH = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.72).addScaledVector(PERP, 46);
+  const LH = LIGHTHOUSE_POS;
   const beam = new THREE.Group(); beam.position.set(LH.x, heightAt(LH.x, LH.y) - 0.5 + 21.2, LH.y); scene.add(beam);
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
   [0, Math.PI].forEach(r => {
@@ -6793,7 +7248,7 @@
     for (let i = 0, n = I.name === 'Turtle Cay' ? 5 : 1; i < n; i++) addTurtle(I, false);
     if (I.name === 'Turtle Cay') for (let i = 0; i < 3; i++) addTurtle(I, true);
   });
-  for (const al of [8, 24, 40, 56, 70]) for (const sd of [-3.6, 3.6]) if (Math.random() < 0.5) { const p = dockWorld(sd, al); addGull('perch', { spot: { x: p.x, y: DOCK_TOP + 0.22, z: p.y }, face: Math.random() * 6.283 }); }
+  for (const al of [10, 30, 50, 70, 90, 110]) for (const sd of [-DOCK_HW + 0.4, DOCK_HW - 0.4]) if (Math.random() < 0.5) { const p = dockWorld(sd, al); addGull('perch', { spot: { x: p.x, y: DOCK_TOP + 0.22, z: p.y }, face: Math.random() * 6.283 }); }
   for (let i = 0; i < 3; i++) addGull('circle', { c: SHIPC, r: wr(10, 22), alt: wr(9, 18), spd: wr(11, 14) });   // gulls that follow your ship
   for (let i = 0; i < 14; i++) WL.fish.push(makeFish());
 
@@ -6818,7 +7273,7 @@
   const KR = { st: 'roam', x: -1300, z: 2700, hp: 480, max: 480, t: 0, cd: 20, rs: 0, dark: 0, wp: null, tgt: null, lock: null, lockH: 0,
                tents: [], heldPlayer: false, atk: 2, head: 0, side: 1, toldHunt: false, ally: 0, callCd: 0 };
   {   // start somewhere in the open sea, well away from Gull Island
-    for (const [x, z] of [[-1300, 2700], [-800, 3100], [600, 2600], [-2200, -300], [200, -3600]]) if (heightAt(x, z) < -8) { KR.x = x; KR.z = z; break; }
+    for (const [x, z] of [[-1300, 2700], [-800, 3100], [600, 2600], [-2200, -300], [200, -3600]].map(([a, b]) => [a * WS, b * WS])) if (heightAt(x, z) < -6.9) { KR.x = x; KR.z = z; break; }
   }
   const KR_UP = new THREE.Vector3(0, 1, 0), krV = new THREE.Vector3(), krV2 = new THREE.Vector3(), krQ = new THREE.Quaternion();
   // open sea is anywhere that isn't an island or the water close around one
@@ -7189,7 +7644,7 @@
       if (KR.st === 'roam') {
         if (!KR.wp || Math.hypot(KR.wp.x - KR.x, KR.wp.z - KR.z) < 60) {
           for (let i = 0; i < 30; i++) { const a = Math.random() * 6.28, r = 400 + Math.random() * 900, x = KR.x + Math.sin(a) * r, z = KR.z + Math.cos(a) * r; if (krDeep(x, z)) { KR.wp = { x, z }; break; } }
-          if (!KR.wp) KR.wp = { x: -1300, z: 2700 };
+          if (!KR.wp) KR.wp = { x: -1300 * WS, z: 2700 * WS };
         }
         gx = KR.wp.x; gz = KR.wp.z; sp = 18;
         if (KR.clashHold > 0) sp = 0;   // locked in a fight with a serpent
@@ -9395,7 +9850,7 @@
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
     else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
     else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
-    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
+    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
 

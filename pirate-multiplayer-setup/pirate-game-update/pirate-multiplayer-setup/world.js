@@ -11,15 +11,18 @@ class V2 {
   lengthSq() { return this.x * this.x + this.y * this.y; }
   normalize() { const l = Math.sqrt(this.lengthSq()) || 1; this.x /= l; this.y /= l; return this; }
   copy(v) { this.x = v.x; this.y = v.y; return this; }
+  multiplyScalar(k) { this.x *= k; this.y *= k; return this; }
 }
 
-const ISLAND = new V2(-150, -320);
-const R = 300;
+// KEEP IN STEP WITH public/index.html: islands spread WS times apart and IRS times bigger
+const WS = 2.2, IRS = 2.5, HILLS = 2.2;
+const ISLAND = new V2(-150 * WS, -320 * WS);
+const R = 300 * IRS;
 const DOCK_DIR = new V2(-ISLAND.x, -ISLAND.y).normalize();
 const PERP = new V2(-DOCK_DIR.y, DOCK_DIR.x);
-const TOWN = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.52);
-const DOCK_BASE = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.8);
-const DOCK_LEN = 78, DECK_Y = 3.6;
+const DOCK_BASE = ISLAND.clone().addScaledVector(DOCK_DIR, R * 0.94 - 20);
+const TOWN = DOCK_BASE.clone().addScaledVector(DOCK_DIR, -95);
+const DOCK_LEN = 130, DECK_Y = 3.6, DOCK_HW = 5, DOCK_HEAD = 22, DOCK_HEADLEN = 14;
 const local = (u, v) => TOWN.clone().addScaledVector(DOCK_DIR, u).addScaledVector(PERP, v);
 
 const nperm = new Uint8Array(512);
@@ -39,29 +42,63 @@ function distToSeg(px, pz, a, b) {
 }
 const TOWN_BACK = local(-34, 0);
 const ISLANDS = [
-  { name: 'Gull Island', c: ISLAND, r: R, kind: 'home', hill: 60, seed: 5, rough: 0.38 },
+  { name: 'Gull Island', c: ISLAND, r: R, kind: 'home', hill: 95, seed: 5, rough: 0.38 },
   { name: 'Palm Key', c: new V2(1900, 500), r: 128, kind: 'sandbar', hill: 6, seed: 11, aspect: 2.3, rot: 0.6 },
   { name: 'Jungle Isle', c: new V2(-3000, 1100), r: 420, kind: 'jungle', hill: 110, seed: 23, aspect: 1.45, rot: -0.4 },
   { name: 'Smoke Peak', c: new V2(-1700, -3500), r: 400, kind: 'volcano', hill: 0, seed: 37, aspect: 1.15, rot: 0.9, rough: 0.3 },
   { name: 'Skull Isle', c: new V2(2700, -3100), r: 230, kind: 'skull', hill: 40, seed: 51, aspect: 1.5, rot: 1.2 },
-  { name: 'Port Coral', c: new V2(4200, -700), r: 340, kind: 'port', hill: 70, seed: 63, rough: 0.4 },
+  { name: 'Port Coral', c: new V2(4200, -700), r: 340, kind: 'port', hill: 90, seed: 63, rough: 0.4 },
   { name: 'Gull Rocks', c: new V2(900, -1500), r: 85, kind: 'islet', hill: 16, seed: 71, aspect: 1.6, rot: 0.3 },
   { name: 'Turtle Cay', c: new V2(-1300, -1600), r: 100, kind: 'islet', hill: 10, seed: 77, aspect: 1.4, rot: -0.8 },
   { name: 'Mermaid Cove', c: new V2(1100, 4200), r: 270, kind: 'cove', hill: 22, seed: 83, aspect: 1.15, rot: 0.5, rough: 0.16 },
   { name: 'Driftwood Isle', c: new V2(-3600, -1900), r: 170, kind: 'sandbar', hill: 18, seed: 89, aspect: 1.3, rot: 0.2 },
 ];
 ISLANDS.forEach(I => {
+  if (I.kind !== 'home') { I.c.multiplyScalar(WS); I.r *= IRS; }
+  I.hill *= HILLS;
   I.cs = Math.cos(I.rot || 0); I.sn = Math.sin(I.rot || 0); I.nf = 1.6 / I.r; I.rough = I.rough ?? 0.42;
   I.toHome = ISLAND.clone().sub(I.c); if (I.toHome.lengthSq() > 1) I.toHome.normalize(); else I.toHome.copy(DOCK_DIR);
 });
 const PORT = ISLANDS[5];
-const PORT_FRAME = { origin: PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.45), dir: PORT.toHome.clone(), perp: new V2(-PORT.toHome.y, PORT.toHome.x) };
-const PORT_DOCK_BASE = PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.8);
+const PORT_DOCK_BASE = PORT.c.clone().addScaledVector(PORT.toHome, PORT.r * 0.94 - 20), PORT_DOCK_LEN = 100;
+const PORT_FRAME = { origin: PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, -95), dir: PORT.toHome.clone(), perp: new V2(-PORT.toHome.y, PORT.toHome.x) };
 const PORT_BACK = PORT_FRAME.origin.clone().addScaledVector(PORT.toHome, -30);
-const PORT_DOCK_FAR = PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, 130);
+const PORT_DOCK_FAR = PORT_DOCK_BASE.clone().addScaledVector(PORT.toHome, PORT_DOCK_LEN + 60);
 const DOCK_FAR = DOCK_BASE.clone().addScaledVector(DOCK_DIR, DOCK_LEN + 60);
+// towns, villages and raider camps: the ground is levelled under each (same list and maths as the game)
+const SITES = [
+  { i: 0, kind: 'town', name: 'Gull Town', u: 5, r: 96 },
+  { i: 5, kind: 'town', name: 'Port Coral', u: 5, r: 96 },
+  { i: 0, kind: 'village', name: 'Brackenford', a: 2.3, f: 0.5, r: 64 },
+  { i: 2, kind: 'village', name: 'Vinehollow', a: 0.6, f: 0.5, r: 64 },
+  { i: 9, kind: 'village', name: 'Saltmarsh', a: 1.5, f: 0.45, r: 60 },
+  { i: 3, kind: 'village', name: 'Ashfall', a: -0.35, f: 0.7, r: 60 },
+  { i: 8, kind: 'village', name: 'Shellharbor', a: 1.9, f: 0.8, r: 58 },
+  { i: 5, kind: 'village', name: 'Coral Heights', a: 2.8, f: 0.45, r: 62 },
+  { i: 0, kind: 'camp', name: 'Blackwater raider', a: -2.2, f: 0.45, r: 36, n: 4 },
+  { i: 2, kind: 'camp', name: 'Blackwater raider', a: -2.0, f: 0.35, r: 36, n: 5 },
+  { i: 3, kind: 'camp', name: 'Blackwater raider', a: 2.6, f: 0.66, r: 36, n: 4 },
+  { i: 7, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 34, n: 3 },
+  { i: 5, kind: 'camp', name: 'Blackwater raider', a: -2.4, f: 0.5, r: 36, n: 4 },
+  { i: 4, kind: 'camp', name: 'Blackwater raider', a: 1.6, f: 0.35, r: 34, n: 4 },
+  { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
+];
+ISLANDS.forEach(I => I.sites = []);
+SITES.forEach(S => {
+  const I = ISLANDS[S.i];
+  if (S.kind === 'town') {
+    const F = S.i === 0 ? { origin: TOWN, dir: DOCK_DIR } : PORT_FRAME;
+    S.x = F.origin.x + F.dir.x * S.u; S.z = F.origin.y + F.dir.y * S.u; S.h = 4.2;
+  } else {
+    const ca = Math.cos(S.a), sa = Math.sin(S.a), dx = I.toHome.x * ca - I.toHome.y * sa, dz = I.toHome.x * sa + I.toHome.y * ca;
+    let f = S.f, x = I.c.x + dx * I.r * f, z = I.c.y + dz * I.r * f;
+    for (; f > 0.08 && islandHeight(I, x, z, true) < 5; f -= 0.02) { x = I.c.x + dx * I.r * f; z = I.c.y + dz * I.r * f; }
+    S.x = x; S.z = z; S.h = Math.max(5.5, Math.min(40, islandHeight(I, x, z, true)));
+  }
+  I.sites.push(S);
+});
 
-function islandHeight(I, x, z) {
+function islandHeight(I, x, z, raw) {
   const dx = x - I.c.x, dz = z - I.c.y;
   if (dx * dx + dz * dz > I.r * I.r * 3.4) return -7;
   const ax = dx * I.cs + dz * I.sn, az = (-dx * I.sn + dz * I.cs) * (I.aspect || 1);
@@ -73,9 +110,10 @@ function islandHeight(I, x, z) {
   if (I.kind === 'cove') s = (0.24 - Math.abs(d - 0.74)) * 1.7;
   let h = -7 + 11 * sstep(-0.15, 0.2, s);
   h += I.hill * Math.pow(Math.max(0, s - 0.3), 1.4) * (0.5 + 1.0 * fbm(x * 0.006 + I.seed, z * 0.006));
+  if (I.kind !== 'volcano' && I.kind !== 'cove') h += I.hill * 0.75 * Math.pow(Math.max(0, fbm(x * 0.003 + I.seed * 1.7, z * 0.003 - I.seed) - 0.35), 1.2) * sstep(0.12, 0.45, s);   // rolling hills
   if (I.kind === 'volcano') {
-    h += 140 * Math.pow(Math.max(0, s - 0.22), 1.7);
-    h -= 600 * Math.pow(Math.max(0, s - 0.86), 1.2);
+    h += 300 * Math.pow(Math.max(0, s - 0.22), 1.7);
+    h -= 1300 * Math.pow(Math.max(0, s - 0.86), 1.2);
   }
   h += (vnoise(x * 0.08, z * 0.08) - 0.5) * 1.2 * sstep(0, 0.2, s);
   if (I.kind === 'cove') {
@@ -92,6 +130,10 @@ function islandHeight(I, x, z) {
   if (I.kind === 'port') {
     const dd = distToSeg(x, z, PORT_BACK, PORT_DOCK_BASE), w = sstep(46, 34, dd) * sstep(-3, 1.5, h);
     h += (4.2 - h) * w;
+  }
+  if (!raw && I.sites) for (const S of I.sites) {
+    const dd = Math.hypot(x - S.x, z - S.z);
+    if (dd < S.r + 30) { const w = sstep(S.r + 30, S.r, dd) * sstep(-3, 1.5, h); h += (S.h - h) * w; }
   }
   return h;
 }
@@ -136,19 +178,20 @@ function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (
 
 const DOCK_TOP = DECK_Y + 0.25;
 const DOCKS = [
-  { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, head: 13, headLen: 8 },
-  { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: 60, head: 10, headLen: 8 },
+  { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, hw: DOCK_HW, head: DOCK_HEAD, headLen: DOCK_HEADLEN },
+  { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 },
 ];
+DOCKS.forEach(d => d.rr = Math.pow(d.len + d.headLen + d.head + 8, 2));
 function onDock(x, z) {
   for (const d of DOCKS) {
     const px = x - d.base.x, pz = z - d.base.y;
-    if (px * px + pz * pz > 12000) continue;
+    if (px * px + pz * pz > d.rr) continue;
     const lx = -(px * d.perp.x + pz * d.perp.y), lz = px * d.dir.x + pz * d.dir.y;
-    if ((Math.abs(lx) <= 4 && lz >= -3 && lz <= d.len + 1) || (Math.abs(lx) <= d.head && lz >= d.len - 1 && lz <= d.len + d.headLen)) return true;
+    if ((Math.abs(lx) <= d.hw && lz >= -3 && lz <= d.len + 1) || (Math.abs(lx) <= d.head && lz >= d.len - 1 && lz <= d.len + d.headLen)) return true;
   }
   return false;
 }
-const walkable = (x, z) => { if (onDock(x, z)) return true; const h = heightAt(x, z); return h > 0.6 && h < 50; };
+const walkable = (x, z) => { if (onDock(x, z)) return true; const h = heightAt(x, z); return h > 0.6 && h < 300; };
 
 // --- Skull Isle "X marks the spot" (the Blackwater thugs camp next to it) ---
 const SPOT_X = (() => {
@@ -171,15 +214,25 @@ function campBandits(near, n, name) {
   for (let i = 0; i < n; i++) { const a = i / n * 6.28; out.push({ name, home: { x: c.x, z: c.z }, x: c.x + Math.cos(a) * 5, z: c.z + Math.sin(a) * 5, facing: a }); }
   return out;
 }
+// the Blackwater raider camps on the sites (same tent spots as the game's raiderCamp)
+const CAMP_TENTS = [[9, 3], [-8, 6], [2, -10], [-7, -7]];
+function siteCamp(S) {
+  const c = { x: S.x, z: S.z }, out = [];
+  CAMP_TENTS.forEach(([dx, dz]) => campColliders.push({ x: c.x + dx, z: c.z + dz, r: 2.6 }));
+  campColliders.push({ x: c.x, z: c.z, r: 1.4 });
+  for (let i = 0; i < S.n; i++) { const a = i / S.n * 6.28; out.push({ name: S.name, home: { x: c.x, z: c.z }, x: c.x + Math.cos(a) * 5, z: c.z + Math.sin(a) * 5, facing: a }); }
+  return out;
+}
 const BANDIT_SPAWNS = [
   ...campBandits({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }, 4, 'Bandit'),
   ...campBandits({ x: SPOT_X.x + 14, z: SPOT_X.z + 10 }, 3, 'Blackwater thug'),
+  ...SITES.filter(S => S.kind === 'camp').flatMap(siteCamp),
 ];
 
 // --- Raiders: same order as the client's raider list ---
 const HULLS = { brig: { L: 27, B: 7.6 }, galleon: { L: 40, B: 11 } };
 const RAIDER_SPAWNS = [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']]
-  .map(([x, z, kind]) => ({ home: { x, z }, kind, T: HULLS[kind], galleon: kind === 'galleon', maxHp: kind === 'galleon' ? 240 : 110 }));
+  .map(([x, z, kind]) => [x * WS, z * WS, kind]).map(([x, z, kind]) => ({ home: { x, z }, kind, T: HULLS[kind], galleon: kind === 'galleon', maxHp: kind === 'galleon' ? 240 : 110 }));
 
 function blockedAt(T, cx, cz, h) {
   const s = Math.sin(h), c = Math.cos(h);
@@ -188,4 +241,4 @@ function blockedAt(T, cx, cz, h) {
 }
 const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
 
-module.exports = { EDGE, MIST, TOWER, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
+module.exports = { WS, ISLANDS, SITES, EDGE, MIST, TOWER, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };

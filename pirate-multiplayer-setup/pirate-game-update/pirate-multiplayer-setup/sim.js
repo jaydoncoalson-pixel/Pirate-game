@@ -93,7 +93,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
 
   // ---------- raiders ----------
   function raiderWaypoint(r) {
-    for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = 600 + Math.random() * 1800, x = r.x + Math.sin(a) * d, z = r.z + Math.cos(a) * d; if (W.raidSea(x, z)) { r.wpt = { x, z }; return; } }
+    for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, d = (600 + Math.random() * 1800) * 1.6, x = r.x + Math.sin(a) * d, z = r.z + Math.cos(a) * d; if (W.raidSea(x, z)) { r.wpt = { x, z }; return; } }
     r.wpt = { x: r.home.x, z: r.home.z };
   }
   function spawnRaider(r, players) {

@@ -20,7 +20,7 @@ const SST = ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow
 
 function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornOwns }) {
   // ---------------------------------------------------------------- the Kraken
-  const K = { st: 'roam', x: -1300, z: 2700, h: 0, hp: 480, max: 480, t: 0, cd: 20, rs: 0, wp: null, tg: null, ally: null, scanT: 0, ramT: 10, dmgAcc: 0 };
+  const K = { st: 'roam', x: -1300 * W.WS, z: 2700 * W.WS, h: 0, hp: 480, max: 480, t: 0, cd: 20, rs: 0, wp: null, tg: null, ally: null, scanT: 0, ramT: 10, dmgAcc: 0 };
   const ship = (players, id) => { const q = players.get(id); return q && q.p && q.p.sh && q.p.sh.a === 1 ? q.p.sh : null; };
   const swimmer = (players, id) => { const q = players.get(id); return q && q.p && q.p.swm === 1 ? q.p : null; };
   function tgPos(players, tg) {
@@ -63,14 +63,14 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     // locked in a fight with a serpent: it stands its ground and grabs no one until the clash is over
     if (K.clash > 0) { K.clash -= dt; if (K.st === 'roam' || K.st === 'hunt') { if (K.st === 'hunt') { K.st = 'roam'; K.tg = null; } K.cd = Math.max(K.cd, 6); return; } }
     switch (K.st) {
-      case 'dead': K.rs -= dt; if (K.rs <= 0) { const q = deepNear(-1300, 2700, 0, 1500) || { x: -1300, z: 2700 }; Object.assign(K, { st: 'roam', hp: K.max, cd: 30, x: q.x, z: q.z, tg: null }); } return;
+      case 'dead': K.rs -= dt; if (K.rs <= 0) { const q = deepNear(-1300 * W.WS, 2700 * W.WS, 0, 1500) || { x: -1300 * W.WS, z: 2700 * W.WS }; Object.assign(K, { st: 'roam', hp: K.max, cd: 30, x: q.x, z: q.z, tg: null }); } return;
       case 'dying': if (K.t > 4) { K.st = 'dead'; K.rs = 600; K.tg = null; } return;
       case 'drown': if (K.t > 9) { K.st = 'roam'; K.tg = null; K.cd = K.ally ? 0 : 60; K.wp = null; } return;
       case 'leaving': kMove(K.x + Math.sin(K.h) * 100, K.z + Math.cos(K.h) * 100, 20, dt); if (K.t > 5) { K.st = 'roam'; if (!K.ally) { const q = deepNear(K.x, K.z, 250, 400); if (q) { K.x = q.x; K.z = q.z; } } } return;
       case 'roam': {
         K.cd = Math.max(0, K.cd - dt);
         let gx, gz, sp = 18;
-        if (!K.wp || Math.hypot(K.wp.x - K.x, K.wp.z - K.z) < 60) K.wp = deepNear(K.x, K.z, 400, 1300) || { x: -1300, z: 2700 };
+        if (!K.wp || Math.hypot(K.wp.x - K.x, K.wp.z - K.z) < 60) K.wp = deepNear(K.x, K.z, 400, 1300 * W.WS) || { x: -1300 * W.WS, z: 2700 * W.WS };
         gx = K.wp.x; gz = K.wp.z;
         if (K.ally) {   // escort: keep close alongside whoever called it
           const o = players.get(K.ally.owner), me = o && o.p ? (o.p.sh || o.p) : null;
