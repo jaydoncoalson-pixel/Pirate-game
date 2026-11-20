@@ -7723,43 +7723,55 @@ window.__pgBoot = () => {
       for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.3, x0 = kx + Math.cos(a) * kr, z0 = kz + Math.sin(a) * kr, x1 = kx + Math.cos(a) * (kr + 9), z1 = kz + Math.sin(a) * (kr + 9);
         const links = []; for (let i = 0; i <= 14; i++) { const u = i / 14; links.push(new THREE.Matrix4().compose(new THREE.Vector3(x0 + (x1 - x0) * u, 6 * (1 - u) * (1 - u) + 0.3, z0 + (z1 - z0) * u), new THREE.Quaternion().setFromEuler(new THREE.Euler(i % 2 ? Math.PI / 2 : 0, a, 0)), new THREE.Vector3(1, 1, 1))); }
         instanced(new THREE.TorusGeometry(0.35, 0.09, 4, 8), iron, links, root); }
-      // ---- the Blackwater Beast ----
-      // A hulking thing the size of a house, black-hided and scarred, horned and spined, with jaws full of broken teeth,
-      // an iron collar on its neck and chains on its legs. Its eyes burn red in the dark; it breathes, watches ye,
-      // grumbles, and when ye come close it hurls itself at the bars.
-      const hide = lam(0x2a2422), hideD = lam(0x151212), scar = lam(0x3a1a18), tooth = lam(0xd8cfb8), horn = lam(0x2a2420);
+      // ---- the Blackwater Beast: a monstrous crab ----
+      // A crab the size of a house: a black-and-blood-red shell crusted with barnacles and spikes, eight jointed legs
+      // in iron cuffs, two enormous claws that snap and grind, and red eyes glowing on stalks. It sidles about the cage,
+      // turns to face ye, clacks its claws, and when ye come close it slams itself claws-first into the bars.
+      const shell = new THREE.MeshPhongMaterial({ color: 0x3a1210, specular: 0x553333, shininess: 40 }), shellD = new THREE.MeshPhongMaterial({ color: 0x1c0a09, specular: 0x332222, shininess: 30 });
+      const under = lam(0x6a4a3a), barn = lam(0x8a8478), spikeM = lam(0x120808), clawTip = lam(0x0d0606);
       const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
-      const B = new THREE.Group(); B.position.set(kx, 1.2, kz - 2); root.add(B);
-      const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), hide); body.scale.set(5.5, 4.6, 8.5); body.position.set(0, 6.4, 0); B.add(body);
-      const hump = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), hide); hump.scale.set(4.6, 3.6, 4.5); hump.position.set(0, 9.2, 2.5); B.add(hump);
-      for (let k = 0; k < 11; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.6 - Math.abs(k - 4) * 0.2, 5), horn); sp.position.set(0, 11.4 - Math.abs(k - 3) * 0.35, 5.5 - k * 1.25); sp.rotation.x = -0.4; B.add(sp); }
-      for (let k = 0; k < 5; k++) { const sc = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 3), scar); sc.position.set(k % 2 ? 4.9 : -4.9, 6 + k * 0.6, -2 + k); sc.rotation.set(0.3, 0, k % 2 ? 0.6 : -0.6); B.add(sc); }
+      const B = new THREE.Group(); B.position.set(kx, 1.2, kz); B.scale.setScalar(0.72); root.add(B);   // sized so legs and claws stay inside the bars
+      const seg = (par, a, b, r0, r1, m) => { const d = new THREE.Vector3().subVectors(b, a), len = d.length(); const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); par.add(c); return c; };
+      const body = new THREE.Group(); body.position.y = 7.5; B.add(body);
+      const cara = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), shell); cara.scale.set(9.5, 3.4, 7); body.add(cara);
+      const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), under); belly.scale.set(8.8, 2.2, 6.4); belly.position.y = -0.3; body.add(belly);
+      const ridge = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), shellD); ridge.scale.set(5, 1.6, 4.2); ridge.position.set(0, 2.4, -0.5); body.add(ridge);
+      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.8, 5), spikeM); sp.position.set(Math.cos(a) * 9, 0.4, Math.sin(a) * 6.6); sp.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1); body.add(sp); }
+      for (let k = 0; k < 9; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.2, 5), spikeM); const x = (k % 3 - 1) * 3, z = (Math.floor(k / 3) - 1) * 2.6; sp.position.set(x, 3.2 - Math.abs(x) * 0.15, z); sp.rotation.set(z * 0.08, 0, -x * 0.1); body.add(sp); }
+      for (let k = 0; k < 26; k++) { const a = Math.random() * 6.28, r = 0.3 + Math.random() * 0.6; const bn = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 0.4, 6), barn); const nx = Math.cos(a) * r, nz = Math.sin(a) * r; bn.position.set(nx * 9.3, Math.sqrt(Math.max(0, 1 - r * r)) * 3.3, nz * 6.8); bn.lookAt(bn.position.clone().multiply(new THREE.Vector3(2, 4, 2))); bn.rotateX(Math.PI / 2); body.add(bn); }
+      // the face: mouthparts that work constantly, and eyes on stalks
+      const mouth = []; for (let k = 0; k < 4; k++) { const mp = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.6, 0.3), under); mp.position.set(-1.05 + k * 0.7, -0.9, 6.8); body.add(mp); mouth.push(mp); }
+      const eyes = [], stalks = []; [-1, 1].forEach(sd => { const st = new THREE.Group(); st.position.set(sd * 2, 1.8, 5.6); body.add(st); stalks.push(st);
+        seg(st, new THREE.Vector3(0, 0, 0), new THREE.Vector3(sd * 0.4, 2.6, 0.4), 0.35, 0.25, shellD);
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), eyeM); e.position.set(sd * 0.4, 2.9, 0.4); st.add(e);
+        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(3, 3, 1); gl.position.copy(e.position); st.add(gl); eyes.push(gl); });
+      const eyeLight = new THREE.PointLight(0xff3010, 0.9, 18, 1.8); eyeLight.position.set(0, 4.5, 7); body.add(eyeLight);
+      // eight walking legs, each two jointed segments with a pointed tip, the upper joints cuffed in iron
       const legs = [];
-      for (const [x, z] of [[-3.6, 4.5], [3.6, 4.5], [-3.6, -4.5], [3.6, -4.5]]) { const lg = new THREE.Group(); lg.position.set(x, 4.5, z); B.add(lg);
-        const up = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 4.5, 8), hide); up.position.y = -1.5; lg.add(up); const lo = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 3, 8), hideD); lo.position.set(0, -4, 0.4); lg.add(lo);
-        for (let c = -1; c <= 1; c++) { const cl = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 4), tooth); cl.rotation.x = Math.PI / 2; cl.position.set(c * 0.55, -5.3, 1.6); lg.add(cl); }
-        const cuff = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.22, 6, 12), iron); cuff.rotation.x = Math.PI / 2; cuff.position.y = -4.2; lg.add(cuff); legs.push(lg); }
-      // tail
-      const tail = []; for (let k = 0; k < 9; k++) { const t = new THREE.Mesh(new THREE.SphereGeometry(1.6 - k * 0.15, 8, 6), hide); t.position.set(0, 5.5 - k * 0.3, -8.5 - k * 1.7); B.add(t); tail.push(t); }
-      // neck and head
-      const neck = new THREE.Group(); neck.position.set(0, 8.5, 7.5); B.add(neck);
-      const nk = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 3.2, 5, 10), hide); nk.rotation.x = Math.PI / 2 - 0.5; nk.position.set(0, 0.6, 1.5); neck.add(nk);
-      const collar = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.4, 6, 16), iron); collar.position.set(0, 0.4, 1); collar.rotation.x = 0.5; neck.add(collar);
-      for (let k = 0; k < 8; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.7, 4), iron); const a = k / 8 * 6.28; sp.position.set(Math.cos(a) * 3.1, 0.4 + Math.sin(a) * 3.1 * Math.cos(0.5), 1 + Math.sin(a) * 3.1 * Math.sin(0.5)); sp.lookAt(neck.position.clone().add(new THREE.Vector3(Math.cos(a) * 10, Math.sin(a) * 10, 0))); neck.add(sp); }
-      const head = new THREE.Group(); head.position.set(0, 1.6, 4.6); neck.add(head);
-      const skullB = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), hide); skullB.scale.set(2.6, 2.1, 3); head.add(skullB);
-      const snout = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 3.6), hide); snout.position.set(0, -0.3, 3.2); head.add(snout);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.7, 1.2), hideD); brow.position.set(0, 1.1, 1.6); brow.rotation.x = 0.3; head.add(brow);
-      const jaw = new THREE.Group(); jaw.position.set(0, -1.1, 1.2); head.add(jaw);
-      const jawM = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 4.4), hideD); jawM.position.set(0, -0.3, 2.1); jaw.add(jawM);
-      for (let k = 0; k < 7; k++) { const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.75 + (k % 3) * 0.25, 4), tooth); t1.position.set(-1.2 + k * 0.4, -1, 4.6 - Math.abs(k - 3) * 0.5); t1.rotation.x = Math.PI; head.add(t1);
-        const t2 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6 + (k % 2) * 0.3, 4), tooth); t2.position.set(-1.1 + k * 0.37, 0.35, 3.8 - Math.abs(k - 3) * 0.4); jaw.add(t2); }
-      [-1, 1].forEach(sd => { const hn = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.35, 6, 10, Math.PI * 0.9), horn); hn.position.set(sd * 1.8, 1.6, 0); hn.rotation.set(0, Math.PI / 2, sd > 0 ? -0.6 : Math.PI + 0.6); head.add(hn);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.33, 1.4, 6), horn); tip.position.set(sd * 2.9, 3.3, -0.8); tip.rotation.z = -sd * 0.4; head.add(tip); });
-      const eyes = []; [-1, 1].forEach(sd => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), eyeM); e.position.set(sd * 1.15, 0.65, 2.3); head.add(e);
-        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(2.4, 2.4, 1); gl.position.copy(e.position); head.add(gl); eyes.push(gl); });
-      const eyeLight = new THREE.PointLight(0xff3010, 0.9, 16, 1.8); eyeLight.position.set(0, 0.5, 3.6); head.add(eyeLight);
-      DUN.beast = { B, body, hump, neck, head, jaw, legs, tail, eyes, eyeLight, t: 0, pace: 0, lunge: -1, growlT: 6 };
+      for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
+        const z = 3.6 - i * 2.6, lg = new THREE.Group(); lg.position.set(sd * 7.6, 7.2, z); B.add(lg);
+        const out = sd * (6 + (i === 1 || i === 2 ? 1 : 0)), knee = new THREE.Vector3(out, 3.8, (i - 1.5) * -1.2), tip = new THREE.Vector3(out * 1.55, -7.2, (i - 1.5) * -2.4);
+        seg(lg, new THREE.Vector3(0, 0, 0), knee, 0.9, 0.75, shell); const kn = new THREE.Mesh(new THREE.SphereGeometry(0.85, 8, 6), shellD); kn.position.copy(knee); lg.add(kn);
+        seg(lg, knee, tip.clone().lerp(knee, 0.25), 0.75, 0.5, shell); seg(lg, tip.clone().lerp(knee, 0.25), tip, 0.5, 0.05, clawTip);
+        const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.2, 6, 12), iron); cuff.position.copy(knee).multiplyScalar(0.5); cuff.lookAt(knee.clone()); lg.add(cuff);
+        legs.push({ g: lg, sd, i });
+      }
+      // two great claws: arm, wrist, a heavy spiked palm, a fixed finger and a moving one
+      const claws = []; [-1, 1].forEach(sd => { const arm = new THREE.Group(); arm.position.set(sd * 5, 6.8, 5.5); B.add(arm);
+        const elbow = new THREE.Vector3(sd * 4, 1.5, 3.5), wrist = new THREE.Vector3(sd * 3.2, 1.2, 7.5);
+        seg(arm, new THREE.Vector3(0, 0, 0), elbow, 1.2, 1, shell); seg(arm, elbow, wrist, 1.1, 1, shell);
+        [elbow, wrist].forEach(p => { const j = new THREE.Mesh(new THREE.SphereGeometry(1.15, 8, 6), shellD); j.position.copy(p); arm.add(j); });
+        const hand = new THREE.Group(); hand.position.copy(wrist); arm.add(hand);
+        const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), shell); palm.scale.set(2.2, 2.6, 3.6); palm.position.z = 2.6; hand.add(palm);
+        for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1, 4), spikeM); sp.position.set(sd * 1.6, 1.4 - k * 0.2, 1 + k * 0.9); sp.rotation.z = -sd * 1.2; hand.add(sp); }
+        const fixedF = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5, 6), shellD); fixedF.rotation.x = Math.PI / 2; fixedF.position.set(0, -0.9, 7.6); hand.add(fixedF);
+        const fing = new THREE.Group(); fing.position.set(0, 1, 5.6); hand.add(fing);
+        const mf = new THREE.Mesh(new THREE.ConeGeometry(0.85, 5.2, 6), shellD); mf.rotation.x = Math.PI / 2; mf.position.z = 2.4; fing.add(mf);
+        for (let k = 0; k < 4; k++) { const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t1.position.set(0, 0.6, 6.4 + k * 0.9); hand.add(t1); const t2 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t2.rotation.x = Math.PI; t2.position.set(0, -0.5, 1 + k * 0.9); fing.add(t2); }
+        claws.push({ arm, hand, fing, sd }); });
+      // a chain from the shell to the cage floor
+      { const links = []; for (let i = 0; i <= 12; i++) { const u = i / 12; links.push(new THREE.Matrix4().compose(new THREE.Vector3(0, 4 - u * 4 + Math.sin(u * Math.PI) * -0.6, -6 - u * 7), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i % 2 ? Math.PI / 2 : 0, Math.PI / 2)), new THREE.Vector3(1.4, 1.4, 1.4))); } instanced(new THREE.TorusGeometry(0.35, 0.1, 4, 8), iron, links, B); }
+      DUN.beast = { B, body, legs, claws, stalks, mouth, eyes, eyeLight, t: 0, pace: 0, growlT: 6 };
       // a dim glow from the cavern floor round the cage so its outline shows in the gloom
       const cg = new THREE.PointLight(0x8070a0, 0.5, 60, 1.4); add(cg, kx, 26, kz + 26);
       const shaft = new THREE.SpotLight(0x7080b0, 0.9, 45, 0.5, 0.7, 1.2); shaft.position.set(kx + 4, 31, kz + 6); shaft.target.position.set(kx, 0, kz); add(shaft, kx + 4, 31, kz + 6); root.add(shaft.target);   // a thin grey light from a crack far above, just enough to show its shape
@@ -7821,28 +7833,36 @@ window.__pgBoot = () => {
     if (DUN.hoardCd > 0) DUN.hoardCd -= dt;
     // torches flicker
     for (const f of DUN.flames) { const k = 0.85 + 0.15 * Math.sin(t * 13 + f.position.x * 3) * Math.sin(t * 7.3 + f.position.z); f.scale.set(1 * k, 1.4 * k, 1); if (f.userData.L) f.userData.L.intensity = 1.0 * k; }
-    // the beast: breathing, pacing, watching ye, growling; and if ye come close, it throws itself at the bars
+    // the crab: breathing, sidling round the cage, turning to face ye, clacking its claws; close up, it charges the bars
     const Bs = DUN.beast; if (!Bs) return;
     Bs.t += dt; const br = Math.sin(Bs.t * 1.1);
-    Bs.body.scale.y = 4.6 + br * 0.18; Bs.hump.scale.y = 3.6 + br * 0.15;
     const cg = DUN.cage, px = l.x - cg.x, pz = l.z - cg.z, pd = Math.hypot(px, pz), near = pd < cg.r + 22;
-    // it prowls round inside the cage, turning to keep ye in sight
-    Bs.pace += dt * (near ? 0.25 : 0.1); const ang = near ? Math.atan2(px, pz) : Bs.pace;
-    const want = Math.atan2(Math.sin(ang), Math.cos(ang)); Bs.B.rotation.y += angDiff(Bs.B.rotation.y, want) * Math.min(1, dt * (near ? 1.4 : 0.4));
-    let reach = near ? cg.r - 12 : 3 + Math.sin(Bs.pace * 1.7) * 2;   // how far from the middle it stands
-    const LG = DUN.lungeT; if (LG > 0) { DUN.lungeT -= dt; const u = 1 - DUN.lungeT / 2.2; reach += Math.sin(Math.min(1, u * 1.6) * Math.PI) * 6; }
-    Bs.B.position.x += (cg.x + Math.sin(Bs.B.rotation.y) * reach - Bs.B.position.x) * Math.min(1, dt * 2);
-    Bs.B.position.z += (cg.z + Math.cos(Bs.B.rotation.y) * reach - 2 - Bs.B.position.z) * Math.min(1, dt * 2);
-    Bs.legs.forEach((lg, i) => { lg.rotation.x = Math.sin(Bs.t * 2.2 + i * 1.6) * (near ? 0.15 : 0.08); });
-    Bs.tail.forEach((tp, i) => { tp.position.x = Math.sin(Bs.t * 1.3 - i * 0.5) * i * 0.35; });
-    const growl = LG > 0 || (Bs.growlT < 1.5);
-    Bs.jaw.rotation.x = growl ? 0.45 + Math.sin(Bs.t * 18) * 0.06 : 0.08 + br * 0.04;
-    Bs.neck.rotation.x = near ? -0.15 + (LG > 0 ? 0.3 : 0) : 0.1;
-    Bs.head.rotation.y = Math.sin(Bs.t * 0.7) * 0.15;
+    Bs.pace += dt * (near ? 0.25 : 0.12); const ang = near ? Math.atan2(px, pz) : Bs.pace * 0.6;
+    const prevRot = Bs.B.rotation.y; Bs.B.rotation.y += angDiff(Bs.B.rotation.y, ang) * Math.min(1, dt * (near ? 1.6 : 0.5));
+    let reach = near ? 0 : 1 + Math.sin(Bs.pace * 1.7);
+    const LG = DUN.lungeT; let lu = 0; if (LG > 0) { DUN.lungeT -= dt; const u = 1 - DUN.lungeT / 2.2; lu = Math.sin(Math.min(1, u * 1.6) * Math.PI); reach += lu * 2; }
+    // crabs walk sideways: when idle it scuttles left and right across the cage
+    const sideW = near ? 0 : Math.sin(Bs.pace * 0.9) * 2.5, rx = Math.cos(Bs.B.rotation.y), rz = -Math.sin(Bs.B.rotation.y);
+    const tx = cg.x + Math.sin(Bs.B.rotation.y) * reach + rx * sideW, tz = cg.z + Math.cos(Bs.B.rotation.y) * reach + rz * sideW;
+    const ox = Bs.B.position.x, oz = Bs.B.position.z;
+    Bs.B.position.x += (tx - ox) * Math.min(1, dt * 2); Bs.B.position.z += (tz - oz) * Math.min(1, dt * 2);
+    const mv = Math.min(1, (Math.hypot(Bs.B.position.x - ox, Bs.B.position.z - oz) / Math.max(dt, 1e-3)) / 3 + Math.abs(angDiff(prevRot, Bs.B.rotation.y)) / Math.max(dt, 1e-3));
+    Bs.body.position.y = 7.5 + br * 0.2 - lu * 0.8; Bs.body.rotation.x = lu * 0.15; Bs.body.rotation.z = Math.sin(Bs.t * 6) * 0.03 * mv;
+    // legs step in alternating sets, faster when it moves
+    Bs.wt = (Bs.wt || 0) + dt * (2 + mv * 9);
+    Bs.legs.forEach(({ g, sd, i }) => { const ph = Bs.wt + (i % 2 ? Math.PI : 0) + (sd > 0 ? Math.PI / 2 : 0); g.rotation.z = sd * (Math.max(0, Math.sin(ph)) * 0.18 * (0.3 + mv)); g.rotation.y = Math.cos(ph) * 0.12 * (0.3 + mv); });
+    // claws: idle clacks, a raised threat when ye're near, and a furious snapping charge
+    const growl = LG > 0 || Bs.growlT < 1.5;
+    Bs.claws.forEach((c, k) => { const raise = near ? 0.35 + lu * 0.35 : 0.05 + 0.05 * Math.sin(Bs.t * 0.8 + k);
+      c.arm.rotation.x += (-raise - c.arm.rotation.x) * Math.min(1, dt * 4); c.arm.rotation.y = c.sd * (-0.15 + Math.sin(Bs.t * 0.9 + k * 2) * 0.08 - lu * 0.25);
+      const snap = growl ? Math.abs(Math.sin(Bs.t * 9 + k * 1.3)) : Math.max(0, Math.sin(Bs.t * 1.3 + k * 2.4)) ** 6;
+      c.fing.rotation.x = -0.05 - snap * 0.55; c.hand.rotation.z = c.sd * Math.sin(Bs.t * 0.6 + k) * 0.15; });
+    Bs.mouth.forEach((m, i) => { m.rotation.x = Math.sin(Bs.t * (growl ? 14 : 4) + i * 1.5) * 0.35; });
+    Bs.stalks.forEach((st, i) => { st.rotation.z = Math.sin(Bs.t * 1.7 + i * 2) * 0.15; st.rotation.x = near ? 0.2 : Math.sin(Bs.t * 0.9 + i) * 0.2; });
     const glow = 0.8 + 0.2 * Math.sin(Bs.t * 2.4); Bs.eyes.forEach(e => e.material.opacity = glow * (near ? 1 : 0.7)); Bs.eyeLight.intensity = 0.6 + 0.5 * glow * (near ? 1.4 : 0.8);
-    Bs.growlT -= dt; if (Bs.growlT <= 0) { Bs.growlT = 8 + Math.random() * 10; const wp = new THREE.Vector3(); Bs.head.getWorldPosition(wp); SFX.beastGrumble({ x: wp.x, z: wp.z, range: 400 }, 1.2); }
+    Bs.growlT -= dt; if (Bs.growlT <= 0) { Bs.growlT = 8 + Math.random() * 10; const wp = new THREE.Vector3(); Bs.body.getWorldPosition(wp); SFX.beastGrumble({ x: wp.x, z: wp.z, range: 400 }, 1.2); }
     // lunge at the bars: a roar, the bars ring and shake
-    if (pd < cg.r + 10 && LG <= 0 && (DUN.lungeCd || 0) <= 0) { DUN.lungeT = 2.2; DUN.lungeCd = 7; const wp = new THREE.Vector3(); Bs.head.getWorldPosition(wp); SFX.beastRoar({ x: wp.x, z: wp.z, range: 400 }, 1.4, 1); setTimeout(() => SFX.crash({ x: wp.x, z: wp.z }), 500); if (!DUN.toldBeast) { DUN.toldBeast = true; toast('The Blackwater Beast hurls itself at the bars! The whole cage shudders... it holds. For now.'); } }
+    if (pd < cg.r + 10 && LG <= 0 && (DUN.lungeCd || 0) <= 0) { DUN.lungeT = 2.2; DUN.lungeCd = 7; const wp = new THREE.Vector3(); Bs.body.getWorldPosition(wp); SFX.beastRoar({ x: wp.x, z: wp.z, range: 400 }, 1.4, 1); setTimeout(() => SFX.crash({ x: wp.x, z: wp.z }), 500); if (!DUN.toldBeast) { DUN.toldBeast = true; toast('The Blackwater Beast, a crab the size of a house, slams its claws into the bars! The whole cage shudders... it holds. For now.'); } }
     DUN.lungeCd = Math.max(0, (DUN.lungeCd || 0) - dt);
     if (DUN.barMesh) { const sh = LG > 0 ? Math.sin(t * 40) * 0.12 * Math.min(1, LG) : 0; DUN.barMats.forEach((m, i) => { const e = m.elements; const tmpm = m.clone(); tmpm.elements[12] = e[12] + sh * Math.sin(i); DUN.barMesh.setMatrixAt(i, tmpm); }); DUN.barMesh.instanceMatrix.needsUpdate = true; }
   }
