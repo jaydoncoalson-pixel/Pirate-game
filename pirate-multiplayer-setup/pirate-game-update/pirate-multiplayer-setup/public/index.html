@@ -1432,17 +1432,43 @@
       for (const k in ch.props) ch.props[k].visible = false;
       let rate = 14, snapArms = false;
       if (swim) {
-        // front crawl: arms windmill, elbows bend on the recovery, flutter kick, head turns to breathe
-        ch.phase += dt * (3 + speed * 0.8);
-        const q = ch.phase * 1.4, TAU = Math.PI * 2;
-        t.shL = Math.PI - (q % TAU); t.shR = Math.PI - ((q + Math.PI) % TAU);
-        t.elL = -0.25 - 0.8 * Math.max(0, Math.sin(q)); t.elR = -0.25 - 0.8 * Math.max(0, -Math.sin(q));
-        t.shLz = -0.15; t.shRz = 0.15;
-        t.hipL = Math.sin(ch.phase * 4) * 0.35; t.hipR = -t.hipL;
-        t.kneeL = 0.2 + 0.3 * Math.max(0, Math.sin(ch.phase * 4)); t.kneeR = 0.2 + 0.3 * Math.max(0, -Math.sin(ch.phase * 4));
-        t.pitch = 1.25; t.headX = -0.65; t.headY = Math.sin(q * 0.5) * 0.55; t.roll = Math.sin(q) * 0.12;
-        snapArms = true; rate = 8;
-      } else {
+        // Swimming. Still: treading water, upright with head and shoulders out, hands sculling in slow figure-eights and
+        // legs working an eggbeater kick, bobbing gently. Moving: a proper front crawl, blended in with speed: long
+        // strokes with a high-elbow recovery that swings wide over the water, the whole body rolling with each stroke,
+        // the head turning to breathe on alternate sides, and a quick flutter kick.
+        ch.swimK = (ch.swimK ?? 0) + ((speed > 0.6 ? Math.min(1, speed / 3.5) : 0) - (ch.swimK ?? 0)) * Math.min(1, dt * 4);
+        const k = ch.swimK, TAU = Math.PI * 2;
+        ch.phase += dt * (1.6 + speed * 0.75);
+        const q = ch.phase * 1.4;
+        // treading water
+        const tq = T * 2.2, tr = {
+          shL: -0.55 + Math.sin(tq) * 0.35, shR: -0.55 + Math.sin(tq + Math.PI) * 0.35,
+          shLz: -0.75 - Math.cos(tq) * 0.3, shRz: 0.75 + Math.cos(tq + Math.PI) * 0.3,
+          elL: -0.7 + Math.cos(tq) * 0.25, elR: -0.7 + Math.cos(tq + Math.PI) * 0.25,
+          hipL: -0.55 + Math.sin(T * 3.1) * 0.35, hipR: -0.55 + Math.sin(T * 3.1 + Math.PI) * 0.35,
+          kneeL: 0.95 + Math.cos(T * 3.1) * 0.35, kneeR: 0.95 + Math.cos(T * 3.1 + Math.PI) * 0.35,
+          pitch: 0.18, headX: -0.12, headY: Math.sin(T * 0.4 + ch.seed) * 0.45, roll: Math.sin(T * 1.1) * 0.05, lean: 0.05, twist: Math.sin(tq) * 0.06,
+          bob: -1.2 + Math.sin(T * 2.2) * 0.06,
+        };
+        // front crawl: each arm sweeps a full circle; pulling (under water) it's nearly straight, recovering it bends
+        // high at the elbow and swings out wide
+        const aL = q % TAU, aR = (q + Math.PI) % TAU, rec = a => Math.max(0, Math.sin(a - Math.PI)) ;   // recovery: the over-water half of the circle
+        const breathe = Math.sin(q * 0.5);   // head turns to breathe every other stroke, to alternating sides
+        const cr = {
+          shL: Math.PI - aL, shR: Math.PI - aR,
+          shLz: -0.12 - 0.5 * rec(aL), shRz: 0.12 + 0.5 * rec(aR),
+          elL: -0.15 - 1.3 * rec(aL), elR: -0.15 - 1.3 * rec(aR),
+          hipL: Math.sin(ch.phase * 6) * 0.28, hipR: -Math.sin(ch.phase * 6) * 0.28,
+          kneeL: 0.15 + 0.3 * Math.max(0, Math.sin(ch.phase * 6)), kneeR: 0.15 + 0.3 * Math.max(0, -Math.sin(ch.phase * 6)),
+          pitch: 1.38, headX: -0.5 + 0.15 * Math.abs(breathe), headY: breathe * 0.9 * Math.pow(Math.abs(breathe), 2) * 1.2,
+          roll: Math.sin(q) * 0.42 + Math.max(-0.25, Math.min(0.25, -ch.turn * 0.08)), lean: 0, twist: Math.sin(q) * 0.12,
+          bob: -0.22 + Math.sin(q * 2) * 0.04,   // half in the water, back awash
+        };
+        for (const key in cr) t[key] = key === 'shL' || key === 'shR' ? (k > 0.5 ? cr[key] : tr[key]) : tr[key] + (cr[key] - tr[key]) * k;
+        // the arms switch between sculling and stroking in one smooth sweep rather than a snap
+        if (k > 0.5) { ch.armBlend = Math.min(1, (ch.armBlend || 0) + dt * 3); } else ch.armBlend = Math.max(0, (ch.armBlend || 0) - dt * 3);
+        snapArms = ch.armBlend >= 1; rate = 8;
+            } else {
         const k = Math.min(1, speed / 3), run = Math.max(0, Math.min(1, (speed - 6) / 4));
         if (speed > 0.05) ch.phase += dt * (2.2 + speed * 1.35);
         const p = ch.phase, sp = Math.sin(p), cp = Math.cos(p);
@@ -1516,7 +1542,7 @@
       legs[0].rotation.x = c.hipL; legs[1].rotation.x = c.hipR; knees[0].rotation.x = c.kneeL; knees[1].rotation.x = c.kneeR;
       arms[0].rotation.x = c.shL; arms[1].rotation.x = c.shR; arms[0].rotation.z = c.shLz; arms[1].rotation.z = c.shRz;
       forearms[0].rotation.x = c.elL; forearms[1].rotation.x = c.elR;
-      body.rotation.x = c.pitch; body.rotation.z = c.roll + c.sway; body.position.y = swim ? 0 : c.bob;
+      body.rotation.x = c.pitch; body.rotation.z = c.roll + c.sway; body.position.y = c.bob;   // (swimming: low in the water when treading, riding the surface when stroking)
       upper.rotation.x = c.lean; upper.rotation.y = c.twist; upper.rotation.z = -c.sway * 1.6;
       head.rotation.y = c.headY; head.rotation.x = c.headX;
     };
