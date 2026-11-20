@@ -43,6 +43,7 @@ function api(req, res, p) {
   const json = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(o)); };
   const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (p === '/api/status' && req.method === 'GET') return json(200, Object.assign(accounts.status(), { ownerLocked: !!process.env.OWNER_PASSWORD }));
   if (p === '/api/me' && req.method === 'GET') { const r = accounts.me(bearer); return r ? json(200, r) : json(401, { err: 'Not logged in.' }); }
   if (req.method !== 'POST') return json(405, { err: 'POST only' });
   readBody(req, 600 * 1024, b => {

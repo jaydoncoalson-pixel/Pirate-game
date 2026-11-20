@@ -50,12 +50,14 @@ function createAccounts({ dir, reserved = {} }) {
   const U = process.env.UPSTASH_REDIS_REST_URL, UT = process.env.UPSTASH_REDIS_REST_TOKEN;
   const store = U && UT ? redisStore(U, UT) : fileStore(dir);
   const db = { accounts: {} }, byToken = new Map();
-  let ready = false;
-  const loaded = store.loadAll().then(all => {
+  let ready = false, loadErr = null;
+  // load everything at start-up; if the store can't be reached, keep retrying (logins wait until it works)
+  const tryLoad = () => store.loadAll().then(all => {
     db.accounts = all || {};
     for (const [key, a] of Object.entries(db.accounts)) for (const t of a.tokens || []) byToken.set(t, key);
-    ready = true; console.log(`Accounts: ${Object.keys(db.accounts).length} loaded from ${store.where}`);
-  }).catch(e => { console.error(`Accounts: could not load from ${store.where}: ${e.message}. Logins are disabled until the server restarts.`); });
+    ready = true; loadErr = null; console.log(`Accounts: ${Object.keys(db.accounts).length} loaded from ${store.where}`);
+  }).catch(e => { loadErr = e.message; console.error(`Accounts: could not load from ${store.where}: ${e.message}. Retrying in 15s.`); setTimeout(tryLoad, 15000); });
+  const loaded = tryLoad();
   if (store.where !== 'Upstash Redis' && process.env.RENDER && !process.env.DATA_DIR) console.warn('Accounts: saving to the ordinary disk on Render, which is wiped on every restart. Set up Upstash Redis or a persistent disk (see accounts.js).');
 
   // write changes a moment later (batched); retried if the store is briefly unreachable
@@ -82,26 +84,27 @@ function createAccounts({ dir, reserved = {} }) {
   }
   const pub = (key, token) => { const a = db.accounts[key]; return { name: a.name, token, save: a.save || null }; };
 
-  const notReady = { err: 'The server is still starting up. Try again in a moment.' };
+  const notReady = () => ({ err: loadErr ? `The server can't open its account storage (${store.where}: ${loadErr}). Check the storage settings in Render.` : 'The server is still starting up. Try again in a moment.' });
   return {
-    ready: () => ready, loaded,
+    ready: () => ready, loaded, status: () => ({ ready, store: store.where, error: loadErr, accounts: Object.keys(db.accounts).length, persistent: store.where === 'Upstash Redis' || !!process.env.DATA_DIR }),
     register(name, pw) {
-      if (!ready) return notReady;
+      if (!ready) return notReady();
       name = String(name || '').trim().replace(/\s+/g, ' ');
       if (!NAME_RE.test(name)) return { err: 'Names are 2 to 16 letters, numbers, spaces, - _ or \'.' };
       if (String(pw || '').length < 4) return { err: 'Pick a password of at least 4 characters.' };
       const key = keyOf(name);
       if (db.accounts[key]) return { err: 'That name is already taken. Log in, or choose another name.' };
-      if (reserved[key] !== undefined && reserved[key] !== null && String(pw) !== reserved[key]) return { err: 'That name is reserved.' };
+      if (reserved[key] !== undefined && reserved[key] !== null && String(pw) !== reserved[key]) return { err: 'That name is reserved. Its password must be the owner password (OWNER_PASSWORD in Render).' };
       const salt = crypto.randomBytes(16).toString('hex');
       db.accounts[key] = { name, salt, hash: hash(pw, salt), save: null, created: Date.now(), tokens: [] };
       persist(key);
       return pub(key, newToken(key));
     },
     login(name, pw) {
-      if (!ready) return notReady;
+      if (!ready) return notReady();
       const key = keyOf(name), a = db.accounts[key];
-      if (!a || hash(pw, a.salt) !== a.hash) return { err: 'Wrong name or password.' };
+      if (!a) return { err: `There's no captain called "${String(name).trim()}" yet. Click Create account to make one.`, noAccount: true };
+      if (hash(pw, a.salt) !== a.hash) return { err: 'Wrong password for that captain.' };
       return pub(key, newToken(key));
     },
     me(token) { const key = byToken.get(String(token || '')); return key && db.accounts[key] ? pub(key, token) : null; },

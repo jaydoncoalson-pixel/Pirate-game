@@ -225,6 +225,7 @@
       <div id="pgUrlBox" style="display:${http ? 'none' : 'block'}"><label style="font-size:13px">Server address</label><input id="pgUrl" style="${inp}"></div>
       <div id="pgMsg" style="min-height:18px;font-size:13px;color:#8e1f1f;margin:-4px 0 8px"></div>
       <div style="display:flex;gap:8px"><button id="pgGo" style="flex:1;${btn('#6b4423', '#fff3d6')}">Log in</button><button id="pgNew" style="flex:1;${btn('#8a5a33', '#fff3d6')}">Create account</button></div>
+      <div id="pgStat" style="font-size:11px;opacity:.7;margin-top:8px;text-align:center"></div>
       <div style="text-align:center;margin-top:10px"><button id="pgOff" style="${btn('#f4e4c1', '#2a1a0c')};padding:6px 12px;font-size:13px">Play offline</button></div></div>`;
     document.body.appendChild(o);
     const nm = o.querySelector('#pgName'), pw = o.querySelector('#pgPass'), ur = o.querySelector('#pgUrl'), msg = o.querySelector('#pgMsg');
@@ -235,7 +236,8 @@
       if (busy) return; const u = ur.value.trim(), n = nm.value.trim(), p = pw.value;
       if (!n || !p) { msg.textContent = 'Enter yer captain name and a password.'; return; }
       busy = true; msg.style.color = '#2a1a0c'; msg.textContent = create ? 'Creating yer captain…' : 'Logging in…';
-      let r; try { r = await apiCall(apiBase(u), create ? '/api/register' : '/api/login', { name: n, password: p }); } catch (e) { r = { err: "Couldn't reach the server." }; }
+      let r; try { r = await apiCall(apiBase(u), create ? '/api/register' : '/api/login', { name: n, password: p }); } catch (e) { r = { err: "Couldn't reach the server (" + (e.message || 'network error') + ')' }; }
+      if (r.err && /\(404\)|\(405\)/.test(r.err)) r.err = "This server doesn't have accounts yet. It may still be updating on Render; wait a minute and refresh.";
       busy = false;
       if (r.err) { msg.style.color = '#8e1f1f'; msg.textContent = r.err; return; }
       if (!http) localStorage.setItem('pg_server', u);
@@ -245,6 +247,13 @@
     o.querySelector('#pgNew').onclick = () => go(true);
     o.querySelector('#pgOff').onclick = () => { o.remove(); boot(); resolveRoom(null); };
     setTimeout(() => nm.value ? pw.focus() : nm.focus(), 50);
+    // how the server's account storage is doing (so a problem shows up here, not as a mystery)
+    (async () => { const st = o.querySelector('#pgStat'); try { const r = await apiCall(apiBase(ur.value.trim()), '/api/status');
+      if (r.error) { st.style.color = '#8e1f1f'; st.style.opacity = 1; st.textContent = `Account storage problem: ${r.error}`; }
+      else if (r.ready === false) st.textContent = 'Server starting up…';
+      else if (r.store) st.textContent = `${r.accounts} captain${r.accounts === 1 ? '' : 's'} on this server${r.persistent ? '' : ' · warning: saves reset when the server restarts'}`;
+      else st.textContent = "This server doesn't support accounts yet (it may still be updating). Refresh in a minute.";
+    } catch (e) { st.textContent = "Couldn't reach the server's account service."; } })();
   }
   // already logged in on this device: carry straight on
   async function auto() {
