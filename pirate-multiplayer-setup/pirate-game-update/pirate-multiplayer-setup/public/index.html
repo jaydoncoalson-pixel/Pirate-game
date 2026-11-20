@@ -5624,7 +5624,35 @@
         oscs.forEach(os => { os.start(t); os.stop(t + dur + 0.1); }); br.start(t, Math.random()); br.stop(t + dur + 0.1);
         setTimeout(() => { try { [envG, mix, verb, wet, dry, dark].forEach(n => n.disconnect()); } catch (e) {} }, (dur + 4) * 1000);
       },
-      horn() { tone({ type: 'sawtooth', f0: 98, f1: 104, dur: 2.6, vol: 0.22, attack: 0.5 }); tone({ type: 'triangle', f0: 147, f1: 156, dur: 2.6, vol: 0.18, attack: 0.5 }); tone({ type: 'sawtooth', f0: 196, f1: 185, dur: 1.4, vol: 0.08, attack: 0.3, delay: 1.2 }); },
+      // The Serpent Horn: a great war horn. A brass voice (two slightly detuned saws with a sub-octave) whose filter opens
+      // with the breath like real brass, a lip scoop up into each note, vibrato settling in, breath noise and a long echo.
+      // A long low call, then a rising fifth.
+      horn() {
+        if (!ctx || muted) return; const o = out(null, 0.5); if (!o) return;
+        const t0 = ctx.currentTime;
+        if (!SFX._verb) { const L = Math.floor(ctx.sampleRate * 3.6), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 2.6); } SFX._verb = ir; }
+        const verb = ctx.createConvolver(); verb.buffer = SFX._verb; const wet = ctx.createGain(); wet.gain.value = 0.4; verb.connect(wet); wet.connect(o);
+        const note = (f, start, dur, peak) => {
+          const t = t0 + start, bus = ctx.createGain(); bus.gain.value = 1; bus.connect(o); bus.connect(verb);
+          const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2.2;
+          lp.frequency.setValueAtTime(220, t); lp.frequency.exponentialRampToValueAtTime(f * 14 * peak, t + 0.18); lp.frequency.exponentialRampToValueAtTime(f * 8, t + 0.6); lp.frequency.setValueAtTime(f * 8, t + dur - 0.35); lp.frequency.exponentialRampToValueAtTime(f * 2.5, t + dur);   // the brass "blat" as the breath hits
+          const amp = ctx.createGain(); amp.gain.setValueAtTime(0.0001, t); amp.gain.exponentialRampToValueAtTime(0.9 * peak, t + 0.12); amp.gain.exponentialRampToValueAtTime(0.7 * peak, t + 0.5); amp.gain.setValueAtTime(0.7 * peak, t + dur - 0.4); amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          lp.connect(amp); amp.connect(bus);
+          const vib = ctx.createOscillator(); vib.frequency.value = 5; const vg = ctx.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.012, t + 0.8); vib.connect(vg);   // vibrato settling in
+          const oscs = [vib];
+          [[-6, 'sawtooth', 0.5], [6, 'sawtooth', 0.5], [0, 'square', 0.22]].forEach(([dt2, type, g2], n) => {
+            const os = ctx.createOscillator(); os.type = type; os.detune.value = dt2; const fr = n === 2 ? f / 2 : f;
+            os.frequency.setValueAtTime(fr * 0.94, t); os.frequency.exponentialRampToValueAtTime(fr, t + 0.09);   // lips scooping up into the note
+            vg.connect(os.frequency); const gg = ctx.createGain(); gg.gain.value = g2; os.connect(gg); gg.connect(lp); oscs.push(os);
+          });
+          const br = ctx.createBufferSource(); br.buffer = noiseBuf; br.loop = true; const bf = ctx.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = f * 6; bf.Q.value = 1.2;
+          const bg = ctx.createGain(); bg.gain.setValueAtTime(0.0001, t); bg.gain.exponentialRampToValueAtTime(0.12 * peak, t + 0.06); bg.gain.exponentialRampToValueAtTime(0.03, t + 0.4); bg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          br.connect(bf); bf.connect(bg); bg.connect(bus);   // breath through the mouthpiece
+          oscs.forEach(os => { os.start(t); os.stop(t + dur + 0.05); }); br.start(t, Math.random()); br.stop(t + dur + 0.05);
+        };
+        note(98, 0, 2.3, 1);        // a long low call (G2)...
+        note(146.8, 2.15, 1.5, 1.15);   // ...rising a fifth (D3)
+      },
       roar() { tone({ type: 'sawtooth', f0: 90, f1: 38, dur: 2.2, vol: 0.3, attack: 0.1 }); tone({ type: 'square', f0: 62, f1: 30, dur: 2.4, vol: 0.18, attack: 0.2 }); noise({ dur: 2, type: 'lowpass', f0: 500, vol: 0.3 }); },
       blip() { tone({ type: 'square', f0: 520 + Math.random() * 80, dur: 0.05, vol: 0.03 }); },
       click() { tone({ type: 'triangle', f0: 900, f1: 700, dur: 0.05, vol: 0.05 }); },
