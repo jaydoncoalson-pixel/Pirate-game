@@ -8055,6 +8055,7 @@
     if (sk < 1.45) { const u = (sk - 1.15) / 0.3, e = u * u; return { lift: 1 - 0.9 * e, pitch: -0.5 + 1.4 * e, jaw: u < 0.55 ? 1 : 0.15, fwd: Math.sin(Math.PI * u), shake: 0 }; }   // lunges and snaps
     const u = ease((sk - 1.45) / 0.45); return { lift: 0.1 * (1 - u), pitch: 0.9 * (1 - u), jaw: 0.15 - 0.1 * u, fwd: 0, shake: 0 };   // recovers
   }
+  const _neckA = new THREE.Vector3(), _neckD = new THREE.Vector3();
   function poseElder(m, x, z, h, lift, emerge, dt, t, opts = {}) {
     m.t += dt;
     const K = m.K, st = K.trail, SC = K.scale;
@@ -8132,6 +8133,25 @@
     if (I && I.k === 'roar') pitch -= 0.55 * bell;
     const roll = Math.max(-0.35, Math.min(0.35, -m.turn * 0.35)) + (CT >= 0 && clGrip(CT) ? Math.sin(m.t * 6.3) * 0.25 : 0);
     m.head.rotation.set(pitch, yaw, roll, 'YXZ');
+    // blend the neck into the back of the skull: the first few body sections ease from where the trail puts them onto a
+    // smooth line running out of the head's nape, so head and body join seamlessly at any height, pitch or turn
+    {
+      const NB = K.elder ? 6 : 5, NBk = Math.min(NB, m.N - 1);
+      m.head.updateMatrixWorld(true);
+      const A = m.head.localToWorld(_neckA.set(0, K.elder ? 0.02 : -0.1, K.elder ? -0.55 : -0.5)), B = m.segs[NBk].position;
+      // the line leaves the nape heading straight back out of the head, then curves into the body (a quadratic through a control point)
+      const back = _neckD.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)), reach = A.distanceTo(B) * 0.45;
+      const Cx = A.x + back.x * reach, Cy = A.y + back.y * reach, Cz = A.z + back.z * reach;
+      for (let k = 0; k < NBk; k++) {
+        const u = k / NBk, w = Math.pow(1 - u, 1.3), i1 = 1 - u;
+        const qx = i1 * i1 * A.x + 2 * i1 * u * Cx + u * u * B.x, qy = i1 * i1 * A.y + 2 * i1 * u * Cy + u * u * B.y, qz = i1 * i1 * A.z + 2 * i1 * u * Cz + u * u * B.z;
+        const sg = m.segs[k], px = sg.position.x, pz = sg.position.z;
+        sg.position.set(px + (qx - px) * w, sg.position.y + (qy - sg.position.y) * w, pz + (qz - pz) * w);
+        // face along the blended line
+        const tx = 2 * i1 * (Cx - A.x) + 2 * u * (B.x - Cx), tz = 2 * i1 * (Cz - A.z) + 2 * u * (B.z - Cz);
+        sg.rotation.y += angDiff(sg.rotation.y, Math.atan2(-tx, -tz)) * w;
+      }
+    }
     // the jaw: breathing when calm, working when angry, wide for a hiss, a yawn or a roar
     let jaw = 0.05 + 0.04 * (0.5 + 0.5 * Math.sin(m.t * 0.8));
     if (opts.angry) jaw = 0.16 + Math.sin(m.t * 2.5) * 0.08;
