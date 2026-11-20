@@ -4598,18 +4598,57 @@
       SEA_BLADES.add(g); return g;
     }
     if (S === 'tidecaller') {
-      // Tidecaller: the mermaid's blade, translucent aquamarine with a glowing moonlit edge, a guard of pearl shells and fins
-      const glass = new THREE.MeshPhongMaterial({ color: 0x5fe0e8, specular: 0xffffff, shininess: 220, emissive: 0x0a4a50, transparent: true, opacity: 0.78 });
-      const moon = new THREE.MeshBasicMaterial({ color: 0xdffcff }), nacre = metal(0xf0e6d8, 160, 0x1a2020), fin = new THREE.MeshPhongMaterial({ color: 0x7fe8d8, specular: 0xffffff, shininess: 120, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
-      gripKit(g, { len: 0.2, r: 0.03, mat: metal(0x2a6a7a, 90), band: nacre, bands: 6 });
-      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), nacre), 0, 0, -0.215));
-      [-1, 1].forEach(sd => { const f = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 3), fin); f.scale.z = 0.25; at3(f, 0, sd * 0.1, 0.0, 0, 0, sd * -2.1); g.add(f); });
-      for (let k = 0; k < 4; k++) { const sh = new THREE.Mesh(new THREE.TorusGeometry(0.02 + k * 0.01, 0.006, 5, 12, Math.PI), nacre); sh.rotation.set(0, Math.PI / 2, 0); sh.position.z = 0.04 - k * 0.004; g.add(sh); }
-      const edges = [];
-      bladeKit(g, { len: lk.len, curve: lk.curve, body: glass, edge: moon, w: t => 0.12 * (1 - 0.5 * t) * (1 + 0.1 * Math.sin(t * Math.PI * 5)) + 0.012, thick: 0.026,
-        each: (i, tm, cy, cz, rx, w, L) => { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, L), moon); sp.position.set(0, cy + w / 2, cz); sp.rotation.x = rx; g.add(sp); edges.push(sp); } });
-      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x7ff0ff, transparent: true, depthWrite: false, opacity: 0.55 })); gl.scale.set(0.85, 0.85, 1); gl.position.z = 0.07 + lk.len * 0.55; g.add(gl);
-      g.userData.seaTick = t => { const p = 0.5 + 0.5 * Math.sin(t * 1.4); moon.color.setHSL(0.5, 0.8, 0.82 + 0.12 * p); gl.material.opacity = 0.35 + 0.3 * p; edges.forEach((m, i) => { m.material = moon; }); };
+      // Tidecaller, the mermaid's blade: a pearl in an open clam for a pommel, a grip of shimmering fish scales, a guard
+      // shaped like a mermaid's tail fluke with a starfish and shells, and an iridescent blade that starts as scales at
+      // the hilt and fades to clear sea glass, with a fin rippling along its back. The whole thing shimmers pink to teal.
+      const scaleTex = canvasTex(128, 128, (c, w, h) => {
+        for (let row = 0; row < 9; row++) for (let col = 0; col < 7; col++) {
+          const x = col * 20 + (row % 2) * 10, y = row * 15, hue = 170 + ((row * 23 + col * 37) % 90);
+          const gr = c.createRadialGradient(x, y + 4, 1, x, y, 13); gr.addColorStop(0, `hsl(${hue},80%,82%)`); gr.addColorStop(1, `hsl(${hue + 30},70%,48%)`);
+          c.fillStyle = gr; c.beginPath(); c.arc(x, y, 11, 0, Math.PI); c.fill(); c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.2; c.stroke();
+        }
+      });
+      scaleTex.wrapS = scaleTex.wrapT = THREE.RepeatWrapping; scaleTex.repeat.set(0.6, 0.6);
+      const scalesM = new THREE.MeshPhongMaterial({ map: scaleTex, color: 0xffffff, specular: 0xffffff, shininess: 160, emissive: 0x102830 });
+      const pearlM = new THREE.MeshPhongMaterial({ color: 0xfff6f0, specular: 0xffffff, shininess: 200, emissive: 0x2a2028 });
+      const shellM = new THREE.MeshPhongMaterial({ color: 0xffc8d6, specular: 0xffffff, shininess: 120, emissive: 0x2a0a14, side: THREE.DoubleSide });
+      const finM = new THREE.MeshPhongMaterial({ color: 0x5fe8d8, specular: 0xffffff, shininess: 160, emissive: 0x0a3a40, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+      const glassM = new THREE.MeshPhongMaterial({ color: 0x9ff2f0, specular: 0xffffff, shininess: 230, emissive: 0x0e4a52, transparent: true, opacity: 0.72 });
+      const bladeScales = new THREE.MeshPhongMaterial({ map: scaleTex, color: 0xdffcff, specular: 0xffffff, shininess: 200, emissive: 0x0e3a44, transparent: true, opacity: 0.92 });
+      const moon = new THREE.MeshBasicMaterial({ color: 0xe8fdff });
+      // grip of fish scales, bound with strands of pearls
+      const grip = at3(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.21, 12), scalesM), 0, 0, -0.095, Math.PI / 2); g.add(grip);
+      for (let i = 0; i < 3; i++) for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.0065, 6, 5), pearlM), Math.cos(a) * 0.033, Math.sin(a) * 0.033, -0.03 - i * 0.07)); }
+      // pommel: a pearl resting in an open clam
+      [-1, 1].forEach(sd => { const half = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), shellM); half.scale.set(1, 0.35, 1); half.position.set(0, sd * 0.01, -0.23); half.rotation.set(sd > 0 ? 0 : Math.PI, 0, 0); half.rotation.x += -sd * 0.5; g.add(half); for (let r = 0; r < 5; r++) { const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.003, 0.08), shellM); rib.position.set((r - 2) * 0.016, sd * 0.022, -0.23); rib.rotation.y = (r - 2) * 0.3; g.add(rib); } });
+      const pearl = g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), pearlM), 0, 0, -0.235)) && g.children[g.children.length - 1];
+      // the guard: a mermaid's tail fluke sweeping out to both sides, a starfish at its heart, little shells on the flukes
+      [-1, 1].forEach(sd => {
+        const fluke = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 3, 1), finM); fluke.scale.set(1, 1, 0.22); fluke.position.set(0, sd * 0.12, 0.0); fluke.rotation.set(0, 0, sd * -2.2); g.add(fluke);
+        for (let k = 0; k < 4; k++) { const ray = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.16, 0.004), new THREE.MeshBasicMaterial({ color: 0xbff8ff })); ray.position.set(0.012, sd * (0.09 + k * 0.012), -0.01 - k * 0.012); ray.rotation.x = sd * (0.9 + k * 0.25); g.add(ray); }
+        const sh = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.025, 8, 1, true), shellM); sh.position.set(0.016, sd * 0.19, -0.03); sh.rotation.z = Math.PI / 2; g.add(sh);
+      });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), scalesM), 0, 0, 0.03)).scale.set(0.9, 1.2, 0.9);
+      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, arm = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.04, 5), new THREE.MeshPhongMaterial({ color: 0xff8a6a, emissive: 0x3a1006 })); arm.position.set(0.032, Math.sin(a) * 0.02, 0.03 + Math.cos(a) * 0.02); arm.rotation.set(a, 0, 0); g.add(arm); }
+      // the blade: scales at the hilt melting into clear sea glass, a fin rippling along the back, a moonlit edge
+      const fins = [], edges = [];
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: glassM, edge: moon, thick: 0.026, segs: 14, tipMat: glassM,
+        w: t => 0.115 * (1 - 0.55 * t) * (1 + 0.08 * Math.sin(t * Math.PI * 5)) + 0.012,
+        each: (i, tm, cy, cz, rx, w, L) => {
+          if (tm < 0.4) { const sc = new THREE.Mesh(new THREE.BoxGeometry(0.03, w * 0.9, L * 1.02), bladeScales); sc.position.set(0, cy, cz); sc.rotation.x = rx; sc.material = bladeScales; g.add(sc); }   // scales near the hilt
+          if (tm > 0.04 && tm < 0.8) { const fh = 0.035 + 0.03 * Math.sin(tm / 0.8 * Math.PI), pg = new THREE.PlaneGeometry(L * 1.05, fh); pg.translate(0, fh / 2, 0); const f = new THREE.Mesh(pg, finM); f.position.set(0, cy + w / 2, cz); f.rotation.set(rx, Math.PI / 2, 0, 'XYZ'); g.add(f); fins.push({ m: f, rx, tm });
+            const ray = new THREE.Mesh(new THREE.BoxGeometry(0.002, fh * 0.95, 0.002), moon); ray.position.set(0, fh * 0.47, 0); f.add(ray); }   // a soft dorsal fin with a bright ray, like a fish's
+          const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.005, L), moon); sp.position.set(0, cy - w / 2, cz); sp.rotation.x = rx; g.add(sp); edges.push(sp);
+        } });
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9ff6ff, transparent: true, depthWrite: false, opacity: 0.5 })); gl.scale.set(0.85, 0.85, 1); gl.position.z = 0.07 + lk.len * 0.55; g.add(gl);
+      const glP = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffd6ec, transparent: true, depthWrite: false, opacity: 0.6 })); glP.scale.set(0.2, 0.2, 1); glP.position.z = -0.235; g.add(glP);
+      g.userData.seaTick = t => {
+        const p = 0.5 + 0.5 * Math.sin(t * 1.4), hue = 0.48 + 0.08 * Math.sin(t * 0.6);   // shimmer from teal toward pink and back
+        moon.color.setHSL(0.5, 0.8, 0.82 + 0.12 * p); gl.material.opacity = 0.32 + 0.28 * p; glP.material.opacity = 0.45 + 0.35 * p;
+        finM.color.setHSL(hue, 0.75, 0.62); glassM.emissive.setHSL(hue, 0.7, 0.14 + 0.06 * p); scalesM.emissive.setHSL(0.9 + 0.1 * Math.sin(t * 0.8), 0.6, 0.08 + 0.05 * p);
+        scaleTex.offset.y = (t * 0.05) % 1;   // the scales glint as light runs over them
+        fins.forEach(f => { f.m.scale.y = 0.8 + 0.3 * Math.sin(t * 3 - f.tm * 12); f.m.rotation.z = 0.15 * Math.sin(t * 2.4 - f.tm * 9); });   // the fin ripples like it's swimming
+      };
       SEA_BLADES.add(g); return g;
     }
     return g;
