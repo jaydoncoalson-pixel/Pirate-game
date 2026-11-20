@@ -7466,8 +7466,8 @@
   // two kinds answer a horn: the true Serpent Horn's Elder Serpent (10x a shoal serpent's size, 3x its 55 m/s hunting speed, sinks ships in one bite),
   // and the common sea serpent that answers anyone else's horn once the true one has been claimed
   const ELD_KINDS = {
-    elder: { elder: true, scale: 10, max: 165, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, baseY: -9, amp: 20, neck: 16, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
-    common: { elder: false, scale: 1, max: 55, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
+    elder: { elder: true, scale: 10, max: 165, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, segN: 60, segSp: 21, waveK: 0.21, neckN: 14, baseY: -12, amp: 8, neck: 8, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
+    common: { elder: false, scale: 1, max: 55, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, segN: 28, segSp: 4.2, waveK: 0.42, neckN: 7, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
   };
   const ELD = { K: ELD_KINDS.elder, on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
   const RIDE = { on: false };
@@ -7486,14 +7486,14 @@
   // yer serpent's name in messages
   const etoast = msg => toast(ELD.K.elder ? msg : msg.replace(/the Elder Serpent/g, 'yer sea serpent').replace(/The Elder Serpent/g, 'Yer sea serpent').replace(/Elder Serpent/g, 'sea serpent'));
   function makeElderMesh(K) {
-    const M = K.elder ? ELD_MATS : COMMON_MATS, SC = K.scale, g = new THREE.Group(), N = K.elder ? 30 : 28, SPACING = 4.2 * SC, segs = [];
+    const M = K.elder ? ELD_MATS : COMMON_MATS, SC = K.scale, g = new THREE.Group(), N = K.segN, SPACING = K.segSp, segs = [];   // the Elder Serpent's body is twice as many, closer segments, so it reads as one long body
     scene.add(g);
     for (let k = 0; k < N; k++) {
       const r = 3.0 * SC * (1 - (k / N) * 0.8), m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), M.scale);
       m.scale.set(1, 0.9, 1.75); g.add(m);
       const belly = new THREE.Mesh(new THREE.SphereGeometry(r * 0.82, 10, 6), M.belly); belly.position.y = -r * 0.32; belly.scale.set(1.05, 0.7, 1.2); m.add(belly);
       // a ridge of blood-red blades all down the back, and bony spines between them
-      const fin = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, r * 1.6, 3), k % 2 ? M.horn : M.fin); fin.position.y = r * 0.95; fin.rotation.x = -0.55; fin.scale.z = 0.35; m.add(fin);
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, r * 1.6, 3), (K.elder ? k % 4 > 1 : k % 2) ? M.horn : M.fin); fin.position.y = r * 0.95; fin.rotation.x = -0.55; fin.scale.z = 0.35; m.add(fin);
       segs.push(m);
     }
     const head = new THREE.Group(); head.scale.setScalar(2.8 * SC); g.add(head);
@@ -7525,8 +7525,8 @@
     m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
     for (let k = 0; k < m.N; k++) {
       const idx = Math.min(m.trail.length - 1, Math.round(k * m.SPACING / st)), p = m.trail[idx], q = m.trail[Math.min(m.trail.length - 1, idx + 3)];
-      let y = K.baseY + K.amp * still * Math.sin(k * 0.42 - m.t * (K.elder ? 1.5 : 2.6)) - sink;
-      if (k < 7 && lift > 0) y += lift * (7 - k) * K.neck;
+      let y = K.baseY + K.amp * still * Math.sin(k * K.waveK - m.t * (K.elder ? 1.5 : 2.6)) - sink;
+      if (k < K.neckN && lift > 0) y += lift * (K.neckN - k) * K.neck;
       m.segs[k].position.set(p.x, y + waveHeight(p.x, p.z, t) * 0.5, p.z);
       m.segs[k].rotation.set(0, Math.atan2(p.x - q.x, p.z - q.z), 0);
     }
