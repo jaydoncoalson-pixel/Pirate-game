@@ -72,7 +72,7 @@ function ebiteOk(me, d) {
   const near = (x, z) => typeof x === 'number' && Math.hypot(el[0] - x, el[1] - z) <= 700;   // generous: he moves up to ~500 m/s and presence lags a little
   if (!(d.person ? near(tq.p.x, tq.p.z) || (tq.p.sh && near(tq.p.sh.x, tq.p.sh.z)) : tq.p.sh && near(tq.p.sh.x, tq.p.sh.z))) return false;   // a captain, or their ship, right beside the serpent
   if (d.kill) return hornOwns(me);
-  return (+d.dmg || 0) <= 22;
+  return (+d.dmg || 0) <= 45;
 }
 
 const env = createEnv();

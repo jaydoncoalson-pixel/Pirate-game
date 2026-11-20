@@ -126,7 +126,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
       const el = Array.isArray(q.p.el) ? q.p.el : null, elNear = !!(d.el && el && Math.hypot(el[0] - K.x, el[1] - K.z) < 700);   // an Elder Serpent can tear into it anywhere
       if (elNear ? (K.st === 'dying' || K.st === 'dead') : ((K.st !== 'engaged') || Math.min(Math.hypot(px - K.x, pz - K.z), Math.hypot(q.p.x - K.x, q.p.z - K.z)) > 400)) return;
       if (K.ally && K.ally.owner === from) return;   // its caller can't hurt it
-      K.hp -= Math.max(0, Math.min(60, +d.dmg || 0));
+      K.hp -= Math.max(0, Math.min(100, +d.dmg || 0));
       if (K.hp <= 0) { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); }
     } else if (topic === 'kcall') {
       if (q.p.sw !== 'seasword') return;
