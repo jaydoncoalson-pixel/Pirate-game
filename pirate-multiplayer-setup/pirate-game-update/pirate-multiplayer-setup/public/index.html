@@ -3264,8 +3264,8 @@ window.__pgBoot = () => {
       return;
     }
     ship.lastHit = (ship.lastHit ?? 99) + dt;
-    { const tide = STATE.sword === 'tidecaller';   // Tidecaller: the hull mends three times as fast, and sooner after a hit
-      if (ship.lastHit > (tide ? 4 : 10) && ship.hp < ship.maxHp) ship.hp = Math.min(ship.maxHp, ship.hp + (tide ? 6 : 2) * dt); }
+    { const tide = STATE.sword === 'tidecaller', sea = STATE.sword === 'seasword';   // Tidecaller: the hull mends three times as fast, and sooner after a hit; the Sword of the Sea, four times
+      if (ship.lastHit > (sea ? 3 : tide ? 4 : 10) && ship.hp < ship.maxHp) ship.hp = Math.min(ship.maxHp, ship.hp + (sea ? 8 : tide ? 6 : 2) * dt); }
     // Smoothly ease the ship toward its selected underwater depth and surface state.
     ship.diveTarget = ship.diveTarget ?? ship.diveDepth ?? -22;
     ship.diveDepth = ship.diveDepth ?? -22;
@@ -3317,7 +3317,7 @@ window.__pgBoot = () => {
         const desired = Math.atan2(dx, dz), err = angDiff(ship.heading, desired);
         const steer = Math.abs(err) < 0.025 ? 0 : Math.sign(err);
         ship.sailTarget = 1;
-        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.35 : 1;
+        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : 1;
         // full sail on a straight run; ease off for sharp turns and when closing on the last mark
         const cruiseSpeed = T.speed * seaBuff * 0.9 * Math.max(0.35, Math.cos(Math.min(Math.PI / 2, Math.abs(err)))) * (last ? Math.min(1, 0.25 + d / 160) : 1);
         ship.speed += (cruiseSpeed * Math.max(0.2, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.4);
@@ -3331,7 +3331,7 @@ window.__pgBoot = () => {
       const thr = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
       const steer = (keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
       if (thr > 0) ship.sailTarget = 1; else if (thr < 0 && Math.abs(ship.speed) < 2) ship.sailTarget = 0.12;
-      const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.35 : 1;   // the Sword of the Sea fills yer sails
+      const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : 1;   // the Sword of the Sea fills yer sails
       if (thr > 0) ship.speed += (T.speed * seaBuff * Math.max(0.15, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.5);
       else if (thr < 0) ship.speed += (-T.speed * 0.3 - ship.speed) * Math.min(1, dt * 0.8);
       else ship.speed *= 1 - dt * 0.3;
@@ -4876,7 +4876,7 @@ window.__pgBoot = () => {
     btn(c, STATE.swords.includes('seasword') ? 'Equip the Sword of the Sea' : 'Give me the Sword of the Sea', () => {
       if (!STATE.swords.includes('seasword')) STATE.swords.push('seasword');
       STATE.sword = 'seasword'; save(); refreshBlade(); setWeapon('cutlass'); onSwordChanged();
-      toast('The Sword of the Sea is yers. Press R to call the kraken to yer aid!'); SFX.mermaid();
+      toast('The Sword of the Sea is yers. The sea itself obeys ye: Z Tsunami, G Maelstrom, T Tempest, H Sea Wall. R calls the kraken.'); SFX.mermaid();
     }, STATE.sword === 'seasword');
     c = sec('Health');
     btn(c, 'Heal me', () => { PLAYER.hp = PLAYER.max; });
@@ -5206,7 +5206,7 @@ window.__pgBoot = () => {
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, yer cannons hit 50% harder, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 240, cool: 0.26, reach: 5.0, arc: -0.5, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
@@ -6213,8 +6213,8 @@ window.__pgBoot = () => {
   }
   // damage per ball: the Sword of the Sea makes its owner's cannons hit 50% harder
   function shotDamage(ent, enemy) {
-    if (ent === ship) return (STATE.sword === 'seasword' ? 16.5 : 11) * gunMul();
-    if (ent.remote) return (ent.sw === 'seasword' ? 9 : 6) * (ent.gm || 1);
+    if (ent === ship) return (STATE.sword === 'seasword' ? 22 : 11) * gunMul();
+    if (ent.remote) return (ent.sw === 'seasword' ? 12 : 6) * (ent.gm || 1);
     return 6;
   }
   function updateBalls(dt, t) {
@@ -6224,7 +6224,8 @@ window.__pgBoot = () => {
       b.vy -= 20 * dt; m.position.x += b.vx * dt; m.position.y += b.vy * dt; m.position.z += b.vz * dt;
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
-      const targets = b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
+      if (b.enemy && SEACTL.wallT > 0 && ship && Math.hypot(x - ship.x, z - ship.z) < SEACTL.wallR && y < 22) { hit = true; wSplash(x, 3, z, false); }   // the Sea Wall swallows it
+      const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
         const dx = x - tg.x, dz = z - tg.z, hh = tg.heading;
         const lx = dx * Math.cos(hh) - dz * Math.sin(hh), lz = dx * Math.sin(hh) + dz * Math.cos(hh), gy = tg.group.position.y;
@@ -6557,6 +6558,12 @@ window.__pgBoot = () => {
     let x = camera.position.x + Math.cos(a) * d, z = camera.position.z + Math.sin(a) * d, y = 700;
     for (let i = 0; i < 40; i++) { const nx = x + (Math.random() - 0.5) * 50, nz = z + (Math.random() - 0.5) * 50, ny = y - 700 / 40; boltPos.set([x, y, z, nx, ny, nz], i * 6); x = nx; y = ny; z = nz; }
     boltGeo.attributes.position.needsUpdate = true; flashT = 0.24; SFX.thunder(d);
+  }
+  // a bolt called down on one spot (the Sword of the Sea's Tempest)
+  function strikeAt(x, z) {
+    let px = x + (Math.random() - 0.5) * 120, pz = z + (Math.random() - 0.5) * 120, y = 700;
+    for (let i = 0; i < 40; i++) { const u = (i + 1) / 40, nx = i === 39 ? x : px + (x - px) * 0.08 + (Math.random() - 0.5) * 40 * (1 - u), nz = i === 39 ? z : pz + (z - pz) * 0.08 + (Math.random() - 0.5) * 40 * (1 - u), ny = 700 - 700 * u; boltPos.set([px, y, pz, nx, ny, nz], i * 6); px = nx; y = ny; pz = nz; }
+    boltGeo.attributes.position.needsUpdate = true; flashT = 0.28; SFX.thunder(Math.hypot(x - camera.position.x, z - camera.position.z));
   }
   // the lighthouse sweeps its beam at night
   const LH = LIGHTHOUSE_POS;
@@ -10765,7 +10772,7 @@ window.__pgBoot = () => {
     const crest = [];   // foam riding the top of the wave
     for (let i = 0; i < 22; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 5), tideFoam); f.userData.a = -0.65 + 1.3 * i / 21; mesh.add(f); crest.push(f); }
     mesh.position.set(A.x, 0, A.z); mesh.rotation.y = A.h; scene.add(mesh);   // the wall's open arc faces +z, turned to face the way ye aim
-    TIDE.waves.push({ mesh, wall, crest, x: A.x, z: A.z, h: A.h, t: 0, hit: new Set() });
+    TIDE.waves.push({ mesh, wall, crest, x: A.x, z: A.z, h: A.h, t: 0, hit: new Set(), big: false });
     TIDE.waveCd = TIDE.WAVE_CD; SFX.splash({ x: A.x, z: A.z }, true); SFX.roar();
     toast('Ye raise Tidecaller... and the sea rises with it!');
   }
@@ -10776,7 +10783,7 @@ window.__pgBoot = () => {
     if (heightAt(x, z) > -4) { toast('The whirlpool needs open water ahead of ye.'); return; }
     const disc = new THREE.Mesh(new THREE.CircleGeometry(75, 48), new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, opacity: 0, depthWrite: false }));
     disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.6, z); scene.add(disc);
-    TIDE.pools.push({ disc, x, z, t: 0, tick: 0 }); TIDE.poolCd = TIDE.POOL_CD;
+    TIDE.pools.push({ disc, x, z, t: 0, tick: 0, big: false }); TIDE.poolCd = TIDE.POOL_CD;
     SFX.splash({ x, z }, true); toast('The sea begins to turn... a whirlpool opens before ye!');
   }
   function updateTide(dt, t) {
@@ -10789,16 +10796,16 @@ window.__pgBoot = () => {
     // waves race outward for 2 s, 300 m, hitting each thing once
     for (let i = TIDE.waves.length - 1; i >= 0; i--) {
       const W = TIDE.waves[i]; W.t += dt;
-      const d = 25 + W.t * 150, hgt = 9 * Math.sin(Math.min(1, W.t / 2) * Math.PI) + 2;
+      const B2 = W.big ? 1 : 0, d = 25 + W.t * (B2 ? 260 : 150), hgt = (B2 ? 26 : 9) * Math.sin(Math.min(1, W.t / 2) * Math.PI) + 2;   // a tsunami: twice as far, three times as tall
       W.wall.scale.set(d, hgt, d); W.wall.position.y = hgt / 2 - 1.5;
       for (const f of W.crest) { const a = f.userData.a, sc = 2.2 + d * 0.012; f.position.set(Math.sin(a) * d, hgt - 1.2 + Math.sin(a * 9 + W.t * 6) * 0.6, Math.cos(a) * d); f.scale.set(sc * 1.8, sc * 0.7, sc); }
       W.wall.material.opacity = 0.55 * (1 - Math.max(0, W.t - 1.5) / 0.5);
       for (const T of tideTargets()) {
         if (W.hit.has(T.e)) continue;
         const dx = T.e.x - W.x, dz = T.e.z - W.z, dist = Math.hypot(dx, dz); if (Math.abs(dist - d) > 30) continue;
-        if (Math.abs(angDiff(W.h, Math.atan2(dx, dz))) > 0.7) continue;
-        W.hit.add(T.e); T.hit(T.ship ? 40 : 70); wSplash(T.e.x, 2, T.e.z, true);
-        if (T.ship && !T.e.net) { T.e.speed = -6; T.e.x += dx / dist * 12; T.e.z += dz / dist * 12; T.e.roll = (T.e.roll || 0) + 0.25; }   // shoved back and heeled over
+        if (Math.abs(angDiff(W.h, Math.atan2(dx, dz))) > (B2 ? 1.0 : 0.7)) continue;
+        W.hit.add(T.e); T.hit(T.ship ? (B2 ? 95 : 40) : (B2 ? 140 : 70)); wSplash(T.e.x, 2, T.e.z, true);
+        if (T.ship && !T.e.net) { T.e.speed = B2 ? -14 : -6; T.e.x += dx / dist * (B2 ? 40 : 12); T.e.z += dz / dist * (B2 ? 40 : 12); T.e.roll = (T.e.roll || 0) + 0.25; }   // shoved back and heeled over
       }
       if (Math.random() < dt * 30) { const a = W.h + (Math.random() - 0.5) * 1.3; wSplash(W.x + Math.sin(a) * d, hgt, W.z + Math.cos(a) * d, false); }
       if (W.t > 2) { scene.remove(W.mesh); TIDE.waves.splice(i, 1); }
@@ -10806,19 +10813,97 @@ window.__pgBoot = () => {
     // whirlpools turn for 8 s, dragging ships toward the eye and grinding anything caught in them
     for (let i = TIDE.pools.length - 1; i >= 0; i--) {
       const Pl = TIDE.pools[i]; Pl.t += dt; Pl.tick -= dt;
-      const life = Pl.t < 1 ? Pl.t : Pl.t > 7 ? Math.max(0, 8 - Pl.t) : 1;
+      const PL = Pl.big ? 12 : 8, life = Pl.t < 1 ? Pl.t : Pl.t > PL - 1 ? Math.max(0, PL - Pl.t) : 1, PR = Pl.big ? 1.6 : 1;   // a maelstrom: bigger, longer, deadlier
       Pl.disc.material.opacity = 0.85 * life; Pl.disc.rotation.z += dt * 2.2; Pl.disc.position.y = 0.6 + waveHeight(Pl.x, Pl.z, t) * 0.5;
       const grind = Pl.tick <= 0; if (grind) Pl.tick = 1;
       for (const T of tideTargets()) {
-        const dx = Pl.x - T.e.x, dz = Pl.z - T.e.z, dist = Math.hypot(dx, dz); if (dist > 110) continue;
-        if (T.ship && !T.e.net && dist > 4) { const pull = Math.min(dist, 18 * dt) * life; T.e.x += dx / dist * pull + dz / dist * pull * 0.8; T.e.z += dz / dist * pull - dx / dist * pull * 0.8; T.e.heading += dt * 0.9 * life; }   // dragged round and in
-        if (grind && dist < 80) T.hit(T.ship ? 14 : 18);
+        const dx = Pl.x - T.e.x, dz = Pl.z - T.e.z, dist = Math.hypot(dx, dz); if (dist > 110 * PR) continue;
+        if (T.ship && !T.e.net && dist > 4) { const pull = Math.min(dist, (Pl.big ? 32 : 18) * dt) * life; T.e.x += dx / dist * pull + dz / dist * pull * 0.8; T.e.z += dz / dist * pull - dx / dist * pull * 0.8; T.e.heading += dt * 0.9 * life; }   // dragged round and in
+        if (grind && dist < 80 * PR) T.hit(T.ship ? (Pl.big ? 26 : 14) : (Pl.big ? 32 : 18));
       }
       if (Math.random() < dt * 10 * life) { const a = Math.random() * 6.28, r = 20 + Math.random() * 55; wSplash(Pl.x + Math.cos(a) * r, 1, Pl.z + Math.sin(a) * r, false); }
-      if (Pl.t > 8) { scene.remove(Pl.disc); Pl.disc.geometry.dispose(); TIDE.pools.splice(i, 1); }
+      if (Pl.t > PL) { scene.remove(Pl.disc); Pl.disc.geometry.dispose(); TIDE.pools.splice(i, 1); }
     }
   }
   addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; const k = e.key.toLowerCase(); if (!tideOn()) return; if (k === 'r') tideWave(); if (k === 'g') tideWhirlpool(); });
+  // ---- the Sword of the Sea: SEA CONTROL ----
+  // Z Tsunami: a towering wave that races out twice as far and hits more than twice as hard as Tidecaller's.
+  // G Maelstrom: a vast whirlpool that drags ships in from far off and grinds them for 12 seconds.
+  // T Tempest: a storm breaks around ye; for 25 seconds lightning strikes yer enemies again and again.
+  // H Sea Wall: a ring of water rises round yer ship for 10 seconds and swallows every shot fired at her.
+  const SEACTL = { fCd: 0, gCd: 0, tCd: 0, vCd: 0, stormT: 0, boltT: 0, wallT: 0, wallR: 0, wall: null };
+  const seaOn = () => STATE.sword === 'seasword';
+  const seaBusy = () => talk || uiOpen || STOM.on || MERM.held || inInterior || DUN.on;
+  function seaTsunami() {
+    if (!seaOn() || seaBusy()) return;
+    if (SEACTL.fCd > 0) { toast(`The sea is still drawing back... (${Math.ceil(SEACTL.fCd)}s)`); return; }
+    const A = tideAim(), mesh = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 32, 1, true, -1.0, 2.0), tideWater); mesh.add(wall);
+    const crest = []; for (let i = 0; i < 34; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 5), tideFoam); f.userData.a = -1.0 + 2.0 * i / 33; mesh.add(f); crest.push(f); }
+    mesh.position.set(A.x, 0, A.z); mesh.rotation.y = A.h; scene.add(mesh);
+    TIDE.waves.push({ mesh, wall, crest, x: A.x, z: A.z, h: A.h, t: 0, hit: new Set(), big: true });
+    SEACTL.fCd = 15; SFX.splash({ x: A.x, z: A.z }, true); SFX.roar(); setTimeout(() => SFX.splash({ x: A.x + Math.sin(A.h) * 200, z: A.z + Math.cos(A.h) * 200 }, true), 600);
+    toast('Ye sweep the Sword of the Sea... and a TSUNAMI rises before ye!');
+  }
+  function seaMaelstrom() {
+    if (!seaOn() || seaBusy()) return;
+    if (SEACTL.gCd > 0) { toast(`The deep needs time before it turns again... (${Math.ceil(SEACTL.gCd)}s)`); return; }
+    const A = tideAim(); const x = A.x + Math.sin(A.h) * 220, z = A.z + Math.cos(A.h) * 220;
+    if (heightAt(x, z) > -4) { toast('The maelstrom needs open water ahead of ye.'); return; }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(120, 56), new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, opacity: 0, depthWrite: false }));
+    disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.6, z); scene.add(disc);
+    TIDE.pools.push({ disc, x, z, t: 0, tick: 0, big: true }); SEACTL.gCd = 25;
+    SFX.splash({ x, z }, true); SFX.roar(); toast('The sea obeys ye... a MAELSTROM tears open ahead!');
+  }
+  function seaTempest() {
+    if (!seaOn() || seaBusy()) return;
+    if (SEACTL.tCd > 0) { toast(`The sky has spent its fury for now... (${Math.ceil(SEACTL.tCd)}s)`); return; }
+    SEACTL.stormT = 25; SEACTL.boltT = 0.6; SEACTL.tCd = 60;
+    const c = sailing && ship ? ship : P.pos; strikeAt(c.x + 300, c.z + 200); setTimeout(() => strikeAt(c.x - 250, c.z - 300), 350);
+    toast('Ye raise the Sword of the Sea to the sky... and the TEMPEST answers!');
+  }
+  function seaWall() {
+    if (!seaOn() || seaBusy()) return;
+    if (!ship || ship.sinking || !(sailing || onShip)) { toast('Ye need to be aboard yer ship to raise the Sea Wall.'); return; }
+    if (SEACTL.vCd > 0) { toast(`The sea won't rise again just yet... (${Math.ceil(SEACTL.vCd)}s)`); return; }
+    SEACTL.wallT = 10; SEACTL.vCd = 30; SEACTL.wallR = ship.T.L * 0.5 + 35;
+    if (!SEACTL.wall) { SEACTL.wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48, 1, true), new THREE.MeshBasicMaterial({ color: 0x5fd8f0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); scene.add(SEACTL.wall); SEACTL.crest = new THREE.Mesh(new THREE.TorusGeometry(1, 0.035, 6, 64), tideFoam); SEACTL.crest.rotation.x = Math.PI / 2; scene.add(SEACTL.crest); }
+    SFX.splash({ x: ship.x, z: ship.z }, true); toast('The sea rises in a wall around yer ship!');
+  }
+  const seaHud = document.createElement('div');
+  seaHud.style.cssText = 'position:absolute;right:16px;bottom:96px;color:#cff4ff;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.8);pointer-events:none;text-align:right;line-height:1.55';
+  document.body.appendChild(seaHud);
+  function updateSeaControl(dt, t) {
+    for (const k of ['fCd', 'gCd', 'tCd', 'vCd']) SEACTL[k] = Math.max(0, SEACTL[k] - dt);
+    const cd = v => v > 0 ? `(${Math.ceil(v)}s)` : '&middot; ready';
+    const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}` : '';
+    if (seaHud.innerHTML !== hud) seaHud.innerHTML = hud;
+    if (!seaOn()) { SEACTL.stormT = 0; SEACTL.wallT = 0; }
+    // a swimmer the sea loves: healed quickly in the water
+    if (seaOn() && krSwimming() && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 8 * dt);
+    // the Tempest: a bolt every second or so on whatever's nearest and hostile; when nothing is, the sea all round is struck
+    if (SEACTL.stormT > 0) {
+      SEACTL.stormT -= dt; SEACTL.boltT -= dt;
+      if (SEACTL.boltT <= 0) {
+        SEACTL.boltT = 0.9 + Math.random() * 0.6; const c = sailing && ship ? ship : P.pos;
+        const near = tideTargets().filter(T2 => Math.hypot(T2.e.x - c.x, T2.e.z - c.z) < 850);
+        if (near.length) { const T2 = near[Math.floor(Math.random() * near.length)]; strikeAt(T2.e.x, T2.e.z); T2.hit(T2.ship ? 30 : 45); wSplash(T2.e.x, 4, T2.e.z, true); puff(T2.e.x, 8, T2.e.z, { color: 0xfff6c0, size: 10, life: 0.6, grow: 2.5, vy: 4, op: 0.9 }); }
+        else { const a = Math.random() * 6.28, d = 250 + Math.random() * 500; strikeAt(c.x + Math.sin(a) * d, c.z + Math.cos(a) * d); }
+      }
+    }
+    // the Sea Wall: rises, follows the ship, ripples, and falls away
+    if (SEACTL.wall) {
+      const W = SEACTL.wall;
+      if (SEACTL.wallT > 0 && ship && !ship.sinking) {
+        SEACTL.wallT -= dt; const u = Math.min(1, (10 - SEACTL.wallT) / 0.8), dn = Math.min(1, SEACTL.wallT / 0.8), hgt = 22 * Math.min(u, dn);
+        W.visible = true; W.scale.set(SEACTL.wallR, Math.max(0.1, hgt), SEACTL.wallR); W.position.set(ship.x, hgt / 2 - 2 + Math.sin(t * 3) * 0.6, ship.z); W.rotation.y += dt * 0.6;
+        W.material.opacity = 0.6 * Math.min(u, dn);
+        SEACTL.crest.visible = true; SEACTL.crest.scale.setScalar(SEACTL.wallR); SEACTL.crest.position.set(ship.x, hgt - 2 + Math.sin(t * 3) * 0.6, ship.z);   // foam along its crest
+        if (Math.random() < dt * 18) { const a = Math.random() * 6.28; wSplash(ship.x + Math.sin(a) * SEACTL.wallR, hgt, ship.z + Math.cos(a) * SEACTL.wallR, false); }
+      } else { W.visible = false; SEACTL.crest.visible = false; SEACTL.wallT = 0; }
+    }
+  }
+  addEventListener('keydown', e => { if (e.repeat || uiOpen || talk || !seaOn()) return; const k = e.key.toLowerCase(); if (k === 'z') seaTsunami(); else if (k === 'g') seaMaelstrom(); else if (k === 't') seaTempest(); else if (k === 'h') seaWall(); });
   // ---- Hollowell's Ghost Blade ----
   const GHOST = { cd: 0, CD: 30, rings: [] };
   function ghostDrain(at) {   // the blade drinks: a wisp of life flows from the wound back into ye
@@ -11210,7 +11295,7 @@ window.__pgBoot = () => {
     updateShip(dt, t);
     updateCrew(dt);
     tickSeaBlades(t);
-    updateTide(dt, t); updateGhost(dt, t); updateFortGuns(dt);
+    updateTide(dt, t); updateSeaControl(dt, t); updateGhost(dt, t); updateFortGuns(dt);
     updateElder(dt, t); updateBrood(dt, t); if (MP.room) { updateRemoteElders(dt, t); updateRemoteBroods(dt, t); }
     mpUpdate(dt, t);
     if (DUN.on) {
@@ -11255,7 +11340,7 @@ window.__pgBoot = () => {
     const g = groundAt(P.pos.x, P.pos.z);
     const swimY = waveHeight(P.pos.x, P.pos.z, t) - 0.45;
     const swimming = !onDock(P.pos.x, P.pos.z) && g < swimY - 0.85;
-    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : 1) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace
+    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : STATE.sword === 'seasword' ? 1.9 : 1) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace
     P.speed += (want - P.speed) * Math.min(1, dt * 10);
     if (ml > 0) { mx /= ml; mz /= ml; P.facing = angLerp(P.facing, Math.atan2(mx, mz), Math.min(1, dt * 12)); }
     const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
