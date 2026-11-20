@@ -17,6 +17,7 @@ function mistSpot() {
 }
 const KST = ['roam', 'hunt', 'engaged', 'drown', 'leaving', 'dying', 'dead'];
 const SST = ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'];
+const BWST = ['caged', 'rise', 'hunt', 'attack', 'return', 'dying', 'dead'];
 
 function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornOwns }) {
   // ---------------------------------------------------------------- the Kraken
@@ -262,20 +263,114 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     if (s.hp <= 0) { s.hp = 0; s.st = 'dying'; s.deadT = 0; broadcast('sdead', { i: d.i | 0, by: from }); }
   }
 
+  // ---------------------------------------------------------------- the Blackwater Beast
+  // Kept caged under Skull Isle. In a Blackwater raid it breaks loose, surfaces off the island and hunts any crewed
+  // ship that isn't Blackwater (so: players), seizing her in its claws and crushing her hull until she sinks or gets
+  // away. It keeps to open water. When the raid ends it swims home to its pen.
+  const BW = { st: 'caged', x: 0, z: 0, h: 0, hp: 1500, max: 1500, t: 0, tg: null, wp: null, atkT: 0, pk: 99, sp: 0, grip: 0, cd: 0, orb: 0 };
+  // deep water, clear of the shallows (its legs would hit bottom): it can go anywhere the sea is deep enough
+  const bwSea = (x, z) => Math.abs(x) < W.EDGE - 300 && Math.abs(z) < W.EDGE - 300 && W.heightAt(x, z) < -6.5 && W.heightAt(x + 45, z) < -4 && W.heightAt(x - 45, z) < -4 && W.heightAt(x, z + 45) < -4 && W.heightAt(x, z - 45) < -4;
+  const bwAlive = () => BW.st === 'rise' || BW.st === 'hunt' || BW.st === 'attack' || BW.st === 'return';
+  function bwHome() {
+    const I = W.ISLANDS[4];
+    for (let i = 0; i < 120; i++) { const a = Math.random() * 6.28, d = I.r * 1.3 + 80 + Math.random() * 400, x = I.c.x + Math.sin(a) * d, z = I.c.y + Math.cos(a) * d; if (W.raidSea(x, z)) return { x, z }; }
+    return { x: I.c.x + I.r * 2.5, z: I.c.y };
+  }
+  function bwMove(gx, gz, sp, dt) {
+    BW.sp += (sp - BW.sp) * Math.min(1, dt * 1.2);
+    let want = Math.atan2(gx - BW.x, gz - BW.z);
+    for (let k = 0; k < 7; k++) { const a = want + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.45; if (bwSea(BW.x + Math.sin(a) * 90, BW.z + Math.cos(a) * 90)) { want = a; break; } }   // feel round islands
+    BW.h += Math.max(-1.3 * dt, Math.min(1.3 * dt, angDiff(BW.h, want)));
+    const nx = BW.x + Math.sin(BW.h) * BW.sp * dt, nz = BW.z + Math.cos(BW.h) * BW.sp * dt;
+    if (bwSea(nx, nz)) { BW.x = nx; BW.z = nz; BW.stuck = 0; } else { BW.sp *= 0.5; BW.stuck = (BW.stuck || 0) + dt; }
+    // boxed in by land: strike out for open water somewhere to the side for a while, then try again
+    if (BW.stuck > 2) { BW.stuck = 0; for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, r = 300 + Math.random() * 900, x = BW.x + Math.sin(a) * r, z = BW.z + Math.cos(a) * r; if (bwSea(x, z)) { BW.detour = { x, z, t: 10 }; break; } } }
+  }
+  // steer for (gx, gz), unless it's working its way round an island
+  function bwGo(gx, gz, sp, dt) {
+    if (BW.detour) { BW.detour.t -= dt; if (BW.detour.t <= 0 || Math.hypot(BW.detour.x - BW.x, BW.detour.z - BW.z) < 80) BW.detour = null; else { bwMove(BW.detour.x, BW.detour.z, Math.max(sp, 60), dt); return; } }
+    bwMove(gx, gz, sp, dt);
+  }
+  function updateBeast(dt, players) {
+    BW.t += dt; BW.pk += dt;
+    if (BW.st === 'caged' || BW.st === 'dead') return;
+    if (BW.st === 'dying') { if (BW.t > 6) { BW.st = 'dead'; BW.tg = null; } return; }
+    if (BW.st === 'rise') { if (BW.t > 6) { BW.st = 'hunt'; BW.t = 0; } return; }
+    if (BW.st === 'return') {
+      if (!BW.wp) BW.wp = bwHome();
+      BW.deep = true; const a = Math.atan2(BW.wp.x - BW.x, BW.wp.z - BW.z); BW.h += angDiff(BW.h, a) * Math.min(1, dt * 2); BW.sp = 60; BW.x += Math.sin(BW.h) * 60 * dt; BW.z += Math.cos(BW.h) * 60 * dt;   // home through the deep
+      if (BW.t > 90 || Math.hypot(BW.wp.x - BW.x, BW.wp.z - BW.z) < 120) { BW.st = 'caged'; BW.t = 0; BW.wp = null; BW.deep = false; }
+      return;
+      bwGo(BW.wp.x, BW.wp.z, 45, dt);
+      if (BW.t > 90 || Math.hypot(BW.wp.x - BW.x, BW.wp.z - BW.z) < 120) { BW.st = 'caged'; BW.t = 0; BW.wp = null; }
+      return;
+    }
+    const ships = [];
+    for (const [id, q] of players) if (q.p && q.p.sh && q.p.sh.a === 1 && typeof q.p.sh.x === 'number') ships.push({ id, x: q.p.sh.x, z: q.p.sh.z });
+    let prey = BW.tg ? ships.find(p => p.id === BW.tg) : null;
+    if (BW.st === 'hunt') {
+      if (!prey) { let bd = 1e9; for (const p of ships) { const d = Math.hypot(p.x - BW.x, p.z - BW.z); if (d < bd && bwSea(p.x, p.z)) { bd = d; prey = p; } } BW.tg = prey ? prey.id : null; }
+      if (!prey) {   // nothing at sea: prowl
+        if (!BW.wp || Math.hypot(BW.wp.x - BW.x, BW.wp.z - BW.z) < 150) { const q = [...players.values()].find(q => q.p && typeof q.p.x === 'number'); BW.wp = q ? (deepNearSea(q.p.x, q.p.z, 900, 2000) || bwHome()) : bwHome(); }
+        bwGo(BW.wp.x, BW.wp.z, 28, dt); return;
+      }
+      const d = Math.hypot(prey.x - BW.x, prey.z - BW.z);
+      if (BW.cd > 0) {   // it has let her go for a moment: it circles her, out of reach, before it comes again
+        BW.cd -= dt; BW.orb += dt * 0.35; const ox = prey.x + Math.sin(BW.orb) * 380, oz = prey.z + Math.cos(BW.orb) * 380; bwGo(ox, oz, 55, dt); return;
+      }
+      // far off, it sinks out of sight and races straight for her through the deep, under reefs and round islands alike;
+      // it only surfaces again in open water near her
+      if (d > 900 || (BW.deep && !bwSea(BW.x, BW.z))) { BW.deep = true; BW.detour = null; const a = Math.atan2(prey.x - BW.x, prey.z - BW.z); BW.h += angDiff(BW.h, a) * Math.min(1, dt * 2); BW.sp += (130 - BW.sp) * Math.min(1, dt); BW.x += Math.sin(BW.h) * BW.sp * dt; BW.z += Math.cos(BW.h) * BW.sp * dt; return; }
+      BW.deep = false;
+      bwGo(prey.x, prey.z, d > 600 ? 62 : 46, dt);
+      if (d < 85) { BW.st = 'attack'; BW.t = 0; BW.atkT = 1.4; BW.grip = 0; }
+      return;
+    }
+    if (BW.st === 'attack') {
+      if (!prey) { BW.st = 'hunt'; BW.tg = null; return; }   // she sank, or her crew left her
+      const d = Math.hypot(prey.x - BW.x, prey.z - BW.z);
+      if (d > 280) { BW.st = 'hunt'; return; }   // she slipped its grip
+      // stay right up against her, facing her, and crush
+      const a = Math.atan2(BW.x - prey.x, BW.z - prey.z), gx = prey.x + Math.sin(a) * 62, gz = prey.z + Math.cos(a) * 62;
+      { const dx = gx - BW.x, dz = gz - BW.z, dd = Math.hypot(dx, dz), st = Math.min(dd, 70 * dt); if (dd > 0.01) { const nx = BW.x + dx / dd * st, nz = BW.z + dz / dd * st; if (bwSea(nx, nz)) { BW.x = nx; BW.z = nz; } } BW.sp = st / Math.max(dt, 1e-3); }   // it scuttles sideways to keep its grip
+      BW.h += angDiff(BW.h, Math.atan2(prey.x - BW.x, prey.z - BW.z)) * Math.min(1, dt * 3);
+      BW.atkT -= dt;
+      if (BW.atkT <= 0 && d < 140) { BW.atkT = 2.6 + Math.random() * 0.6; BW.pk = 0; BW.grip++; sendTo(prey.id, 'bwhit', { to: prey.id, dmg: 18 + Math.floor(Math.random() * 7) }); }
+      if (BW.grip >= 3 && BW.atkT > 1.5) { BW.st = 'hunt'; BW.cd = 12; BW.orb = Math.atan2(BW.x - prey.x, BW.z - prey.z); }   // three crushing blows, then it lets go and circles: a chance to fight back or flee
+    }
+  }
+  const deepNearSea = (x, z, r0, r1_) => { for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1_ - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; if (bwSea(px, pz)) return { x: px, z: pz }; } return null; };
+  function beastRelease() {
+    if (bwAlive() && BW.st !== 'return') return;
+    const q = bwHome(); Object.assign(BW, { deep: false, detour: null, st: 'rise', x: q.x, z: q.z, h: Math.random() * 6.28, hp: BW.max, t: 0, tg: null, wp: null, sp: 0, pk: 99 });
+  }
+  function beastRecall() { if (BW.st === 'rise' || BW.st === 'hunt' || BW.st === 'attack') { BW.st = 'return'; BW.t = 0; BW.tg = null; BW.wp = null; } }
+  function beastHandle(from, d, players) {
+    const q = players.get(from); if (!q || !q.p || !bwAlive() || BW.st === 'rise') return;
+    const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z, el = Array.isArray(q.p.el) ? q.p.el : null;
+    if (Math.min(Math.hypot(px - BW.x, pz - BW.z), Math.hypot(q.p.x - BW.x, q.p.z - BW.z), el ? Math.hypot(el[0] - BW.x, el[1] - BW.z) : 1e9) > 1200) return;
+    BW.hp -= d.el && el && hornOwns && hornOwns(q) && Math.hypot(el[0] - BW.x, el[1] - BW.z) < 700 ? 300 : Math.max(0, Math.min(60, +d.dmg || 0));   // the Elder Serpent's bite tears a great chunk out of it
+    if (BW.st === 'hunt' && !BW.tg && q.p.sh && q.p.sh.a === 1) BW.tg = from;   // it turns on whoever hurts it
+    if (BW.hp <= 0) { BW.hp = 0; BW.st = 'dying'; BW.t = 0; BW.tg = null; broadcast('bwdead', { by: from }); }
+  }
+
   return {
-    tick(dt, players) { updateKraken(dt, players); updateSerpents(dt, players); },
+    tick(dt, players) { updateKraken(dt, players); updateSerpents(dt, players); updateBeast(dt, players); },
+    beastRelease, beastRecall,
     snapshot() {
-      return { ksnap: krakenSnap(), ssnap: SERP.map((s, i) => [i, r1(s.x), r1(s.z), r2(s.h), Math.max(0, Math.round(s.hp)), SST.indexOf(s.st), r2(s.sk), r1(s.speed), s.tg || 0]) };
+      BW.h = Math.atan2(Math.sin(BW.h), Math.cos(BW.h));
+      return { bwsnap: [r1(BW.x), r1(BW.z), r2(BW.h), BWST.indexOf(BW.st), Math.max(0, Math.round(BW.hp)), BW.max, BW.tg || 0, r1(Math.min(BW.pk, 99)), r1(BW.sp), BW.deep ? 1 : 0], ksnap: krakenSnap(), ssnap: SERP.map((s, i) => [i, r1(s.x), r1(s.z), r2(s.h), Math.max(0, Math.round(s.hp)), SST.indexOf(s.st), r2(s.sk), r1(s.speed), s.tg || 0]) };
     },
     handle(from, topic, d, players) {
       if (!d || typeof d !== 'object') d = {};
       if (topic === 'kdmg' || topic === 'kclash' || topic === 'kslay' || topic === 'kcall' || topic === 'kpick' || topic === 'kquest' || topic === 'kadmin') { krakenHandle(from, topic, d, players); return true; }
       if (topic === 'sdmg') { serpentHandle(from, d, players); return true; }
+      if (topic === 'bwdmg') { beastHandle(from, d, players); return true; }
       return false;
     },
-    removePlayer(id) { if (K.ally && K.ally.owner === id) K.ally = null; prevSh.delete(id); for (const s of SERP) if (s.tg === id) s.tg = null; },
-    _state: { K, SERP },
+    removePlayer(id) { if (BW.tg === id) BW.tg = null; if (K.ally && K.ally.owner === id) K.ally = null; prevSh.delete(id); for (const s of SERP) if (s.tg === id) s.tg = null; },
+    _state: { K, SERP, BW },
   };
 }
 
-module.exports = { createMonsters, KST, SST, krDeep };
+module.exports = { createMonsters, KST, SST, BWST, krDeep };

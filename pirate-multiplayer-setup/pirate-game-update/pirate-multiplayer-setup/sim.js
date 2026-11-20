@@ -18,11 +18,16 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     hp: 50, max: 50, state: 'idle', atkT: 0, slashT: 0, hitAt: 0, target: null, victim: null, wait: Math.random() * 3, deadT: 0,
   }));
   const raiders = W.RAIDER_SPAWNS.map(s => ({
-    home: s.home, T: s.T, galleon: s.galleon, maxHp: s.maxHp,
-    x: s.home.x, z: s.home.z, heading: 0, speed: 10, steer: 0, hp: s.maxHp, state: 'patrol',
+    home: s.home, T: s.T, galleon: s.galleon, maxHp: s.maxHp, raid: !!s.raid, leaving: false, leaveT: 0,
+    x: s.home.x, z: s.home.z, heading: 0, speed: 10, steer: 0, hp: s.maxHp, state: s.raid ? 'gone' : 'patrol',
     reload: { 1: 0, '-1': 0 }, wpt: null, blockT: 0, sinkT: 0, respawnT: 0, target: null, heldBy: null, lastHitBy: null, lastHitKr: false,
   }));
 
+  // ---------- the Blackwater raid ----------
+  // Every 5 minutes (while anyone is online) there's a 5% chance the Blackwater fleet sails out of Fort Blackwater.
+  // Waves of raid ships come, each bigger than the last; every raider at sea turns more savage; and the Blackwater
+  // Beast breaks out of its pen and hunts every ship that doesn't fly the Blackwater flag. After 8 minutes it's over.
+  const RAID = { on: false, t: 0, dur: 480, rollT: 300, wave: 0, waveT: 0 };
   // players: Map id -> { p: presence } (filled by the relay)
   const footTargets = players => [...players].filter(([, q]) => q.p && q.p.md === 1 && typeof q.p.x === 'number');
   const shipTargets = players => [...players].filter(([, q]) => q.p && q.p.sh && q.p.sh.a === 1);
@@ -110,30 +115,81 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     r.heading = Math.random() * 6.28; r.speed = 10; r.steer = 0; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0;
     r.target = null; r.heldBy = null; r.lastHitBy = null; r.lastHitKr = false;
   }
+  // a raid ship comes over the horizon, a mile or so from a captain who's at sea (or anyone, or else Skull Isle)
+  function spawnRaidShip(r, players) {
+    const all = [...players.values()].filter(q => q.p && typeof q.p.x === 'number'), sea = all.filter(q => q.p.sh && q.p.sh.a === 1);
+    const pts = (sea.length ? sea.map(q => q.p.sh) : all.map(q => q.p));
+    let ok = false;
+    for (let i = 0; i < 80 && !ok && pts.length; i++) {
+      const p = pts[Math.floor(Math.random() * pts.length)], a = Math.random() * 6.28, d = 1300 + Math.random() * 1100; r.x = p.x + Math.sin(a) * d; r.z = p.z + Math.cos(a) * d;
+      ok = W.raidSea(r.x, r.z) && all.every(q => Math.hypot(r.x - q.p.x, r.z - q.p.z) > 900) && !W.blockedAt(r.T, r.x, r.z, 0);
+    }
+    if (!ok) for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28; r.x = r.home.x + Math.cos(a) * 300; r.z = r.home.z + Math.sin(a) * 300; if (W.raidSea(r.x, r.z) && !W.blockedAt(r.T, r.x, r.z, 0)) break; }
+    raiderWaypoint(r);
+    r.heading = Math.random() * 6.28; r.speed = 18; r.steer = 0; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0; r.leaving = false; r.leaveT = 0;
+    r.target = null; r.heldBy = null; r.lastHitBy = null; r.lastHitKr = false;
+  }
+  function raidStart() {
+    if (RAID.on) return;
+    Object.assign(RAID, { on: true, t: 0, wave: 0, waveT: 4 });
+    monsters.beastRelease();
+    broadcast('raid', { on: 1, dur: RAID.dur });
+    console.log('*** Blackwater raid begins');
+  }
+  function raidEnd() {
+    if (!RAID.on) return;
+    RAID.on = false; RAID.rollT = 300;
+    for (const r of raiders) if (r.raid) { if (r.state === 'patrol' || r.state === 'attack') { r.leaving = true; r.leaveT = 0; } else if (r.state === 'gone') r.respawnT = Infinity; }
+    monsters.beastRecall();
+    broadcast('raid', { on: 0 });
+    console.log('*** Blackwater raid over');
+  }
+  function updateRaid(dt, players) {
+    if (!RAID.on) {
+      if (!players.size) return;
+      RAID.rollT -= dt; if (RAID.rollT <= 0) { RAID.rollT = 300; if (Math.random() < 0.05) raidStart(); }
+      return;
+    }
+    RAID.t += dt; RAID.waveT -= dt;
+    if (RAID.waveT <= 0) {   // each wave is bigger than the last: 2 ships, then 3, then 4...
+      RAID.wave++; RAID.waveT = 40; let n = 1 + RAID.wave, sent = 0;
+      for (const r of raiders) if (n > 0 && r.raid && r.state === 'gone' && r.respawnT === Infinity) { r.respawnT = Math.random() * 8; n--; sent++; }
+      if (sent) broadcast('raidwave', { w: RAID.wave, n: sent });
+    }
+    if (RAID.t >= RAID.dur || !players.size) raidEnd();
+  }
   function updateRaiders(dt, players) {
     const ships = shipTargets(players);
     for (const r of raiders) {
       for (const k in r.reload) r.reload[k] = Math.max(0, r.reload[k] - dt);
-      if (r.state === 'gone') { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r, players); continue; }
-      if (r.state === 'sinking') { r.sinkT += dt; if (r.sinkT > 8) { r.state = 'gone'; r.respawnT = 200; } continue; }
+      if (r.state === 'gone') { r.respawnT -= dt; if (r.respawnT <= 0) { if (r.raid) spawnRaidShip(r, players); else spawnRaider(r, players); } continue; }
+      if (r.state === 'sinking') { r.sinkT += dt; if (r.sinkT > 8) { r.state = 'gone'; r.respawnT = r.raid ? (RAID.on ? 20 + Math.random() * 20 : Infinity) : 200; } continue; }   // in a raid, sunk raid ships are soon replaced
+      if (r.leaving) {   // the raid is over: the fleet sails off over the horizon
+        r.leaveT += dt; r.state = 'patrol'; r.target = null;
+        if (!r.wpt || Math.hypot(r.wpt.x - r.x, r.wpt.z - r.z) < 120) raiderWaypoint(r);
+        if (r.leaveT > 45) { r.state = 'gone'; r.respawnT = Infinity; r.leaving = false; continue; }
+      }
       // nearest player ship that is crewed (someone sailing, on deck or below deck)
       let tg = null, td = 1e9;
       for (const [id, q] of ships) { const dd = Math.hypot(q.p.sh.x - r.x, q.p.sh.z - r.z); if (dd < td) { td = dd; tg = { id, x: q.p.sh.x, z: q.p.sh.z }; } }
       let desired = r.heading, want = 14;
-      if (tg && td < 1000) {
+      // in a raid every Blackwater ship is out for blood: they spot ye from much further, sail harder and reload faster.
+      // The raid fleet itself hunts down any ship at sea, wherever she is.
+      const fury = RAID.on && !r.leaving, sight = r.leaving ? 0 : r.raid ? 6000 : fury ? 2000 : 1000;
+      if (tg && td < sight) {
         r.state = 'attack'; r.target = tg.id;
         const tdx = tg.x - r.x, tdz = tg.z - r.z, b = Math.atan2(tdx, tdz);
-        if (td > 260) { desired = b; want = 30; }
-        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = 22; }
+        if (td > 260) { desired = b; want = fury ? 38 : 30; }
+        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = fury ? 28 : 22; }
         if (td < 240) {
           const fwdDot = (tdx * Math.sin(r.heading) + tdz * Math.cos(r.heading)) / td;
           const side = tdx * Math.cos(r.heading) - tdz * Math.sin(r.heading) > 0 ? 1 : -1;
-          if (Math.abs(fwdDot) < 0.4 && r.reload[side] <= 0) { r.reload[side] = 5 + Math.random() * 2; broadcast('rfire', { i: raiders.indexOf(r), s: side }); }
+          if (Math.abs(fwdDot) < (fury ? 0.5 : 0.4) && r.reload[side] <= 0) { r.reload[side] = fury ? 3 + Math.random() * 1.5 : 5 + Math.random() * 2; broadcast('rfire', { i: raiders.indexOf(r), s: side }); }
         }
       } else {
         r.state = 'patrol'; r.target = null;
         if (!r.wpt || Math.hypot(r.wpt.x - r.x, r.wpt.z - r.z) < 120) raiderWaypoint(r);
-        desired = Math.atan2(r.wpt.x - r.x, r.wpt.z - r.z); want = r.galleon ? 11 : 14;
+        desired = Math.atan2(r.wpt.x - r.x, r.wpt.z - r.z); want = r.leaving ? 30 : r.raid ? 24 : r.galleon ? 11 : 14;
       }
       if (r.heldBy) { if (r.heldBy !== 'kraken' && !players.has(r.heldBy)) r.heldBy = null; else { desired = r.heading; want = 0; r.speed = 0; } }   // a kraken has her
       const diff = angDiff(r.heading, desired), nh = r.heading + Math.max(-0.45 * dt, Math.min(0.45 * dt, diff));
@@ -162,18 +218,20 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     broadcast('rsunk', { i: raiders.indexOf(r), by, kr: kr ? 1 : 0, gal: r.galleon ? 1 : 0 });
   }
 
-  raiders.forEach(r => spawnRaider(r, new Map()));
+  raiders.forEach(r => { if (r.raid) r.respawnT = Infinity; else spawnRaider(r, new Map()); });
   // the Kraken and the sea serpents, shared by everyone
   const monsters = createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornOwns });
 
   // ---------- public API ----------
   return {
-    tick(dt, players) { updateBandits(dt, players); updateRaiders(dt, players); monsters.tick(dt, players); },
+    tick(dt, players) { updateRaid(dt, players); updateBandits(dt, players); updateRaiders(dt, players); monsters.tick(dt, players); },
+    raidAdmin(cmd) { if (cmd === 'start') raidStart(); else if (cmd === 'stop') raidEnd(); },
     snapshot() {
       return {
         bsnap: bandits.map((b, i) => [i, r1(b.x), r1(b.z), r2(b.facing), Math.max(0, Math.round(b.hp)), BST.indexOf(b.state), b.slashT > 0 ? 1 : 0]),
         rsnap: raiders.map((r, i) => [i, r1(r.x), r1(r.z), r2(r.heading), Math.max(0, Math.round(r.hp)), RST.indexOf(r.state), r1(r.speed), r2(r.steer), r.target || 0]),
         ...monsters.snapshot(),
+        raid: { on: RAID.on ? 1 : 0, left: RAID.on ? Math.max(0, Math.round(RAID.dur - RAID.t)) : 0, w: RAID.wave },
       };
     },
     // events from a browser; returns true if the sim consumed the topic
@@ -186,7 +244,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
       return false;
     },
     removePlayer(id) { monsters.removePlayer(id); for (const r of raiders) if (r.heldBy === id) r.heldBy = null; for (const b of bandits) if (b.victim === id) b.victim = null; },
-    _state: { bandits, raiders, monsters: monsters._state },
+    _state: { bandits, raiders, monsters: monsters._state, RAID },
   };
 }
 

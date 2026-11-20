@@ -4900,6 +4900,9 @@ window.__pgBoot = () => {
     });
     btn(c, 'Where is it?', () => { const d = Math.hypot(KR.x - P.pos.x, KR.z - P.pos.z), b = Math.atan2(KR.x - P.pos.x, -(KR.z - P.pos.z)) * 180 / Math.PI; const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west']; toast(`The kraken is ${KR.st === 'roam' ? 'roaming' : KR.st === 'hunt' ? 'hunting' : KR.st === 'dead' ? 'resting in the deep' : 'attacking'}, ${Math.round(d)} m to the ${dirs[Math.round(((b + 360) % 360) / 45) % 8]}.`); });
     btn(c, 'Defeat it', () => { if (KR.st === 'attack' || KR.st === 'grip') { if (window.__mpKraken && window.__mpKraken()) window.__mpKrAdmin({ cmd: 'defeat' }); else KR.hp = 0; } else toast('The kraken is not attacking anyone.'); });
+    c = sec('Blackwater raid (everyone on the server)');
+    btn(c, 'Start a raid', () => { if (window.__mpRaid && window.__mpEnv && window.__mpEnv()) { window.__mpRaid('start'); closeUI(); } else toast('Raids run on the server. Join one first.'); });
+    btn(c, 'End the raid', () => { if (window.__mpRaid && window.__mpEnv && window.__mpEnv()) { window.__mpRaid('stop'); closeUI(); } else toast('Raids run on the server. Join one first.'); });
   }
 
   function openUI(which, tab) {
@@ -6234,6 +6237,7 @@ window.__pgBoot = () => {
         }
       }
       if (!hit && !b.enemy && serpentBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
+      if (!hit && !b.enemy && bwBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
       if (!hit && y < waveHeight(x, z, t)) {
         hit = true;
         if (heightAt(x, z) < -1) { SFX.splash({ x, z }, true); puff(x, y + 1.5, z, { color: 0xffffff, size: 4, life: 0.9, grow: 1.2, vy: 9, op: 0.9 }); puff(x, y + 0.5, z, { color: 0xeaf6ff, size: 6, life: 1.4, grow: 1.5, op: 0.6 }); }
@@ -6309,7 +6313,9 @@ window.__pgBoot = () => {
     r.heading = Math.random() * 6.28; r.speed = 10; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0; r.pitch = 0; r.roll = 0;
     r.group.rotation.set(0, r.heading, 0); scene.add(r.group);
   }
-  [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']].map(([x, z, k]) => [x * WS, z * WS, k]).forEach(([x, z, kind]) => {
+  [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']].map(([x, z, k]) => [x * WS, z * WS, k])
+    .concat(Array.from({ length: 16 }, (_, k) => [0, 0, k % 3 === 2 ? 'galleon' : 'brig', true]))   // the Blackwater raid fleet: only at sea during a raid (same 16 as the server's)
+    .forEach(([x, z, kind, raid]) => {
     const gal = kind === 'galleon';
     const m = makeShip(kind, { sail: 0x2a2a2a, hull: 0x2a2421, trim: 0x8e1f1f, flag: 'jolly' });
     m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
@@ -6323,7 +6329,8 @@ window.__pgBoot = () => {
     const r = Object.assign(m, { home: { x, z }, maxHp: gal ? 240 : 110, galleon: gal, wp: Math.random() * 6.28, reload: { 1: 0, '-1': 0 }, steer: 0 });
     const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = (gal ? 'Blackwater galleon' : 'Blackwater raider') + '<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag);
     r.tag = tag; r.bar = tag.querySelector('.ehp div');
-    spawnRaider(r); enableShadows(m.group); raiders.push(r);
+    if (raid) { r.raid = true; r.state = 'gone'; r.respawnT = Infinity; tag.style.display = 'none'; } else spawnRaider(r);
+    enableShadows(m.group); raiders.push(r);
   });
   function bob(r, dt, t) {
     const T = r.T, L = T.L, B = T.B, sx = Math.sin(r.heading), sz = Math.cos(r.heading);
@@ -6341,10 +6348,10 @@ window.__pgBoot = () => {
       const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
       if (r.state === 'gone') { if (!net) { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r); } continue; }
       if (r.state === 'sinking') {
-        if (r.devoured) { r.group.visible = false; r.tag.style.display = 'none'; r.sinkT += dt; if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = 200; r.devoured = false; r.group.visible = true; } continue; }   // swallowed whole
+        if (r.devoured) { r.group.visible = false; r.tag.style.display = 'none'; r.sinkT += dt; if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = r.raid ? Infinity : 200; r.devoured = false; r.group.visible = true; } continue; }   // swallowed whole
         r.sinkT += dt; r.group.position.y -= dt * 1.5; r.roll += dt * 0.06; r.group.rotation.set(r.pitch, r.heading, r.roll);
         r.tag.style.display = 'none';
-        if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = 200; }
+        if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = r.raid ? Infinity : 200; }
         continue;
       }
       if (!net) {
@@ -7649,6 +7656,55 @@ window.__pgBoot = () => {
   // Blackwater Beast paces in an enormous iron cage, its red eyes burning in the dark. Its own scene, far from the map.
   const DUN_PITCH = 4.5;   // the Blackwater crab's voice is pitched far above the serpents': a shrill, grinding screech
   const DUN = { on: false, scene: null, O: new THREE.Vector3(20000, 0, 20000), rects: [], cols: [], chests: [], beast: null, savedDist: 13, found: false, lungeT: 0, gateZ: -150, penZ: -262 };
+  // the Blackwater Beast's body: built once for its pen under Skull Isle, and again for when it's loose at sea
+  function makeBWCrab() {
+    const iron = lam(0x26262a);
+    const shell = new THREE.MeshPhongMaterial({ color: 0x3a1210, specular: 0x553333, shininess: 40 }), shellD = new THREE.MeshPhongMaterial({ color: 0x1c0a09, specular: 0x332222, shininess: 30 });
+    const under = lam(0x6a4a3a), barn = lam(0x8a8478), spikeM = lam(0x120808), clawTip = lam(0x0d0606);
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
+    const B = new THREE.Group();
+    const seg = (par, a, b, r0, r1, m) => { const d = new THREE.Vector3().subVectors(b, a), len = d.length(); const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); par.add(c); return c; };
+    const body = new THREE.Group(); body.position.y = 7.5; B.add(body);
+    const cara = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), shell); cara.scale.set(9.5, 3.4, 7); body.add(cara);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), under); belly.scale.set(8.8, 2.2, 6.4); belly.position.y = -0.3; body.add(belly);
+    const ridge = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), shellD); ridge.scale.set(5, 1.6, 4.2); ridge.position.set(0, 2.4, -0.5); body.add(ridge);
+    for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.8, 5), spikeM); sp.position.set(Math.cos(a) * 9, 0.4, Math.sin(a) * 6.6); sp.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1); body.add(sp); }
+    for (let k = 0; k < 9; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.2, 5), spikeM); const x = (k % 3 - 1) * 3, z = (Math.floor(k / 3) - 1) * 2.6; sp.position.set(x, 3.2 - Math.abs(x) * 0.15, z); sp.rotation.set(z * 0.08, 0, -x * 0.1); body.add(sp); }
+    for (let k = 0; k < 26; k++) { const a = Math.random() * 6.28, r = 0.3 + Math.random() * 0.6; const bn = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 0.4, 6), barn); const nx = Math.cos(a) * r, nz = Math.sin(a) * r; bn.position.set(nx * 9.3, Math.sqrt(Math.max(0, 1 - r * r)) * 3.3, nz * 6.8); bn.lookAt(bn.position.clone().multiply(new THREE.Vector3(2, 4, 2))); bn.rotateX(Math.PI / 2); body.add(bn); }
+    // the face: mouthparts that work constantly, and eyes on stalks
+    const mouth = []; for (let k = 0; k < 4; k++) { const mp = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.6, 0.3), under); mp.position.set(-1.05 + k * 0.7, -0.9, 6.8); body.add(mp); mouth.push(mp); }
+    const eyes = [], stalks = []; [-1, 1].forEach(sd => { const st = new THREE.Group(); st.position.set(sd * 2, 1.8, 5.6); body.add(st); stalks.push(st);
+      seg(st, new THREE.Vector3(0, 0, 0), new THREE.Vector3(sd * 0.4, 2.6, 0.4), 0.35, 0.25, shellD);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), eyeM); e.position.set(sd * 0.4, 2.9, 0.4); st.add(e);
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(4.5, 4.5, 1); gl.position.copy(e.position); st.add(gl); eyes.push(gl); e.userData.isEye = true; gl.userData.ball = e; });
+    const eyeLight = new THREE.PointLight(0xff3010, 1.6, 70, 1.2); eyeLight.position.set(0, 4.5, 7); body.add(eyeLight);
+    // eight walking legs, each two jointed segments with a pointed tip, the upper joints cuffed in iron
+    const legs = [];
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const z = 3.6 - i * 2.6, lg = new THREE.Group(); lg.position.set(sd * 7.6, 7.2, z); B.add(lg);
+      const out = sd * (6 + (i === 1 || i === 2 ? 1 : 0)), knee = new THREE.Vector3(out, 3.8, (i - 1.5) * -1.2), tip = new THREE.Vector3(out * 1.55, -7.2, (i - 1.5) * -2.4);
+      seg(lg, new THREE.Vector3(0, 0, 0), knee, 0.9, 0.75, shell); const kn = new THREE.Mesh(new THREE.SphereGeometry(0.85, 8, 6), shellD); kn.position.copy(knee); lg.add(kn);
+      seg(lg, knee, tip.clone().lerp(knee, 0.25), 0.75, 0.5, shell); seg(lg, tip.clone().lerp(knee, 0.25), tip, 0.5, 0.05, clawTip);
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.2, 6, 12), iron); cuff.position.copy(knee).multiplyScalar(0.5); cuff.lookAt(knee.clone()); lg.add(cuff);
+      legs.push({ g: lg, sd, i });
+    }
+    // two great claws: arm, wrist, a heavy spiked palm, a fixed finger and a moving one
+    const claws = []; [-1, 1].forEach(sd => { const arm = new THREE.Group(); arm.position.set(sd * 5, 6.8, 5.5); B.add(arm);
+      const elbow = new THREE.Vector3(sd * 4, 1.5, 3.5), wrist = new THREE.Vector3(sd * 3.2, 1.2, 7.5);
+      seg(arm, new THREE.Vector3(0, 0, 0), elbow, 1.2, 1, shell); seg(arm, elbow, wrist, 1.1, 1, shell);
+      [elbow, wrist].forEach(p => { const j = new THREE.Mesh(new THREE.SphereGeometry(1.15, 8, 6), shellD); j.position.copy(p); arm.add(j); });
+      const hand = new THREE.Group(); hand.position.copy(wrist); arm.add(hand);
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), shell); palm.scale.set(2.2, 2.6, 3.6); palm.position.z = 2.6; hand.add(palm);
+      for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1, 4), spikeM); sp.position.set(sd * 1.6, 1.4 - k * 0.2, 1 + k * 0.9); sp.rotation.z = -sd * 1.2; hand.add(sp); }
+      const fixedF = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5, 6), shellD); fixedF.rotation.x = Math.PI / 2; fixedF.position.set(0, -0.9, 7.6); hand.add(fixedF);
+      const fing = new THREE.Group(); fing.position.set(0, 1, 5.6); hand.add(fing);
+      const mf = new THREE.Mesh(new THREE.ConeGeometry(0.85, 5.2, 6), shellD); mf.rotation.x = Math.PI / 2; mf.position.z = 2.4; fing.add(mf);
+      for (let k = 0; k < 4; k++) { const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t1.position.set(0, 0.6, 6.4 + k * 0.9); hand.add(t1); const t2 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t2.rotation.x = Math.PI; t2.position.set(0, -0.5, 1 + k * 0.9); fing.add(t2); }
+      claws.push({ arm, hand, fing, sd }); });
+    // a chain from the shell to the cage floor
+    { const links = []; for (let i = 0; i <= 12; i++) { const u = i / 12; links.push(new THREE.Matrix4().compose(new THREE.Vector3(0, 4 - u * 4 + Math.sin(u * Math.PI) * -0.6, -6 - u * 7), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i % 2 ? Math.PI / 2 : 0, Math.PI / 2)), new THREE.Vector3(1.4, 1.4, 1.4))); } instanced(new THREE.TorusGeometry(0.35, 0.1, 4, 8), iron, links, B); }
+    return { B, body, legs, claws, stalks, mouth, eyes, eyeLight };
+  }
   const dunDoor = () => { const S = SITES.find(q => q.kind === 'fort' && q.i === 4), I = ISLANDS[4]; if (!S) return null; const th = ISLAND.clone().sub(I.c).normalize(); return { x: S.x + th.x * 55, z: S.z + th.y * 55, f: Math.atan2(th.x, th.y) }; };
   function nearDunDoor() { if (DUN.on || onShip || sailing || inInterior || STOM.on || RIDE.on) return false; const d = dunDoor(); return d && Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 6; }
   function dunBuild() {
@@ -7768,50 +7824,7 @@ window.__pgBoot = () => {
       // A crab the size of a house: a black-and-blood-red shell crusted with barnacles and spikes, eight jointed legs
       // in iron cuffs, two enormous claws that snap and grind, and red eyes glowing on stalks. It sidles about the cage,
       // turns to face ye, clacks its claws, and when ye come close it slams itself claws-first into the bars.
-      const shell = new THREE.MeshPhongMaterial({ color: 0x3a1210, specular: 0x553333, shininess: 40 }), shellD = new THREE.MeshPhongMaterial({ color: 0x1c0a09, specular: 0x332222, shininess: 30 });
-      const under = lam(0x6a4a3a), barn = lam(0x8a8478), spikeM = lam(0x120808), clawTip = lam(0x0d0606);
-      const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
-      const B = new THREE.Group(); B.position.set(kx, 0, kz); B.scale.setScalar(4.05); root.add(B);   // a crab the size of a fortress; the pen behind the gate is built to hold it
-      const seg = (par, a, b, r0, r1, m) => { const d = new THREE.Vector3().subVectors(b, a), len = d.length(); const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); par.add(c); return c; };
-      const body = new THREE.Group(); body.position.y = 7.5; B.add(body);
-      const cara = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), shell); cara.scale.set(9.5, 3.4, 7); body.add(cara);
-      const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), under); belly.scale.set(8.8, 2.2, 6.4); belly.position.y = -0.3; body.add(belly);
-      const ridge = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), shellD); ridge.scale.set(5, 1.6, 4.2); ridge.position.set(0, 2.4, -0.5); body.add(ridge);
-      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.8, 5), spikeM); sp.position.set(Math.cos(a) * 9, 0.4, Math.sin(a) * 6.6); sp.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1); body.add(sp); }
-      for (let k = 0; k < 9; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.2, 5), spikeM); const x = (k % 3 - 1) * 3, z = (Math.floor(k / 3) - 1) * 2.6; sp.position.set(x, 3.2 - Math.abs(x) * 0.15, z); sp.rotation.set(z * 0.08, 0, -x * 0.1); body.add(sp); }
-      for (let k = 0; k < 26; k++) { const a = Math.random() * 6.28, r = 0.3 + Math.random() * 0.6; const bn = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 0.4, 6), barn); const nx = Math.cos(a) * r, nz = Math.sin(a) * r; bn.position.set(nx * 9.3, Math.sqrt(Math.max(0, 1 - r * r)) * 3.3, nz * 6.8); bn.lookAt(bn.position.clone().multiply(new THREE.Vector3(2, 4, 2))); bn.rotateX(Math.PI / 2); body.add(bn); }
-      // the face: mouthparts that work constantly, and eyes on stalks
-      const mouth = []; for (let k = 0; k < 4; k++) { const mp = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.6, 0.3), under); mp.position.set(-1.05 + k * 0.7, -0.9, 6.8); body.add(mp); mouth.push(mp); }
-      const eyes = [], stalks = []; [-1, 1].forEach(sd => { const st = new THREE.Group(); st.position.set(sd * 2, 1.8, 5.6); body.add(st); stalks.push(st);
-        seg(st, new THREE.Vector3(0, 0, 0), new THREE.Vector3(sd * 0.4, 2.6, 0.4), 0.35, 0.25, shellD);
-        const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), eyeM); e.position.set(sd * 0.4, 2.9, 0.4); st.add(e);
-        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(4.5, 4.5, 1); gl.position.copy(e.position); st.add(gl); eyes.push(gl); e.userData.isEye = true; gl.userData.ball = e; });
-      const eyeLight = new THREE.PointLight(0xff3010, 1.6, 70, 1.2); eyeLight.position.set(0, 4.5, 7); body.add(eyeLight);
-      // eight walking legs, each two jointed segments with a pointed tip, the upper joints cuffed in iron
-      const legs = [];
-      for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
-        const z = 3.6 - i * 2.6, lg = new THREE.Group(); lg.position.set(sd * 7.6, 7.2, z); B.add(lg);
-        const out = sd * (6 + (i === 1 || i === 2 ? 1 : 0)), knee = new THREE.Vector3(out, 3.8, (i - 1.5) * -1.2), tip = new THREE.Vector3(out * 1.55, -7.2, (i - 1.5) * -2.4);
-        seg(lg, new THREE.Vector3(0, 0, 0), knee, 0.9, 0.75, shell); const kn = new THREE.Mesh(new THREE.SphereGeometry(0.85, 8, 6), shellD); kn.position.copy(knee); lg.add(kn);
-        seg(lg, knee, tip.clone().lerp(knee, 0.25), 0.75, 0.5, shell); seg(lg, tip.clone().lerp(knee, 0.25), tip, 0.5, 0.05, clawTip);
-        const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.2, 6, 12), iron); cuff.position.copy(knee).multiplyScalar(0.5); cuff.lookAt(knee.clone()); lg.add(cuff);
-        legs.push({ g: lg, sd, i });
-      }
-      // two great claws: arm, wrist, a heavy spiked palm, a fixed finger and a moving one
-      const claws = []; [-1, 1].forEach(sd => { const arm = new THREE.Group(); arm.position.set(sd * 5, 6.8, 5.5); B.add(arm);
-        const elbow = new THREE.Vector3(sd * 4, 1.5, 3.5), wrist = new THREE.Vector3(sd * 3.2, 1.2, 7.5);
-        seg(arm, new THREE.Vector3(0, 0, 0), elbow, 1.2, 1, shell); seg(arm, elbow, wrist, 1.1, 1, shell);
-        [elbow, wrist].forEach(p => { const j = new THREE.Mesh(new THREE.SphereGeometry(1.15, 8, 6), shellD); j.position.copy(p); arm.add(j); });
-        const hand = new THREE.Group(); hand.position.copy(wrist); arm.add(hand);
-        const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), shell); palm.scale.set(2.2, 2.6, 3.6); palm.position.z = 2.6; hand.add(palm);
-        for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1, 4), spikeM); sp.position.set(sd * 1.6, 1.4 - k * 0.2, 1 + k * 0.9); sp.rotation.z = -sd * 1.2; hand.add(sp); }
-        const fixedF = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5, 6), shellD); fixedF.rotation.x = Math.PI / 2; fixedF.position.set(0, -0.9, 7.6); hand.add(fixedF);
-        const fing = new THREE.Group(); fing.position.set(0, 1, 5.6); hand.add(fing);
-        const mf = new THREE.Mesh(new THREE.ConeGeometry(0.85, 5.2, 6), shellD); mf.rotation.x = Math.PI / 2; mf.position.z = 2.4; fing.add(mf);
-        for (let k = 0; k < 4; k++) { const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t1.position.set(0, 0.6, 6.4 + k * 0.9); hand.add(t1); const t2 = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 4), barn); t2.rotation.x = Math.PI; t2.position.set(0, -0.5, 1 + k * 0.9); fing.add(t2); }
-        claws.push({ arm, hand, fing, sd }); });
-      // a chain from the shell to the cage floor
-      { const links = []; for (let i = 0; i <= 12; i++) { const u = i / 12; links.push(new THREE.Matrix4().compose(new THREE.Vector3(0, 4 - u * 4 + Math.sin(u * Math.PI) * -0.6, -6 - u * 7), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i % 2 ? Math.PI / 2 : 0, Math.PI / 2)), new THREE.Vector3(1.4, 1.4, 1.4))); } instanced(new THREE.TorusGeometry(0.35, 0.1, 4, 8), iron, links, B); }
+      const { B, body, legs, claws, stalks, mouth, eyes, eyeLight } = makeBWCrab(); B.position.set(kx, 0, kz); B.scale.setScalar(4.05); root.add(B);   // a crab the size of a fortress; the pen behind the gate is built to hold it
       DUN.beast = { B, body, legs, claws, stalks, mouth, eyes, eyeLight, t: 0, pace: 0, growlT: 6, open: 0, woke: false, beatT: 0, breathT: 3, clackT: 4 };
       // a dim glow on the gate so its outline shows in the gloom, and a thin grey light from a crack far above the pen
       const cg = new THREE.PointLight(0x6a3040, 0.55, 90, 1.2); add(cg, 0, 40, GZ + 30);
@@ -7896,6 +7909,15 @@ window.__pgBoot = () => {
     const Bs = DUN.beast; if (!Bs) return;
     Bs.t += dt; const br = Math.sin(Bs.t * 1.1);
     { const big = l.z < -100 ? 1 : 0; DUN.scene.fog.color.lerpColors(new THREE.Color(0x050403), new THREE.Color(0x0c0304), Math.min(1, Math.max(0, (-90 - l.z) / 25))); DUN.scene.background.copy(DUN.scene.fog.color); DUN.scene.fog.near += ((big ? 45 : 14) - DUN.scene.fog.near) * Math.min(1, dt * 3); DUN.scene.fog.far += ((big ? 340 : 75) - DUN.scene.fog.far) * Math.min(1, dt * 3); }   // the beast's cavern is vast: see further into it
+    // during a Blackwater raid the pen stands empty: the Beast is out on the sea
+    const away = (BWS.raid && BWS.raid.on && performance.now() - BWS.raidAt < 5000) || (BWS.st !== 'caged' && BWS.net && performance.now() - BWS.net.at < 3000);
+    Bs.B.visible = !away;
+    if (away) {
+      SFX.dunDrone(l.z < -100 ? 0.3 : 0); if (DUN.penL) DUN.penL.intensity = 0.25;
+      if (l.z < -108 && !DUN.toldAway) { DUN.toldAway = true; toast('The pen is empty. Broken chains, a flooded tunnel in the far wall... the Blackwater Beast is loose upon the sea!'); }
+      return;
+    }
+    DUN.toldAway = false;
     const gd = l.z - DUN.gateZ, near = gd < 38, px = l.x - Bs.B.position.x, pz = l.z - Bs.B.position.z;
     Bs.pace += dt * (near ? 0.25 : 0.12); const ang = near ? Math.max(-0.6, Math.min(0.6, Math.atan2(px, pz))) : Math.sin(Bs.pace * 0.6) * 0.5;
     const prevRot = Bs.B.rotation.y; Bs.B.rotation.y += angDiff(Bs.B.rotation.y, ang) * Math.min(1, dt * (near ? 1.6 : 0.5));
@@ -9230,6 +9252,107 @@ window.__pgBoot = () => {
     }
   }
   // cannonballs: anything of the serpent's above or near the water is a target
+  // ---------- the Blackwater Beast at sea, during a Blackwater raid (the server runs it; this draws it) ----------
+  const BWS = { net: null, m: null, st: 'caged', vis: 0, y: -80, stT: 0, diveT: 0, tag: null, bar: null, raid: { on: 0, left: 0, w: 0 }, raidAt: 0, grumT: 8, told: false, wakeT: 0, wt: 0 };
+  const BW_ST = ['caged', 'rise', 'hunt', 'attack', 'return', 'dying', 'dead'];
+  const bwLive = () => !!(BWS.m && BWS.vis && (BWS.st === 'rise' || BWS.st === 'hunt' || BWS.st === 'attack' || BWS.st === 'return'));
+  function bwBuild() {
+    const c = makeBWCrab(); c.B.scale.setScalar(4.05); c.B.visible = false; scene.add(c.B); BWS.m = c; c.eyeLight.distance = 200; c.eyeLight.intensity = 2.5;
+    const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = 'The Blackwater Beast<div class="ehp"><div></div></div>'; tag.style.display = 'none'; tagLayer.appendChild(tag); BWS.tag = tag; BWS.bar = tag.querySelector('.ehp div');
+  }
+  function onBwState(prev, st) {
+    BWS.stT = 0; const n = BWS.net, d = n ? Math.hypot(n.x - P.pos.x, n.z - P.pos.z) : 1e9;
+    if (st === 'rise') { BWS.vis = 0; SFX.beastRoar({ x: n.x, z: n.z, range: 6000 }, 1.6, 1.5, DUN_PITCH); if (d < 6000) toast('The sea boils off Skull Isle... THE BLACKWATER BEAST IS LOOSE!'); }
+    if (st === 'dying') { SFX.beastRoar({ x: n.x, z: n.z, range: 5000 }, 1.6, 2, DUN_PITCH * 0.8); }
+    if ((st === 'caged' || st === 'dead') && BWS.vis && prev !== 'dying') BWS.diveT = 6;   // it dives for home
+    if (st === 'dead' && prev === 'dying') BWS.diveT = 0;
+  }
+  function updateSeaBeast(dt, t) {
+    const n = BWS.net, live = n && performance.now() - n.at < 3000;
+    const st = live ? n.st : 'caged';
+    if (st !== 'caged' && st !== 'dead' && !BWS.m) bwBuild();
+    updateRaidHud();
+    if (!BWS.m) return;
+    const C = BWS.m, B = C.B;
+    if (st !== BWS.st) { const pv = BWS.st; BWS.st = st; onBwState(pv, st); }
+    BWS.stT += dt;
+    const shown = st !== 'caged' && st !== 'dead';
+    if (!shown && !(BWS.diveT > 0) && st !== 'dead') { B.visible = false; BWS.tag.style.display = 'none'; BWS.vis = 0; return; }
+    if (!shown && st === 'dead' && BWS.stT > 6) { B.visible = false; BWS.tag.style.display = 'none'; BWS.vis = 0; return; }
+    if (!BWS.vis && n) { B.position.set(n.x, -80, n.z); B.rotation.y = n.h; BWS.y = st === 'rise' ? -80 : -16; BWS.vis = 1; }
+    // follow the server, gliding between its updates
+    if (n) { const age = Math.min(0.4, (performance.now() - n.at) / 1000), px = n.x + (n.vx || 0) * age, pz = n.z + (n.vz || 0) * age, k = Math.min(1, dt * 4);
+      B.position.x += (px - B.position.x) * k; B.position.z += (pz - B.position.z) * k; B.rotation.y += angDiff(B.rotation.y, n.h) * Math.min(1, dt * 2.5); }
+    // how high it rides: rising from the deep with its shell awash; sinking when it dies or dives for home
+    let wantY = -16;   // riding high: its great shell and claws out of the water, its legs churning below
+    if (st === 'rise') wantY = -80 + 64 * Math.min(1, BWS.stT / 5.5);
+    if (st === 'dying' || st === 'dead') wantY = -16 - BWS.stT * 12;
+    if (n && n.deep && st !== 'dying') wantY = -110;   // racing through the deep, far below the surface
+    if (n && !n.deep && BWS.wasDeep && st === 'hunt') { const dd = Math.hypot(n.x - P.pos.x, n.z - P.pos.z); if (dd < 2500) { SFX.beastRoar({ x: n.x, z: n.z, range: 3000 }, 1.6, 1.2, DUN_PITCH); for (let k = 0; k < 8; k++) puff(n.x + (Math.random() - 0.5) * 120, 2, n.z + (Math.random() - 0.5) * 120, { color: 0xffffff, size: 26, life: 2.5, grow: 2, vy: 6, op: 0.7 }); } }   // it surfaces in a burst of white water
+    BWS.wasDeep = !!(n && n.deep);
+    if (BWS.diveT > 0) { BWS.diveT -= dt; wantY = BWS.y - 14 * dt; if (BWS.diveT <= 0) { B.visible = false; BWS.vis = 0; BWS.tag.style.display = 'none'; return; } }
+    BWS.y += (wantY - BWS.y) * Math.min(1, dt * 3);
+    const cx = B.position.x, cz = B.position.z;
+    B.position.y = BWS.y + waveHeight(cx, cz, t) * 0.5;
+    B.rotation.z = (st === 'dying' ? Math.min(0.5, BWS.stT * 0.08) : 0) + Math.sin(t * 0.6) * 0.02;
+    const camD = Math.hypot(cx - camera.position.x, cz - camera.position.z);
+    B.visible = !inInterior && !DUN.on && !STOM.on && camD < 9000 && BWS.y > -90;
+    if (!B.visible) { BWS.tag.style.display = 'none'; return; }
+    // legs paddle, claws work, eyes burn
+    const sp = n ? Math.hypot(n.vx || 0, n.vz || 0) : 0, mv = Math.min(1, sp / 40), atk = st === 'attack', pkAge = n ? n.pk + Math.min(1, (performance.now() - n.at) / 1000) : 99;
+    BWS.wt += dt * (2 + mv * 8);
+    C.legs.forEach(({ g, sd, i }) => { const ph = BWS.wt + (i % 2 ? Math.PI : 0) + (sd > 0 ? Math.PI / 2 : 0); g.rotation.z = sd * (Math.max(0, Math.sin(ph)) * 0.25 * (0.3 + mv)); g.rotation.y = Math.cos(ph) * 0.18 * (0.3 + mv); });
+    C.claws.forEach((c, k) => {
+      const raise = atk ? (pkAge < 0.45 ? 0.05 : 0.65) : st === 'dying' ? -0.2 : 0.3;
+      c.arm.rotation.x += (-raise - c.arm.rotation.x) * Math.min(1, dt * (atk && pkAge < 0.45 ? 14 : 3));
+      c.arm.rotation.y = c.sd * (-0.15 - (atk ? 0.3 : 0) + Math.sin(t * 0.9 + k * 2) * 0.08);
+      const open = atk ? (pkAge < 0.35 ? 0 : 1) : Math.max(0, Math.sin(t * 1.3 + k * 2.4)) ** 6;
+      c.fing.rotation.x += ((-0.05 - open * 0.6) - c.fing.rotation.x) * Math.min(1, dt * (atk && pkAge < 0.35 ? 25 : 5));
+    });
+    C.mouth.forEach((m, i) => { m.rotation.x = Math.sin(t * (atk ? 14 : 4) + i * 1.5) * 0.35; });
+    C.stalks.forEach((s2, i) => { s2.rotation.z = Math.sin(t * 1.7 + i * 2) * 0.15; });
+    C.body.position.y = 7.5 + Math.sin(t * 1.1) * 0.2;
+    const glow = 0.85 + 0.15 * Math.sin(t * 1.3); C.eyes.forEach(e => { e.material.opacity = st === 'dying' || st === 'dead' ? Math.max(0, 1 - BWS.stT / 4) : glow; });
+    // a white wake boiling round it as it charges
+    if (mv > 0.3 && camD < 3000 && BWS.y > -34) { BWS.wakeT -= dt; if (BWS.wakeT <= 0) { BWS.wakeT = 0.12; const h = B.rotation.y; puff(cx + Math.sin(h) * 40 + (Math.random() - 0.5) * 60, 1, cz + Math.cos(h) * 40 + (Math.random() - 0.5) * 60, { color: 0xffffff, size: 16, life: 1.8, grow: 2, vy: 2, op: 0.55 }); } }
+    // a pinch: the crunch of a hull in its claws
+    if (n && n.pk < 0.3 && !BWS.pkSeen) { BWS.pkSeen = true; if (camD < 2500) { const v = new THREE.Vector3(); C.claws[0].hand.getWorldPosition(v); SFX.clawClack({ x: v.x, z: v.z, range: 1500 }); SFX.crash({ x: v.x, z: v.z }); wSplash(v.x, 0.6, v.z, true); } }
+    if (n && n.pk > 0.6) BWS.pkSeen = false;
+    BWS.grumT -= dt; if (BWS.grumT <= 0) { BWS.grumT = 9 + Math.random() * 10; if (camD < 3500 && (st === 'hunt' || st === 'attack' || st === 'return')) SFX.beastGrumble({ x: cx, z: cz, range: 3500 }, 1.2, DUN_PITCH); }
+    // its name and how hurt it is
+    if (camD < 2000 && n && st !== 'dead' && BWS.y > -60) {
+      tmp2.set(cx, B.position.y + 75, cz).project(camera);
+      if (tmp2.z < 1) { BWS.tag.style.display = 'block'; BWS.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px, ${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; BWS.bar.style.width = Math.max(0, n.hp / n.max * 100) + '%'; } else BWS.tag.style.display = 'none';
+    } else BWS.tag.style.display = 'none';
+  }
+  // a cannonball that hits it
+  function bwBallHit(x, y, z, dmg) {
+    if (!bwLive() || BWS.st === 'rise') return false;
+    const B = BWS.m.B, d = Math.hypot(x - B.position.x, z - B.position.z);
+    if (d > 72 || y > B.position.y + 62) return false;
+    if (window.__mpBwDmg) window.__mpBwDmg(dmg);
+    puff(x, y, z, { color: 0x5a1010, size: 5, life: 1, grow: 1.6, vy: 3, op: 0.9 });
+    return true;
+  }
+  // its claws close on yer ship
+  function bwHitMe(dmg) {
+    if (!ship || ship.sinking) return;
+    damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
+    SFX.crash({ x: ship.x, z: ship.z }); SFX.clawClack({ x: ship.x, z: ship.z });
+    if ((onShip || sailing) && Math.random() < 0.5) hurtPlayer(8);
+    if (!BWS.told) { BWS.told = true; toast('The Blackwater Beast has yer ship in its claws! Fire everything ye\'ve got, or run for the shallows!'); }
+  }
+  // the raid banner: how long the raid has left and which wave is coming
+  let raidEl = null;
+  function updateRaidHud() {
+    const R = BWS.raid, on = R && R.on && BWS.net && performance.now() - BWS.raidAt < 5000;
+    if (!on) { if (raidEl) raidEl.style.display = 'none'; return; }
+    if (!raidEl) { raidEl = document.createElement('div'); raidEl.style.cssText = 'position:absolute;left:50%;top:14px;transform:translateX(-50%);background:linear-gradient(#5a0808,#2a0404);color:#ffd7c0;border:2px solid #a02020;padding:6px 16px;border-radius:8px;font:bold 16px Georgia,serif;letter-spacing:1px;pointer-events:none;z-index:6;text-shadow:0 1px 3px #000;box-shadow:0 0 18px rgba(200,20,20,.5)'; document.body.appendChild(raidEl); }
+    const left = Math.max(0, R.left - (performance.now() - BWS.raidAt) / 1000), mm = Math.floor(left / 60), ss = String(Math.floor(left % 60)).padStart(2, '0');
+    const bst = BWS.st === 'dead' || BWS.st === 'dying' ? ' · the Beast is slain' : '';
+    raidEl.style.display = 'block'; raidEl.style.opacity = 0.85 + 0.15 * Math.sin(performance.now() / 300);
+    raidEl.textContent = `☠ BLACKWATER RAID ☠  ${mm}:${ss}  ·  wave ${R.w || 1}${bst}`;
+  }
   function serpentBallHit(x, y, z, dmg) {
     for (const s of SERP) {
       if (!serpAlive(s) || Math.hypot(x - s.x, z - s.z) > 80) continue;
@@ -10613,7 +10736,7 @@ window.__pgBoot = () => {
         if (m.peer !== 'server') return;
         const what = m.data && m.data.what;
         const k = prompt(`This server needs its admin key to ${what === 'kraken' ? 'command the Kraken for everyone' : what === 'gift' ? 'gift gold to players' : 'change the time and weather for everyone'}. Enter the key:`);
-        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (what === 'gift') { if (MP.lastGift) window.__mpGift(...MP.lastGift); } else if (what === 'kraken') { if (MP.lastAdminK) window.__mpKrAdmin(MP.lastAdminK); } else if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
+        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (what === 'gift') { if (MP.lastGift) window.__mpGift(...MP.lastGift); } else if (what === 'kraken') { if (MP.lastAdminK) window.__mpKrAdmin(MP.lastAdminK); } else if (what === 'raid') { if (MP.lastRaid) window.__mpRaid(MP.lastRaid); } else if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
         else toast('Not changed: the server needs the admin key.');
       });
       // Tell the server when our kraken grabs or lets go of a raider, so it stops sailing her.
@@ -10627,6 +10750,22 @@ window.__pgBoot = () => {
       MP.room.on('ksunk', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; const name = peerName(d.id); toast(`Yer kraken drags ${name}'s ship down to the depths!`); addGold(300, `Yer kraken sank ${name}'s ship!`); });
       MP.room.on('ssnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const sp = SERP[e[0]]; if (sp) sp.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'][e[5]] || 'roam', sk: e[6], sp: e[7], tg: e[8], t }; } });
       MP.room.on('sbite', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { serpentBite(d.i | 0, Math.min(30, +d.dmg || 0)); } catch (e) {} });
+      // The Blackwater raid and its Beast: the server runs both
+      MP.room.on('bwsnap', m => { const e = m.data; if (m.peer !== 'server' || !Array.isArray(e)) return; const at = performance.now(), o = BWS.net;
+        const nn = { x: e[0], z: e[1], h: e[2], st: BW_ST[e[3]] || 'caged', hp: e[4], max: e[5] || 1500, tg: e[6], pk: e[7], deep: e[9] === 1, at };
+        if (o && at > o.at && o.st === nn.st) { const s2 = (at - o.at) / 1000; nn.vx = Math.max(-120, Math.min(120, (nn.x - o.x) / s2)); nn.vz = Math.max(-120, Math.min(120, (nn.z - o.z) / s2)); nn.vx = o.vx === undefined ? nn.vx : o.vx + (nn.vx - o.vx) * 0.5; nn.vz = o.vz === undefined ? nn.vz : o.vz + (nn.vz - o.vz) * 0.5; } else { nn.vx = 0; nn.vz = 0; }
+        BWS.net = nn; });
+      MP.room.on('raidsnap', m => { if (m.peer !== 'server' || !m.data) return; BWS.raid = m.data; BWS.raidAt = performance.now(); });
+      MP.room.on('raid', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
+        if (d.on) { BWS.told = false; try { SFX.horn(); } catch (e) {} toast('☠ A BLACKWATER RAID! The Blackwater fleet puts to sea and the Beast has broken loose. No ship is safe!'); }
+        else toast('The Blackwater raid is over. The fleet turns for home, and the Beast returns to its pen.'); });
+      MP.room.on('raidwave', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.w > 1)) return; toast(`More Blackwater sails on the horizon! Wave ${d.w}: ${d.n} more ships.`); });
+      MP.room.on('bwhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { bwHitMe(Math.min(40, +d.dmg || 0)); } catch (e) {} });
+      MP.room.on('bwdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
+        if (d.by === MP.me) { addGold(5000, 'Ye slew the Blackwater Beast!'); addMat('gem', 3); addMat('pearl', 5); try { SFX.fanfare(); } catch (e) {} }
+        else toast(`${(MP.peers.get(d.by)?.name || 'A captain')} has slain the Blackwater Beast!`); });
+      window.__mpBwDmg = dmg => { if (!online()) return; MP.room.emit('bwdmg', { dmg: Math.round(dmg) }).catch(() => {}); };
+      window.__mpRaid = cmd => { let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {} MP.lastRaid = cmd; MP.room.emit('raidadmin', { cmd, key }).catch(() => {}); };
       MP.room.on('sdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return; try { serpentDied(d.i | 0, d.by === MP.me); } catch (e) {} });
       window.__mpSerpOnline = () => online();
       window.__mpShips = () => [...MP.peers.values()].filter(q => q.ship && q.tgt && q.tgt.sh).map(q => q.ship);
@@ -10963,6 +11102,7 @@ window.__pgBoot = () => {
     updateKraken(dt, t);
     updateClash(dt, t);
     updateSerpents(dt, t);
+    updateSeaBeast(dt, t);
     updateEnvironment(dt);
     // Underwater atmosphere: short blue-green visibility, subdued daylight,
     // and no above-water sky/cloud dome when the camera is below the surface.

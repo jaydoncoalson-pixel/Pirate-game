@@ -131,7 +131,7 @@ wss.on('connection', ws => {
       players.set(id, { ws, name, acct, p: {} });
       send(ws, { t: 'welcome', id, peers, build: BUILD });
       const snap = sim.snapshot();   // so the newcomer sees the world right away
-      for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) send(ws, serverEmit(k, snap[k]));
+      for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap', 'bwsnap', 'raid']) send(ws, serverEmit(k === 'raid' ? 'raidsnap' : k, snap[k]));
       send(ws, serverEmit('env', env.snapshot()));
       send(ws, hornMsg(players.get(id)));
       broadcastRaw({ t: 'join', id, name }, id);
@@ -174,6 +174,11 @@ wss.on('connection', ws => {
         console.log(`admin ${me.name}: gifted ${amount} gold to ${d.to === 'all' ? 'everyone' : to.length ? to[0][1].name : 'nobody'}`);
         return;
       }
+      if (m.topic === 'raidadmin') {                                    // admin: start or stop a Blackwater raid
+        const d = m.data || {}, ok = ADMIN_KEY ? d.key === ADMIN_KEY : (me.acct || '').toLowerCase() === 'bob3';
+        if (!ok) { send(ws, serverEmit('admin_denied', { what: 'raid' })); return; }
+        sim.raidAdmin(d.cmd); console.log(`admin ${me.name}: raid ${d.cmd}`); return;
+      }
       if (m.topic === 'ebite' && !ebiteOk(me, m.data)) return;
       if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
@@ -205,7 +210,7 @@ setInterval(() => {
   if (snapAcc >= SNAP_MS && players.size) {
     snapAcc = 0;
     const snap = sim.snapshot();
-    for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) broadcastRaw(serverEmit(k, snap[k]));
+    for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap', 'bwsnap', 'raid']) broadcastRaw(serverEmit(k === 'raid' ? 'raidsnap' : k, snap[k]));
   }
 }, TICK_MS);
 

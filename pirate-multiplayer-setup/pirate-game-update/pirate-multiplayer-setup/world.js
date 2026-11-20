@@ -273,7 +273,9 @@ const BANDIT_SPAWNS = [
 // --- Raiders: same order as the client's raider list ---
 const HULLS = { brig: { L: 27, B: 7.6 }, galleon: { L: 40, B: 11 } };
 const RAIDER_SPAWNS = [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']]
-  .map(([x, z, kind]) => [x * WS, z * WS, kind]).map(([x, z, kind]) => ({ home: { x, z }, kind, T: HULLS[kind], galleon: kind === 'galleon', maxHp: kind === 'galleon' ? 240 : 110 }));
+  .map(([x, z, kind]) => [x * WS, z * WS, kind]).map(([x, z, kind]) => ({ home: { x, z }, kind, T: HULLS[kind], galleon: kind === 'galleon', maxHp: kind === 'galleon' ? 240 : 110 }))
+  // the Blackwater raid fleet: 16 more ships that only put to sea during a Blackwater raid (keep in step with the game)
+  .concat(Array.from({ length: 16 }, (_, k) => { const kind = k % 3 === 2 ? 'galleon' : 'brig', I = ISLANDS[4], a = k / 16 * Math.PI * 2; return { home: { x: I.c.x + Math.cos(a) * I.r * 2, z: I.c.y + Math.sin(a) * I.r * 2 }, kind, T: HULLS[kind], galleon: kind === 'galleon', maxHp: kind === 'galleon' ? 240 : 110, raid: true }; }));
 
 function blockedAt(T, cx, cz, h) {
   const s = Math.sin(h), c = Math.cos(h);
