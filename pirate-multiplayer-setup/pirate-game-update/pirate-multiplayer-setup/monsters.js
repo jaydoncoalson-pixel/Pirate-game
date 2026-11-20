@@ -18,7 +18,7 @@ function mistSpot() {
 const KST = ['roam', 'hunt', 'engaged', 'drown', 'leaving', 'dying', 'dead'];
 const SST = ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'];
 
-function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
+function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornOwns }) {
   // ---------------------------------------------------------------- the Kraken
   const K = { st: 'roam', x: -1300, z: 2700, h: 0, hp: 480, max: 480, t: 0, cd: 20, rs: 0, wp: null, tg: null, ally: null, scanT: 0, ramT: 10, dmgAcc: 0 };
   const ship = (players, id) => { const q = players.get(id); return q && q.p && q.p.sh && q.p.sh.a === 1 ? q.p.sh : null; };
@@ -244,7 +244,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk }) {
     const px = q.p.sh ? q.p.sh.x : q.p.x, pz = q.p.sh ? q.p.sh.z : q.p.z;
     const el = Array.isArray(q.p.el) ? q.p.el : null;
     if (Math.min(Math.hypot(px - s.x, pz - s.z), Math.hypot(q.p.x - s.x, q.p.z - s.z), el ? Math.hypot(el[0] - s.x, el[1] - s.z) : 1e9) > 500) return;
-    s.hp -= Math.max(0, Math.min(60, +d.dmg || 0));
+    if (d.el && el && hornOwns && hornOwns(q) && Math.hypot(el[0] - s.x, el[1] - s.z) < 700) s.hp = 0;   // the Elder Serpent kills one in a single bite
+    else s.hp -= Math.max(0, Math.min(60, +d.dmg || 0));
     if (s.st === 'roam') { s.st = 'hunt'; s.tg = from; }
     if (s.hp <= 0) { s.hp = 0; s.st = 'dying'; s.deadT = 0; broadcast('sdead', { i: d.i | 0, by: from }); }
   }

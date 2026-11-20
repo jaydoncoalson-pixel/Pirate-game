@@ -7734,7 +7734,7 @@
     if (!serpAlive(s)) return;
     SFX.hit(at || { x: s.x, z: s.z });
     puff(at ? at.x : s.x, at ? at.y : 2, at ? at.z : s.z, { color: 0x3a6e3a, size: 1.6, life: 0.6, grow: 1.4, vy: 1.5, op: 0.85 });
-    if (serpNet()) { window.__mpKrSend('sdmg', { i: SERP.indexOf(s), dmg: Math.round(n * 10) / 10 }); return; }   // online the server keeps its health
+    if (serpNet()) { window.__mpKrSend('sdmg', { i: SERP.indexOf(s), dmg: Math.round(Math.min(n, 60) * 10) / 10, el: n >= 9999 ? 1 : 0 }); return; }   // online the server keeps its health (el: the Elder Serpent's killing bite)
     s.hp -= n;
     if (s.st === 'roam') s.st = 'hunt';
     if (s.hp <= 0) {
@@ -8215,7 +8215,7 @@
       if (krNet()) window.__mpKrSend('kdmg', { dmg: kd, el: 1 });
       else { KR.hp -= kd; if (KR.hp <= 0 && KR.st !== 'grip' && KR.st !== 'attack') { KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; elderRoar(); etoast('The Elder Serpent drives the Kraken down into the abyss!'); } }
     }
-    else if (T.kind === 'serp') serpentHurt(e, big ? 160 : 40, { x: e.x, y: 2, z: e.z });
+    else if (T.kind === 'serp') serpentHurt(e, big ? 9999 : 40, { x: e.x, y: 2, z: e.z });   // the Elder Serpent kills a serpent in one bite
     else if (T.kind === 'player' && window.__mpElderBite) { if (big) elderGrab(T, e); else window.__mpElderBite(T.peer, big); }
     else if (T.kind === 'person' && window.__mpElderBite) {
       if (e.ship) { if (big) elderGrab({ kind: 'player', peer: T.peer }, e.ship); else window.__mpElderBite(T.peer, big); }   // they're aboard: he takes the whole ship

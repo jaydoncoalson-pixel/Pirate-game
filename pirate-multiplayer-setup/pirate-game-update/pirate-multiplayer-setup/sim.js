@@ -164,7 +164,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
 
   raiders.forEach(r => spawnRaider(r, new Map()));
   // the Kraken and the sea serpents, shared by everyone
-  const monsters = createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk });
+  const monsters = createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornOwns });
 
   // ---------- public API ----------
   return {
