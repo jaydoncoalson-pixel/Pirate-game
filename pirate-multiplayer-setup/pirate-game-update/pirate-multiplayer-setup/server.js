@@ -112,6 +112,17 @@ wss.on('connection', ws => {
         return;
       }
       if (m.topic === 'hclaim') { hornClaim(me); return; }
+      if (m.topic === 'gift') {                                         // admin: gift gold to a player (or everyone)
+        const d = m.data || {}, amount = Math.floor(+d.amount || 0);
+        const ok = ADMIN_KEY ? d.key === ADMIN_KEY : (me.acct || '').toLowerCase() === 'bob3';   // with no ADMIN_KEY set, only the bob3 account
+        if (!ok) { send(ws, serverEmit('admin_denied', { what: 'gift' })); return; }
+        if (!(amount > 0 && amount <= 1000000)) return;
+        const to = d.to === 'all' ? [...players].filter(([pid]) => pid !== id) : players.has(d.to) ? [[d.to, players.get(d.to)]] : [];
+        for (const [, q] of to) send(q.ws, serverEmit('gift', { amount, from: me.name }));
+        send(ws, serverEmit('gift_ok', { amount, n: to.length, name: to.length === 1 ? to[0][1].name : null }));
+        console.log(`admin ${me.name}: gifted ${amount} gold to ${d.to === 'all' ? 'everyone' : to.length ? to[0][1].name : 'nobody'}`);
+        return;
+      }
       if (m.topic === 'ebite' && !ebiteOk(me, m.data)) return;
       if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides

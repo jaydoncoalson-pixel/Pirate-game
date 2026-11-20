@@ -4032,6 +4032,7 @@
   const adminEl = document.getElementById('admin');
   window.__god = false;
   if (isAdmin) { document.getElementById('adminBtn').style.display = ''; document.getElementById('adminWho').textContent = accCur().name; }
+  const ADMIN_GIFT = { to: 'all', amount: 1000 };
   function renderAdmin() {
     const body = document.getElementById('adminBody'); body.innerHTML = '';
     const sec = t => { const h = document.createElement('div'); h.className = 'lab'; h.style.cssText = 'width:auto;margin:12px 0 6px;font-weight:bold'; h.textContent = t; body.appendChild(h); const c = document.createElement('div'); c.className = 'ctl'; body.appendChild(c); return c; };
@@ -4039,6 +4040,22 @@
     let c = sec('Resources');
     btn(c, '+1,000 gold', () => addGold(1000, 'Admin gift'));
     btn(c, '+10 of every material', () => Object.keys(MATS).forEach(k => addMat(k, 10)));
+    c = sec('Gift gold to a player');
+    if (window.__mpGift && window.__mpPeople && window.__mpEnv && window.__mpEnv()) {
+      const people = window.__mpPeople();
+      const sel = document.createElement('select'); sel.style.cssText = 'padding:5px;border-radius:6px;margin-right:6px';
+      sel.innerHTML = `<option value="all">Everyone online (${people.length})</option>` + people.map(q => `<option value="${q.peer}">${q.name.replace(/[<>&"]/g, '')}</option>`).join('');
+      if (ADMIN_GIFT.to && [...sel.options].some(o => o.value === ADMIN_GIFT.to)) sel.value = ADMIN_GIFT.to;
+      sel.onchange = () => { ADMIN_GIFT.to = sel.value; };
+      const amt = document.createElement('input'); amt.type = 'number'; amt.min = 1; amt.max = 1000000; amt.value = ADMIN_GIFT.amount; amt.style.cssText = 'width:110px;padding:5px;border-radius:6px;margin-right:6px';
+      amt.oninput = () => { ADMIN_GIFT.amount = Math.floor(+amt.value || 0); };
+      const go = document.createElement('button'); go.className = 'ch'; go.textContent = 'Send gold';
+      go.onclick = () => { const n = Math.floor(+amt.value || 0); if (!(n > 0 && n <= 1000000)) { toast('Pick an amount between 1 and 1,000,000.'); return; } if (!people.length) { toast('Nobody else is online.'); return; } window.__mpGift(sel.value, n); };
+      c.append(sel, amt, go);
+      const quick = document.createElement('div'); quick.style.cssText = 'margin-top:6px;width:100%';
+      [1000, 10000, 25000, 100000].forEach(v => { const b = document.createElement('button'); b.className = 'ch'; b.textContent = v.toLocaleString(); b.onclick = () => { amt.value = v; ADMIN_GIFT.amount = v; }; quick.appendChild(b); });
+      c.appendChild(quick);
+    } else { const p = document.createElement('div'); p.style.cssText = 'font-size:13px;opacity:.8'; p.textContent = 'Join a server to gift gold to other players.'; c.appendChild(p); }
     c = sec('Swords');
     btn(c, STATE.swords.includes('seasword') ? 'Equip the Sword of the Sea' : 'Give me the Sword of the Sea', () => {
       if (!STATE.swords.includes('seasword')) STATE.swords.push('seasword');
@@ -8090,10 +8107,15 @@
         let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {}
         MP.lastAdminEnv = d; MP.room.emit('admin_env', Object.assign({}, d, { key })).catch(() => {}); return true;
       };
+      // admin: gift gold to another player (or everyone); the server checks ye're the admin
+      window.__mpGift = (to, amount) => { let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {} MP.lastGift = [to, amount]; MP.room.emit('gift', { to, amount, key }).catch(() => {}); };
+      MP.room.on('gift', m => { if (m.peer !== 'server' || !m.data || !(m.data.amount > 0)) return; addGold(Math.floor(m.data.amount), `A gift from ${String(m.data.from || 'the admin').replace(/[<>&]/g, '')}`); SFX.fanfare(); });
+      MP.room.on('gift_ok', m => { if (m.peer !== 'server' || !m.data) return; toast(m.data.n ? `Sent ${m.data.amount.toLocaleString()} gold to ${m.data.name || m.data.n + ' captains'}.` : 'That captain is no longer online.'); });
       MP.room.on('admin_denied', m => {
         if (m.peer !== 'server') return;
-        const k = prompt(`This server needs its admin key to ${m.data && m.data.what === 'kraken' ? 'command the Kraken' : 'change the time and weather'} for everyone. Enter the key:`);
-        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (m.data && m.data.what === 'kraken') { if (MP.lastAdminK) window.__mpKrAdmin(MP.lastAdminK); } else if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
+        const what = m.data && m.data.what;
+        const k = prompt(`This server needs its admin key to ${what === 'kraken' ? 'command the Kraken for everyone' : what === 'gift' ? 'gift gold to players' : 'change the time and weather for everyone'}. Enter the key:`);
+        if (k && k.trim()) { try { localStorage.setItem('pg_admin_key', k.trim()); } catch (e) {} if (what === 'gift') { if (MP.lastGift) window.__mpGift(...MP.lastGift); } else if (what === 'kraken') { if (MP.lastAdminK) window.__mpKrAdmin(MP.lastAdminK); } else if (MP.lastAdminEnv) window.__mpAdminEnv(MP.lastAdminEnv); }
         else toast('Not changed: the server needs the admin key.');
       });
       // Tell the server when our kraken grabs or lets go of a raider, so it stops sailing her.
