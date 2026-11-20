@@ -3502,7 +3502,7 @@
   updateGold();
 
   // ---------- Ship shop ----------
-  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 300], ['galleon', 'Galleon', "big, grand and terrifyin'", 1200], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
+  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 25000], ['galleon', 'Galleon', "big, grand and terrifyin'", 100000], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
   function chooseShip(i) {
     if (!talk || !talk.options) return;
     if (talk.choice) { pickChoice(i); return; }
@@ -3511,7 +3511,7 @@
     if (!opt[0]) { closeDialog(); return; }
     if (opt[0] === 'paint') { closeDialog(); openUI('custom', 'ship'); return; }
     talk.final = true;
-    if (STATE.gold < opt[3]) { say(talk.npc.def.name, `The ${opt[1]} costs ${opt[3]} gold, captain, and ye've only got ${STATE.gold}. Odd jobs around town and floatin' cargo out at sea pay well. Come back when yer purse is heavier.`); return; }
+    if (STATE.gold < opt[3]) { say(talk.npc.def.name, `The ${opt[1]} costs ${opt[3].toLocaleString()} gold, captain, and ye've only got ${STATE.gold.toLocaleString()}. Odd jobs around town and floatin' cargo out at sea pay well. Come back when yer purse is heavier.`); return; }
     if (opt[3]) addGold(-opt[3], `Bought a ${opt[1]}`);
     const replaced = spawnShip(opt[0]);
     say(talk.npc.def.name, (replaced ? "I've sent yer old ship off to the boneyard. " : '') + `There she be! Yer ${opt[1]} is tied up at the end o' the dock. ${opt[0] === 'sloop' ? '' : 'She comes with a full crew, too. '}Walk up to her and press E to climb aboard, then find the wheel at the back to take her out.`);
