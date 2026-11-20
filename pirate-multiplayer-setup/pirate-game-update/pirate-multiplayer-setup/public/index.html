@@ -4365,15 +4365,15 @@
   // ---------- Crafting: materials, swords and the forge ----------
   const MATS = { iron: { name: 'Iron scrap', color: '#8a8f96' }, wood: { name: 'Hardwood', color: '#8a5a33' }, pearl: { name: 'Pearls', color: '#f2ead8' }, gem: { name: 'Fire gems', color: '#ff5a1f' }, steel: { name: 'Raider steel', color: '#5a6a7a' } };
   const SWORDS = {
-    rusty:    { name: 'Old Cutlass', desc: "Yer trusty starter blade. It's seen better days.", dmg: 25, cool: 0.5, reach: 2.9, arc: 0.2, cost: {}, gold: 0, look: { blade: 0xb9bcc0, guard: 0xc9a646, len: 0.95, curve: 0.15, width: 0.1 } },
-    steel:    { name: 'Steel Cutlass', desc: "A proper sailor's blade: sharp, sturdy and reliable.", dmg: 33, cool: 0.48, reach: 3.0, arc: 0.2, cost: { iron: 3 }, gold: 80, look: { blade: 0xe4e8ec, guard: 0x8a8f96, len: 1.0, curve: 0.2, width: 0.11 } },
+    rusty:    { name: 'Old Cutlass', desc: "Yer trusty starter blade. It's seen better days.", dmg: 25, cool: 0.5, reach: 2.9, arc: 0.2, cost: {}, gold: 0, look: { style: 'rusty', blade: 0xb9bcc0, guard: 0xc9a646, len: 0.95, curve: 0.15, width: 0.1 } },
+    steel:    { name: 'Steel Cutlass', desc: "A proper sailor's blade: sharp, sturdy and reliable.", dmg: 33, cool: 0.48, reach: 3.0, arc: 0.2, cost: { iron: 3 }, gold: 80, look: { style: 'steel', blade: 0xe4e8ec, guard: 0x8a8f96, len: 1.0, curve: 0.2, width: 0.11 } },
     axe:      { name: 'Boarding Axe', desc: 'Slow and brutal. Made for chopping through doors and foes alike.', dmg: 44, cool: 0.75, reach: 2.6, arc: 0.0, cost: { iron: 4, wood: 2 }, gold: 60, look: { type: 'axe' } },
-    rapier:   { name: 'Rapier', desc: 'Light and lightning quick, with a long reach. Strikes fast but not deep.', dmg: 22, cool: 0.28, reach: 3.4, arc: 0.55, cost: { iron: 3, pearl: 2 }, gold: 150, look: { blade: 0xf0f2f5, guard: 0xd4af37, len: 1.25, curve: 0, width: 0.04, basket: true } },
-    scimitar: { name: 'Scimitar', desc: 'A broad curved blade that sweeps through a very wide arc.', dmg: 34, cool: 0.5, reach: 3.0, arc: -0.3, cost: { iron: 5, pearl: 1 }, gold: 120, look: { blade: 0xdfe3e8, guard: 0xd4af37, len: 1.0, curve: 0.55, width: 0.16 } },
-    saber:    { name: 'Navy Saber', desc: 'Forged from captured raider steel. Fine, balanced and deadly.', dmg: 42, cool: 0.45, reach: 3.1, arc: 0.15, cost: { steel: 4, iron: 2 }, gold: 250, look: { blade: 0xc8d4e0, guard: 0x2f5d8a, len: 1.1, curve: 0.25, width: 0.1, basket: true } },
-    golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
-    flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
-    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Its edge glows like moonlit water.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
+    rapier:   { name: 'Rapier', desc: 'Light and lightning quick, with a long reach. Strikes fast but not deep.', dmg: 22, cool: 0.28, reach: 3.4, arc: 0.55, cost: { iron: 3, pearl: 2 }, gold: 150, look: { style: 'rapier', blade: 0xf0f2f5, guard: 0xd4af37, len: 1.25, curve: 0, width: 0.04, basket: true } },
+    scimitar: { name: 'Scimitar', desc: 'A broad curved blade that sweeps through a very wide arc.', dmg: 34, cool: 0.5, reach: 3.0, arc: -0.3, cost: { iron: 5, pearl: 1 }, gold: 120, look: { style: 'scimitar', blade: 0xdfe3e8, guard: 0xd4af37, len: 1.0, curve: 0.55, width: 0.16 } },
+    saber:    { name: 'Navy Saber', desc: 'Forged from captured raider steel. Fine, balanced and deadly.', dmg: 42, cool: 0.45, reach: 3.1, arc: 0.15, cost: { steel: 4, iron: 2 }, gold: 250, look: { style: 'saber', blade: 0xc8d4e0, guard: 0x2f5d8a, len: 1.1, curve: 0.25, width: 0.1, basket: true } },
+    golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
+    flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
+    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Its edge glows like moonlit water.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, yer cannons hit 50% harder, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
@@ -4461,30 +4461,151 @@
     return g;
   }
   function tickSeaBlades(t) { for (const g of SEA_BLADES) { if (!g.parent) { if ((g.userData.orphan = (g.userData.orphan || 0) + 1) > 300) SEA_BLADES.delete(g); continue; } g.userData.orphan = 0; if (g.visible) g.userData.seaTick(t); } }
+  // ---- Blades: each sword has its own design (built from a shared kit: a tapered blade with a bright edge and a
+  // fuller, then a hilt), and the magic ones are animated through the same per-frame tick as the Sword of the Sea ----
+  const metal = (c, sh = 110, em = 0x000000) => new THREE.MeshPhongMaterial({ color: c, specular: 0xffffff, shininess: sh, emissive: em });
+  const matte = c => new THREE.MeshLambertMaterial({ color: c });
+  function bladeKit(g, o) {
+    // o: len, curve, w(t) width along the blade, body/edge/fuller materials, z0, tipLen, segs
+    const n = o.segs || 12, z0 = o.z0 ?? 0.07, at = t => ({ y: o.curve * 0.35 * t * t, z: z0 + t * o.len }), parts = [];
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n, t1 = (i + 1) / n, a = at(t0), b = at(t1), tm = (t0 + t1) / 2, L = Math.hypot(b.z - a.z, b.y - a.y) * 1.04, rx = -Math.atan2(b.y - a.y, b.z - a.z);
+      const w = o.w(tm), cy = (a.y + b.y) / 2, cz = (a.z + b.z) / 2;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(o.thick || 0.022, w, L), o.body); body.position.set(0, cy, cz); body.rotation.x = rx; g.add(body); parts.push(body);
+      if (o.edge) { const e = new THREE.Mesh(new THREE.BoxGeometry((o.thick || 0.022) * 0.55, Math.max(0.008, w * 0.16), L), o.edge); e.position.set(0, cy - w / 2 + Math.max(0.008, w * 0.16) / 2, cz); e.rotation.x = rx; g.add(e); }
+      if (o.fuller && tm < (o.fullerEnd || 0.7)) [-1, 1].forEach(sd => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.003, w * 0.18, L), o.fuller); f.position.set(sd * ((o.thick || 0.022) / 2 + 0.0008), cy + w * 0.18, cz); f.rotation.x = rx; g.add(f); });
+      if (o.each) o.each(i, tm, cy, cz, rx, w, L);
+    }
+    const end = at(1), tip = new THREE.Mesh(new THREE.ConeGeometry(o.w(1) * 0.55 + 0.01, o.tipLen || 0.12, 4), o.tipMat || o.body);
+    tip.rotation.x = Math.PI / 2 - Math.atan(o.curve * 0.7); tip.scale.set(0.4, 1, 1); tip.position.set(0, end.y, end.z + (o.tipLen || 0.12) / 2 - 0.01); g.add(tip);
+    return { at, parts };
+  }
+  function gripKit(g, o) {   // o: len, r, wrap material, band material, bands
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 0.92, o.r, o.len, 10), o.mat); grip.rotation.x = Math.PI / 2; grip.position.z = -o.len / 2 + 0.01; g.add(grip);
+    for (let i = 0; i < (o.bands || 0); i++) { const w = new THREE.Mesh(new THREE.TorusGeometry(o.r * 1.02, o.r * 0.16, 4, 10), o.band); w.position.z = -0.02 - i * (o.len - 0.04) / Math.max(1, o.bands - 1); w.rotation.x = 0.45; g.add(w); }
+    return -o.len;
+  }
+  const at3 = (m, x, y, z, rx = 0, ry = 0, rz = 0) => { m.position.set(x, y, z); m.rotation.set(rx, ry, rz); return m; };
+  function knuckleBow(g, mat, r = 0.1, thick = 0.012) {   // the D-guard sweeping from the guard back over the knuckles to the pommel
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(r, thick, 6, 16, Math.PI), mat); bow.rotation.set(0, Math.PI / 2, Math.PI / 2); bow.position.set(0, -0.005, 0.03 - r); g.add(bow); return bow;
+  }
   function buildBlade(lk) {
     if (lk.type === 'sea') return buildSeaBlade(lk);
-    const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c });
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6), M(0x3a2414)); grip.rotation.x = Math.PI / 2; grip.position.z = -0.05; g.add(grip);
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), M(lk.guard || 0xc9a646)); pommel.position.z = -0.16; g.add(pommel);
+    const g = new THREE.Group(), S = lk.style || (lk.type === 'axe' ? 'axe' : 'steel');
     if (lk.type === 'axe') {
-      const h = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.95, 6), M(0x6b4423)); h.rotation.x = Math.PI / 2; h.position.z = 0.4; g.add(h);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.32, 0.2), M(0x8a9098)); head.position.set(0, 0.12, 0.8); g.add(head);
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.38, 0.05), M(0xdfe3e8)); edge.position.set(0, 0.12, 0.92); g.add(edge);
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 4), M(0x8a9098)); spike.position.set(0, -0.08, 0.8); spike.rotation.x = Math.PI; g.add(spike);
+      // Boarding Axe: an ash haft bound in leather with iron rivets, a bearded crescent head and a hooked back spike
+      const ash = matte(0x7a5232), leather = matte(0x3a2414), iron = metal(0x6f757c, 60), steelE = metal(0xe6eaee, 160);
+      const h = at3(new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.032, 1.05, 8), ash), 0, 0, 0.36, Math.PI / 2); g.add(h);
+      for (let i = 0; i < 3; i++) g.add(at3(new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.05, 8), leather), 0, 0, -0.08 + i * 0.06, Math.PI / 2));
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), iron), 0, 0, -0.15));
+      const head = new THREE.Group(); head.position.set(0, 0, 0.8); g.add(head);
+      head.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.13), iron), 0, 0.02, 0));                 // the socket round the haft
+      for (let i = 0; i < 6; i++) { const t = i / 5, a = -0.9 + t * 1.8; const sl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.07), iron); sl.position.set(0, 0.13 + Math.cos(a) * 0.05 + (t - 0.5) * 0.05, Math.sin(a) * 0.17 + 0.03); sl.rotation.x = -a * 0.5; head.add(sl); }   // the cheek, fanning out
+      for (let i = 0; i < 9; i++) { const a = -1.05 + i / 8 * 2.1; const e = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.05, 0.045), steelE); e.position.set(0, 0.2 + Math.cos(a) * 0.06, Math.sin(a) * 0.22 + 0.03); e.rotation.x = -a; head.add(e); }   // the curved cutting edge
+      const beard = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.12, 0.06), iron); beard.position.set(0, 0.17, -0.13); beard.rotation.x = 0.5; head.add(beard);
+      head.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.17, 4), iron), 0, -0.1, 0.0, Math.PI));          // back spike
+      head.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.1, 4), iron), 0, 0.02, 0.09, Math.PI / 2));    // top spike
+      [-1, 1].forEach(sd => head.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), metal(0xb0b6bc, 80)), sd * 0.027, 0.02, 0)));   // rivets
       return g;
     }
-    const bladeM = lk.glow ? new THREE.MeshBasicMaterial({ color: lk.blade }) : M(lk.blade);
-    const n = 7, len = lk.len;
-    for (let i = 0; i < n; i++) {
-      const t0 = i / n, t1 = (i + 1) / n, y0 = lk.curve * 0.35 * t0 * t0, y1 = lk.curve * 0.35 * t1 * t1, z0 = 0.06 + t0 * len, z1 = 0.06 + t1 * len;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.025, lk.width * (1 - 0.55 * t1) + 0.015, Math.hypot(z1 - z0, y1 - y0) * 1.04), bladeM);
-      b.position.set(0, (y0 + y1) / 2, (z0 + z1) / 2); b.rotation.x = -Math.atan2(y1 - y0, z1 - z0); g.add(b);
+    if (S === 'rusty') {
+      // Old Cutlass: pitted grey iron blotched with rust, a chipped edge, a dented brass shell and a frayed leather grip
+      const iron = metal(0x9aa0a4, 40), rust = matte(0x8a4a24), brass = metal(0xa8843a, 50);
+      gripKit(g, { len: 0.2, r: 0.03, mat: matte(0x4a3020), band: matte(0x2a1a10), bands: 4 });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), brass), 0, 0, -0.205));
+      g.add(at3(new THREE.Mesh(new THREE.CircleGeometry(0.075, 10), Object.assign(brass.clone(), { side: THREE.DoubleSide })), 0, 0, 0.04, 0, 0, 0)).scale.set(0.8, 1, 1);
+      knuckleBow(g, brass, 0.105, 0.01);
+      const R = Math.random;
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: iron, edge: metal(0xc4c8cc, 60), w: t => 0.1 * (1 - 0.45 * t) + 0.012,
+        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0 || i === 5) { const sp = new THREE.Mesh(new THREE.CircleGeometry(0.012 + (i % 3) * 0.006, 6), rust); sp.position.set(0.012, cy + (i % 2 ? -1 : 1) * w * 0.15, cz); sp.rotation.y = Math.PI / 2; g.add(sp); } if (i === 3 || i === 7) { const nick = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.025), matte(0x1a1612)); nick.position.set(0, cy - w / 2, cz); g.add(nick); } } });
+      return g;
     }
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(lk.width * 0.3 + 0.012, 0.12, 4), bladeM);
-    tip.rotation.x = Math.PI / 2 - Math.atan(lk.curve * 0.7); tip.position.set(0, lk.curve * 0.35, 0.06 + len + 0.05); g.add(tip);
-    if (lk.basket) { const bm = M(lk.guard); bm.side = THREE.DoubleSide; const bk = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), bm); bk.rotation.x = Math.PI / 2; bk.position.z = 0.02; g.add(bk); }
-    else { const gd = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.24, 0.04), M(lk.guard)); gd.position.z = 0.04; g.add(gd); }
-    if (lk.glow) { const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: lk.glowColor ?? 0xff7a2a, transparent: true, depthWrite: false, opacity: 0.6 })); gl.scale.set(0.7, 0.7, 1); gl.position.z = 0.06 + len * 0.6; g.add(gl); }
+    if (S === 'steel') {
+      // Steel Cutlass: polished steel with a deep fuller, a steel shell guard with a sweeping knuckle bow, black wire-wound grip
+      const st = metal(0xe2e6ea, 150), shell = metal(0x9aa2aa, 120);
+      gripKit(g, { len: 0.2, r: 0.03, mat: matte(0x1c1c20), band: metal(0xc0c4c8, 140), bands: 7 });
+      g.add(at3(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.038, 0.04, 10), shell), 0, 0, -0.215, Math.PI / 2));
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), Object.assign(shell.clone(), { side: THREE.DoubleSide })); cup.rotation.x = Math.PI / 2; cup.position.z = 0.05; g.add(cup);
+      knuckleBow(g, shell, 0.11, 0.011);
+      g.add(at3(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 6), shell), 0, 0.06, 0.045, 0, 0, 0)).rotation.z = 0;
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: st, edge: metal(0xffffff, 220), fuller: metal(0x8a929a, 90), w: t => 0.11 * (1 - 0.5 * t) + 0.012 });
+      return g;
+    }
+    if (S === 'rapier') {
+      // Rapier: a long needle blade off a squared ricasso, a swept hilt of looping gold rings, long quillons with finials
+      const gold = metal(0xe2b84a, 120, 0x2a1a02), st = metal(0xf2f4f6, 200);
+      gripKit(g, { len: 0.18, r: 0.024, mat: matte(0x2a1a10), band: gold, bands: 9 });
+      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.038, 0), gold), 0, 0, -0.2)).scale.set(1, 1, 1.4);
+      [-1, 1].forEach(sd => { const q = at3(new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.009, 0.24, 6), gold), 0, sd * 0.12, 0.03, 0, 0, Math.PI / 2 + sd * 0.25); g.add(q); g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), gold), 0, sd * 0.24, 0.03 + sd * -0.03)); });
+      for (let k = 0; k < 3; k++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.07 + k * 0.012, 0.006, 5, 18, Math.PI * 1.2), gold); ring.rotation.set(0, Math.PI / 2 + (k - 1) * 0.5, Math.PI * 0.9); ring.position.set(0, -0.02, 0.0 - k * 0.025); g.add(ring); }
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.2), Object.assign(gold.clone(), { side: THREE.DoubleSide })); cup.rotation.x = Math.PI / 2; cup.position.z = 0.05; g.add(cup);
+      g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.05, 0.12), st), 0, 0, 0.12));                 // ricasso
+      bladeKit(g, { z0: 0.17, len: lk.len - 0.1, curve: 0, body: st, edge: metal(0xffffff, 240), w: t => 0.042 * (1 - 0.6 * t) + 0.008, thick: 0.018, tipLen: 0.1, fuller: metal(0xb8c0c8, 120), fullerEnd: 0.35 });
+      return g;
+    }
+    if (S === 'scimitar') {
+      // Scimitar: a broad blade sweeping into a deep curve and flaring near the point, gold arabesque, ivory grip, gold quillons
+      const st = metal(0xe2e6ea, 150), gold = metal(0xe2b84a, 120, 0x2a1a02), ivory = metal(0xf2ead8, 60);
+      gripKit(g, { len: 0.19, r: 0.029, mat: ivory, band: gold, bands: 3 });
+      g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.07, 8), gold), 0, 0.012, -0.215, -Math.PI / 2 - 0.3));
+      [-1, 1].forEach(sd => { const q = at3(new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.013, 0.16, 6), gold), 0, sd * 0.08, 0.04 - 0.02, sd * 0.5, 0, Math.PI / 2); g.add(q); g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), gold), 0, sd * 0.16, 0.0)); });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), gold), 0, 0, 0.045)).scale.set(0.8, 1.2, 0.8);
+      bladeKit(g, { len: lk.len, curve: lk.curve * 1.15, body: st, edge: metal(0xffffff, 230), segs: 14,
+        w: t => (0.14 * (1 - 0.35 * t) + (t > 0.62 ? 0.07 * Math.sin((t - 0.62) / 0.38 * Math.PI) : 0)) + 0.01,
+        each: (i, tm, cy, cz, rx, w, L) => { if (tm < 0.55) [-1, 1].forEach(sd => { const ar = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.006, L * 0.9), gold); ar.position.set(sd * 0.0118, cy + w * 0.28 + Math.sin(tm * 30) * w * 0.08, cz); ar.rotation.x = rx; g.add(ar); }); } });
+      return g;
+    }
+    if (S === 'saber' || S === 'golden') {
+      // Navy Saber: blued steel with an etched gold line and a brass three-bar hilt, white sharkskin grip bound in wire.
+      // Captain's Golden Sabre: the same lines in gold, a pearl grip, rubies set in an ornate gilded basket.
+      const gold = S === 'golden', bladeC = gold ? metal(0xe8c44a, 140, 0x3a2604) : metal(0x9fb2c8, 160, 0x0a1420);
+      const hilt = gold ? metal(0xf0cf62, 140, 0x2a1a02) : metal(0xc9a646, 120, 0x1a1002), grip = gold ? metal(0xf6f2ea, 150) : matte(0xe8e4da);
+      gripKit(g, { len: 0.2, r: 0.03, mat: grip, band: hilt, bands: gold ? 5 : 8 });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 8), hilt), 0, 0, -0.205)).scale.set(1, 1.15, 1.4);
+      g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 6), hilt), 0, 0.02, -0.235, -Math.PI / 2 - 0.6));   // backstrap cap
+      for (let k = 0; k < 3; k++) { const bar = new THREE.Mesh(new THREE.TorusGeometry(0.1 - k * 0.012, 0.008, 5, 16, Math.PI), hilt); bar.rotation.set(0, Math.PI / 2, Math.PI / 2 + (k - 1) * 0.28); bar.position.set((k - 1) * 0.022, -0.005, 0.03 - (0.1 - k * 0.012)); g.add(bar); }
+      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.8), Object.assign(hilt.clone(), { side: THREE.DoubleSide })); plate.rotation.x = Math.PI / 2; plate.position.z = 0.05; g.add(plate);
+      if (gold) [[0, 0.06], [0.03, 0.04], [-0.03, 0.04]].forEach(([x, y]) => g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.014, 0), new THREE.MeshBasicMaterial({ color: 0xd8102a })), x, -y, 0.03)));
+      g.add(at3(new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.012, 0.09, 6), hilt), 0, 0.055, 0.035, 0, 0, Math.PI / 2 - 0.2));   // quillon
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: bladeC, edge: metal(gold ? 0xfff2b0 : 0xf2f6fa, 220), fuller: gold ? metal(0xb08a2a, 100) : metal(0x5a6e88, 120), fullerEnd: 0.75,
+        w: t => 0.105 * (1 - 0.45 * t) + 0.012,
+        each: (i, tm, cy, cz, rx, w, L) => { if (tm > 0.08 && tm < 0.5) [-1, 1].forEach(sd => { const et = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.004, L * 0.95), gold ? metal(0xfff6d0, 200) : metal(0xe2b84a, 140)); et.position.set(sd * 0.0116, cy - w * 0.1 + Math.sin(tm * 24) * w * 0.12, cz); et.rotation.x = rx; g.add(et); }); } });
+      return g;
+    }
+    if (S === 'flame') {
+      // Flame Blade: black volcanic steel split by glowing seams of magma, a flame-tongued spine, a blackened guard with fire gems
+      const obs = metal(0x1a1414, 90, 0x0a0202), lava = new THREE.MeshBasicMaterial({ color: 0xff6a1a }), hot = new THREE.MeshBasicMaterial({ color: 0xffc14a }), ironB = metal(0x2a2a2e, 60);
+      gripKit(g, { len: 0.2, r: 0.03, mat: matte(0x2a1210), band: ironB, bands: 5 });
+      const gemM = new THREE.MeshBasicMaterial({ color: 0xff4a10 });
+      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.03, 0), gemM), 0, 0, -0.21));
+      [-1, 1].forEach(sd => { g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.12, 5), ironB), 0, sd * 0.08, 0.03, 0, 0, sd * -Math.PI / 2 + sd * 0.5)); });
+      g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.05), ironB), 0, 0, 0.035));
+      [-1, 1].forEach(sd => g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.018, 0), gemM), sd * 0.027, 0, 0.035)));
+      const seams = [], tongues = [];
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: obs, edge: lava, w: t => 0.12 * (1 - 0.45 * t) + 0.012, segs: 12,
+        each: (i, tm, cy, cz, rx, w, L) => {
+          [-1, 1].forEach(sd => { const sm = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.006, L * 0.8), lava); sm.position.set(sd * 0.0118, cy + Math.sin(i * 1.7) * w * 0.25, cz); sm.rotation.set(rx + Math.sin(i * 2.3) * 0.25, 0, 0); g.add(sm); seams.push(sm); });
+          if (i % 2 === 0 && tm < 0.92) { const fl = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05 + (i % 4) * 0.012, 4), i % 4 ? lava : hot); fl.position.set(0, cy + w / 2 + 0.02, cz); fl.rotation.x = rx - 0.5; g.add(fl); tongues.push(fl); }
+        } });
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff6a1a, transparent: true, depthWrite: false, opacity: 0.55 })); gl.scale.set(0.8, 0.8, 1); gl.position.z = 0.07 + lk.len * 0.55; g.add(gl);
+      g.userData.seaTick = t => { const f = 0.5 + 0.5 * Math.sin(t * 9) * Math.sin(t * 3.7); lava.color.setHSL(0.05 + 0.03 * f, 1, 0.5 + 0.12 * f); gl.material.opacity = 0.4 + 0.3 * f; tongues.forEach((m, i) => { m.scale.y = 0.8 + 0.5 * Math.abs(Math.sin(t * 7 + i * 1.3)); }); };
+      SEA_BLADES.add(g); return g;
+    }
+    if (S === 'tidecaller') {
+      // Tidecaller: the mermaid's blade, translucent aquamarine with a glowing moonlit edge, a guard of pearl shells and fins
+      const glass = new THREE.MeshPhongMaterial({ color: 0x5fe0e8, specular: 0xffffff, shininess: 220, emissive: 0x0a4a50, transparent: true, opacity: 0.78 });
+      const moon = new THREE.MeshBasicMaterial({ color: 0xdffcff }), nacre = metal(0xf0e6d8, 160, 0x1a2020), fin = new THREE.MeshPhongMaterial({ color: 0x7fe8d8, specular: 0xffffff, shininess: 120, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+      gripKit(g, { len: 0.2, r: 0.03, mat: metal(0x2a6a7a, 90), band: nacre, bands: 6 });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), nacre), 0, 0, -0.215));
+      [-1, 1].forEach(sd => { const f = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 3), fin); f.scale.z = 0.25; at3(f, 0, sd * 0.1, 0.0, 0, 0, sd * -2.1); g.add(f); });
+      for (let k = 0; k < 4; k++) { const sh = new THREE.Mesh(new THREE.TorusGeometry(0.02 + k * 0.01, 0.006, 5, 12, Math.PI), nacre); sh.rotation.set(0, Math.PI / 2, 0); sh.position.z = 0.04 - k * 0.004; g.add(sh); }
+      const edges = [];
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: glass, edge: moon, w: t => 0.12 * (1 - 0.5 * t) * (1 + 0.1 * Math.sin(t * Math.PI * 5)) + 0.012, thick: 0.026,
+        each: (i, tm, cy, cz, rx, w, L) => { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, L), moon); sp.position.set(0, cy + w / 2, cz); sp.rotation.x = rx; g.add(sp); edges.push(sp); } });
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x7ff0ff, transparent: true, depthWrite: false, opacity: 0.55 })); gl.scale.set(0.85, 0.85, 1); gl.position.z = 0.07 + lk.len * 0.55; g.add(gl);
+      g.userData.seaTick = t => { const p = 0.5 + 0.5 * Math.sin(t * 1.4); moon.color.setHSL(0.5, 0.8, 0.82 + 0.12 * p); gl.material.opacity = 0.35 + 0.3 * p; edges.forEach((m, i) => { m.material = moon; }); };
+      SEA_BLADES.add(g); return g;
+    }
     return g;
   }
   function refreshBlade() {
