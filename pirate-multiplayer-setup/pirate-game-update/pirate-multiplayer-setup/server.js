@@ -23,6 +23,8 @@ const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
 const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite']);
+// which version of the game page this server is handing out: browsers still running an older page are told to refresh
+const BUILD = (() => { try { return crypto.createHash('sha1').update(fs.readFileSync(path.join(__dirname, 'public', 'index.html'))).digest('hex').slice(0, 10); } catch (e) { return ''; } })();
 
 // ---------- static files ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
@@ -59,6 +61,7 @@ const sim = createSim({
 const HORN = { owner: process.env.HORN_OWNER || 'bob3' };
 console.log(`Serpent Horn belongs to the ${HORN.owner} account`);
 const hornOwns = q => !!(HORN.owner && q && (q.acct || '').toLowerCase() === HORN.owner.toLowerCase());
+const giftsPending = new Map();   // gift id -> { admin, name, amount, timer }
 const hornMsg = q => serverEmit('horn', { owner: HORN.owner, mine: hornOwns(q) });
 function hornClaim(me) { send(me.ws, hornMsg(me)); }   // the game asks who holds the horn
 // a horn serpent's bite on another player's ship, with the serpent right beside that ship. A sinking bite only comes from
@@ -89,7 +92,7 @@ wss.on('connection', ws => {
       const peers = [...players].map(([pid, q]) => ({ id: pid, name: q.name, p: q.p }));
       const acct = String(m.acct || '').trim().slice(0, 24);   // the game account the player is using (bob3 holds the Serpent Horn)
       players.set(id, { ws, name, acct, p: {} });
-      send(ws, { t: 'welcome', id, peers });
+      send(ws, { t: 'welcome', id, peers, build: BUILD });
       const snap = sim.snapshot();   // so the newcomer sees the world right away
       for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap']) send(ws, serverEmit(k, snap[k]));
       send(ws, serverEmit('env', env.snapshot()));
@@ -112,13 +115,24 @@ wss.on('connection', ws => {
         return;
       }
       if (m.topic === 'hclaim') { hornClaim(me); return; }
+      if (m.topic === 'gift_ack') {                                     // a player's game confirms a gift arrived
+        const g = giftsPending.get(String((m.data || {}).id || '')); if (!g) return;
+        clearTimeout(g.timer); giftsPending.delete(String(m.data.id));
+        const a = players.get(g.admin); if (a) send(a.ws, serverEmit('gift_ack', { name: g.name, amount: g.amount }));
+        return;
+      }
       if (m.topic === 'gift') {                                         // admin: gift gold to a player (or everyone)
         const d = m.data || {}, amount = Math.floor(+d.amount || 0);
         const ok = ADMIN_KEY ? d.key === ADMIN_KEY : (me.acct || '').toLowerCase() === 'bob3';   // with no ADMIN_KEY set, only the bob3 account
         if (!ok) { send(ws, serverEmit('admin_denied', { what: 'gift' })); return; }
         if (!(amount > 0 && amount <= 1000000)) return;
         const to = d.to === 'all' ? [...players].filter(([pid]) => pid !== id) : players.has(d.to) ? [[d.to, players.get(d.to)]] : [];
-        for (const [, q] of to) send(q.ws, serverEmit('gift', { amount, from: me.name }));
+        // each player's game confirms the gift arrived; if one doesn't (an old page that doesn't know about gifts), the admin is told
+        for (const [pid, q] of to) {
+          const gid = crypto.randomBytes(4).toString('hex');
+          giftsPending.set(gid, { admin: id, name: q.name, amount, timer: setTimeout(() => { giftsPending.delete(gid); const a = players.get(id); if (a) send(a.ws, serverEmit('gift_lost', { name: q.name, amount })); }, 8000) });
+          send(q.ws, serverEmit('gift', { amount, from: me.name, id: gid }));
+        }
         send(ws, serverEmit('gift_ok', { amount, n: to.length, name: to.length === 1 ? to[0][1].name : null }));
         console.log(`admin ${me.name}: gifted ${amount} gold to ${d.to === 'all' ? 'everyone' : to.length ? to[0][1].name : 'nobody'}`);
         return;

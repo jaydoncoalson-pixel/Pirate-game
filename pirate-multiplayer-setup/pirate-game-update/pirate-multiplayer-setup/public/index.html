@@ -171,7 +171,8 @@
       ws.onopen = () => { retry = 0; banner(''); let acct = ''; try { const A = JSON.parse(localStorage.getItem('gull-island-accounts-v1') || 'null'); const a = A && A.list && (A.list.find(x => x.id === A.active) || A.list[0]); acct = a ? a.name : ''; } catch (e) {} ws.send(JSON.stringify({ t: 'hello', name, acct })); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-        if (m.t === 'welcome') { me = m.id; names[me] = name; peers.clear(); peers.set(me, { id: me, p: mine }); (m.peers || []).forEach(q => { names[q.id] = q.name; peers.set(q.id, { id: q.id, p: q.p || {} }); }); room.presence({}); firePeers(); if (first) { first = false; resolveRoom(room); } }
+        if (m.t === 'welcome') { if (m.build) { window.__pgBuild = window.__pgBuild || m.build; if (window.__pgBuild !== m.build) setTimeout(() => banner('The game has been updated. Refresh the page to get the latest version.'), 50); }
+          me = m.id; names[me] = name; peers.clear(); peers.set(me, { id: me, p: mine }); (m.peers || []).forEach(q => { names[q.id] = q.name; peers.set(q.id, { id: q.id, p: q.p || {} }); }); room.presence({}); firePeers(); if (first) { first = false; resolveRoom(room); } }
         else if (m.t === 'join') { names[m.id] = m.name; peers.set(m.id, { id: m.id, p: {} }); firePeers(); }
         else if (m.t === 'pres') { const q = peers.get(m.id) || { id: m.id, p: {} }; q.p = m.p; peers.set(m.id, q); firePeers(); }
         else if (m.t === 'left') { peers.delete(m.id); firePeers(); }
@@ -8109,8 +8110,14 @@
       };
       // admin: gift gold to another player (or everyone); the server checks ye're the admin
       window.__mpGift = (to, amount) => { let key = ''; try { key = localStorage.getItem('pg_admin_key') || ''; } catch (e) {} MP.lastGift = [to, amount]; MP.room.emit('gift', { to, amount, key }).catch(() => {}); };
-      MP.room.on('gift', m => { if (m.peer !== 'server' || !m.data || !(m.data.amount > 0)) return; addGold(Math.floor(m.data.amount), `A gift from ${String(m.data.from || 'the admin').replace(/[<>&]/g, '')}`); SFX.fanfare(); });
-      MP.room.on('gift_ok', m => { if (m.peer !== 'server' || !m.data) return; toast(m.data.n ? `Sent ${m.data.amount.toLocaleString()} gold to ${m.data.name || m.data.n + ' captains'}.` : 'That captain is no longer online.'); });
+      MP.room.on('gift', m => {
+        if (m.peer !== 'server' || !m.data || !(m.data.amount > 0)) return;
+        addGold(Math.floor(m.data.amount), `A gift from ${String(m.data.from || 'the admin').replace(/[<>&]/g, '')}`); SFX.fanfare();
+        if (m.data.id) MP.room.emit('gift_ack', { id: m.data.id }).catch(() => {});   // tell the admin it arrived
+      });
+      MP.room.on('gift_ok', m => { if (m.peer !== 'server' || !m.data) return; toast(m.data.n ? `Sending ${m.data.amount.toLocaleString()} gold to ${m.data.name || m.data.n + ' captains'}...` : 'That captain is no longer online. Reopen the admin panel to refresh the list.'); });
+      MP.room.on('gift_ack', m => { if (m.peer !== 'server' || !m.data) return; toast(`${String(m.data.name).replace(/[<>&]/g, '')} received ${m.data.amount.toLocaleString()} gold.`); });
+      MP.room.on('gift_lost', m => { if (m.peer !== 'server' || !m.data) return; toast(`${String(m.data.name).replace(/[<>&]/g, '')} didn't receive the gold: their game is an older version. Ask them to refresh the page, then send it again.`); });
       MP.room.on('admin_denied', m => {
         if (m.peer !== 'server') return;
         const what = m.data && m.data.what;
