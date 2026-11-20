@@ -8077,9 +8077,12 @@
     if (opts.call >= 0) { const u = Math.min(1, opts.call / 3.2), b2 = Math.sin(Math.PI * u); lift = Math.max(lift, 1.0 * b2); xPitch = -0.75 * b2; xJaw = Math.min(1, b2 * 1.4); }   // Call the Brood: rearing to the sky, roaring
     const CT = opts.clash >= 0 ? opts.clash : -1;   // locked with the Kraken
     if (CT >= 0) {
-      if (CT < 1.6) { const up = ease(CT / 1.6); lift = 0.75 * up; xPitch = -0.45 * up; xJaw = CT > 0.3 && CT < 1.45 ? Math.sin((CT - 0.3) / 1.15 * Math.PI) : 0.2; }   // rears up to face it, roaring
-      else if (CT < 5.2) { lift = 0.6 + 0.2 * Math.sin(CT * 3.1); xPitch = -0.2 + 0.25 * Math.sin(CT * 4.3); xJaw = 0.55 + 0.35 * Math.sin(CT * 5); }   // thrashing in its coils
-      else { const u = Math.min(1, (CT - 7.1) / 1.2); lift = 0.15 * (1 - u); xPitch = 0.1 * (1 - u); xJaw = 0.3 * (1 - u) + 0.05; }   // shaking off the fight
+      const gp = clGrip(CT);
+      if (CT < CL.rise) { const up = ease(CT / CL.rise); lift = 0.75 * up; xPitch = -0.45 * up; xJaw = CT > 0.3 && CT < 1.8 ? Math.sin((CT - 0.3) / 1.5 * Math.PI) : 0.2; }   // rears up to face it, roaring
+      else if (gp) { const a = gp === 2 ? 1.3 : 1; lift = 0.6 + 0.2 * a * Math.sin(CT * 3.1); xPitch = -0.2 + 0.25 * a * Math.sin(CT * 4.3); xJaw = 0.55 + 0.35 * Math.sin(CT * 5); }   // thrashing in its coils
+      else if (CT < CL.g2[0]) { const u = (CT - CL.s1 - 1.9) / (CL.g2[0] - CL.s1 - 1.9); lift = 0.35 + 0.1 * Math.sin(u * Math.PI); xPitch = -0.1; xJaw = 0.75 + 0.15 * Math.sin(CT * 9); }   // face-off: hissing over it
+      else if (CT < 17) { const u = Math.max(0, (CT - 15.3) / 1.7), b2 = Math.sin(Math.PI * Math.min(1, u)); lift = 0.95 * b2; xPitch = -0.6 * b2; xJaw = Math.max(0.1, b2); }   // rearing over the carcass, roaring in triumph
+      else { const u = Math.min(1, (CT - 17) / 1.3); lift = 0; xPitch = 0.05 * (1 - u); xJaw = 0.2 * (1 - u) + 0.05; }
     }
     if (opts.devour) { lift = 0.22; xPitch = 0.1; xJaw = opts.devour === 2 ? 0.15 : 1.15; }   // devouring: head level with the sea, jaws wide (snapped shut after)
     const G = opts.grab >= 0 ? opts.grab : -1;
@@ -8122,10 +8125,10 @@
     if (xPitch) pitch = xPitch;
     let yaw = h + 0.07 * swim * (opts.ride ? 0.25 : 1) * Math.sin(m.t * (1.4 + 1.6 * swim)) + shake + (G >= 0.5 && G < 2.2 ? Math.sin(m.t * 14) * 0.12 : 0);   // shaking the ship like a dog with a rat
     if (I && I.k === 'look') yaw += 0.75 * Math.sin(iu * Math.PI * 2) * bell;
-    if (CT > 1.6 && CT < 5.2) yaw += Math.sin(m.t * 11) * 0.16 + Math.sin(m.t * 4.7) * 0.1;   // wrenching against the coils
+    if (CT >= 0 && clGrip(CT)) yaw += (Math.sin(m.t * 11) * 0.16 + Math.sin(m.t * 4.7) * 0.1) * (clGrip(CT) === 2 ? 1.3 : 1);   // wrenching against the coils
     if (I && I.k === 'yawn') pitch -= 0.4 * bell;
     if (I && I.k === 'roar') pitch -= 0.55 * bell;
-    const roll = Math.max(-0.35, Math.min(0.35, -m.turn * 0.35)) + (CT > 1.6 && CT < 5.2 ? Math.sin(m.t * 6.3) * 0.25 : 0);
+    const roll = Math.max(-0.35, Math.min(0.35, -m.turn * 0.35)) + (CT >= 0 && clGrip(CT) ? Math.sin(m.t * 6.3) * 0.25 : 0);
     m.head.rotation.set(pitch, yaw, roll, 'YXZ');
     // the jaw: breathing when calm, working when angry, wide for a hiss, a yawn or a roar
     let jaw = 0.05 + 0.04 * (0.5 + 0.5 * Math.sin(m.t * 0.8));
@@ -8303,7 +8306,10 @@
   // The Kraken erupts from the sea in front of him and the two monsters lock together: its tentacles lash up and coil
   // round his neck and squeeze while he thrashes and roars; then he tears free, rears high and drives his jaws down into
   // its mantle in a burst of spray and ink, and the beaten Kraken sinks away. ~9 s; between clashes he fights as usual.
-  const CLASH_T = 9, CLASH_BITE = 6.35;
+  // the timeline: rise, first grapple, first bite, face-off, second grapple (lower down his body), the killing bite, death
+  const CL = { rise: 2.0, g1: [2.0, 6.5], s1: 6.5, g2: [9.4, 13.4], s2: 13.4, end: 18.5 };
+  const CLASH_T = CL.end, CLASH_B1 = CL.s1 + 1.15, CLASH_BITE = CL.s2 + 1.15;
+  const clGrip = ct => ct >= CL.g1[0] && ct < CL.g1[1] ? 1 : ct >= CL.g2[0] && ct < CL.g2[1] ? 2 : 0;   // which grapple, if any
   const clashKS = K => Math.max(1.6, K.scale * 1.3);                   // how big the Kraken shows itself against him
   const clashD = K => 9 * K.scale + 6 * clashKS(K);                     // how far his head sits from it
   const CLASH_DRAW = [];                                                 // serpents (ours or others') locked with the Kraken this frame
@@ -8311,28 +8317,35 @@
     ELD.clash = { t: 0, a: Math.atan2(ELD.x - KR.x, ELD.z - KR.z), bit: false, roar2: false };
     KR.clashHold = 0.5; if (krNet()) window.__mpKrSend('kclash', {});   // hold it to the fight (online the server does)
     ELD.st = 'swim'; ELD.speed = 0; elderRoar(0.9);
-    etoast('The Kraken erupts from the deep to meet the serpent!');
+    etoast('The Kraken erupts from the deep to meet the serpent! A fight to the death!');
   }
   function clashTick(dt) {
     const C = ELD.clash, K = ELD.K; C.t += dt;
     const krOK = KR.st === 'roam' || KR.st === 'hunt' || KR.st === 'dying' || KR.st === 'dead';
-    if (!krOK || C.t > CLASH_T) { ELD.clash = null; ELD.clashCd = 12; ELD.st = 'swim'; if (!krNet() && KR.st === 'hunt') { KR.st = 'roam'; KR.tgt = null; } KR.cd = Math.max(KR.cd || 0, 6); return; }
+    if ((!krOK && !C.bit) || C.t > CLASH_T) { ELD.clash = null; ELD.clashCd = 12; ELD.st = 'swim'; if (!krNet() && KR.st === 'hunt') { KR.st = 'roam'; KR.tgt = null; } KR.cd = Math.max(KR.cd || 0, 6); return; }
     KR.clashHold = 0.3;   // the Kraken stands and fights
     // he holds his ground facing it, dragged in a little while its tentacles squeeze
     const pull = C.t > 1.6 && C.t < 5.2 ? 0.86 + 0.06 * Math.sin(C.t * 3.3) : 1, D = clashD(K) * pull;
     const tx = KR.x + Math.sin(C.a) * D, tz = KR.z + Math.cos(C.a) * D;
     if (heightAt(tx, tz) < -4.5) { const k = Math.min(1, dt * 2.5); ELD.x += (tx - ELD.x) * k; ELD.z += (tz - ELD.z) * k; }
     ELD.speed = 0; ELD.h += angDiff(ELD.h, Math.atan2(KR.x - ELD.x, KR.z - ELD.z)) * Math.min(1, dt * 4);
-    if (!C.roar2 && C.t > 5.3) { C.roar2 = true; elderRoar(0.6); }
-    if (!C.bit && C.t > CLASH_BITE) {   // the killing bite: twice a normal one
-      C.bit = true; const T = { kind: 'kraken' };
-      if (elderTgPos(T)) { elderBite(T, KR); if (elderTgPos(T)) elderBite(T, KR); }
+    const T = { kind: 'kraken' };
+    if (!C.r1 && C.t > CL.s1 + 0.1) { C.r1 = true; elderRoar(0.6); }
+    if (!C.b1 && C.t > CLASH_B1) { C.b1 = true; if (elderTgPos(T)) elderBite(T, KR); }   // tears free with a bite
+    if (!C.r2 && C.t > CL.s2 + 0.1) { C.r2 = true; elderRoar(0.6); }
+    if (!C.bit && C.t > CLASH_BITE) {   // the killing bite: the Kraken dies
+      C.bit = true; SFX.crash({ x: KR.x, z: KR.z });
+      if (krNet()) window.__mpKrSend('kslay', {});
+      else if (KR.st !== 'dead' && KR.st !== 'dying') { KR.hp = 0; KR.st = 'dead'; KR.rs = 600; KR.hp = KR.max; KR.tgt = null; }
+      etoast('The serpent tears the Kraken apart. It sinks, dead, into the abyss!');
     }
+    if (!C.r3 && C.t > 15.6) { C.r3 = true; elderRoar(1.3); }   // a triumphant roar over the sinking carcass
   }
   // the serpent's own pose through the clash (the bite itself plays as a strike)
   function clashOpts(ct) {
     if (!(ct >= 0)) return { clash: -1, sk: -1 };
-    if (ct >= 5.2 && ct < 7.1) return { clash: -1, sk: ct - 5.2 };
+    if (ct >= CL.s1 && ct < CL.s1 + 1.9) return { clash: -1, sk: ct - CL.s1 };
+    if (ct >= CL.s2 && ct < CL.s2 + 1.9) return { clash: -1, sk: ct - CL.s2 };
     return { clash: ct, sk: -1 };
   }
   // the Kraken's side of it: head, coiling tentacles, thrashing arms, spray and ink
@@ -8353,20 +8366,25 @@
     KR.clashShown = true;
     const { m, K, t: ct, x: sx, z: sz } = C, ks = clashKS(K), SC = K.scale, kx = KR.x, kz = KR.z, w = waveHeight(kx, kz, t);
     const face = Math.atan2(sx - kx, sz - kz), fx = Math.sin(face), fz = Math.cos(face);
-    const up = ct < 1.4 ? ease(ct / 1.4) : ct < 7.1 ? 1 : Math.max(0, 1 - ease((ct - 7.1) / 1.7));
+    const dead = ct > CLASH_BITE, du = dead ? Math.min(1, (ct - CLASH_BITE) / 3.6) : 0;
+    const up = ct < 1.4 ? ease(ct / 1.4) : !dead ? 1 : Math.max(0, 1 - ease(du));
     // the head: bursting up, shuddering in the struggle, recoiling from the bite, then sinking away
-    const recoil = ct > CLASH_BITE && ct < CLASH_BITE + 0.8 ? Math.sin((ct - CLASH_BITE) / 0.8 * Math.PI) : 0;
+    const rc = at => ct > at && ct < at + 0.8 ? Math.sin((ct - at) / 0.8 * Math.PI) : 0, recoil = Math.max(rc(CLASH_B1) * 0.7, rc(CLASH_BITE));
     krSwirl.visible = false;
     KRG.visible = up > 0.01; KRG.scale.setScalar(ks);
-    KRG.position.set(kx - fx * recoil * ks * 3, w + 1.2 - 6.4 * ks - (1 - up) * 14 * ks + Math.sin(t * 7) * 0.3 * ks * (ct > 1.6 && ct < 5.2 ? 1 : 0) - recoil * 4 * ks, kz - fz * recoil * ks * 3);
-    KRG.rotation.set(-0.25 * recoil, face + Math.sin(t * 5.5) * 0.06 * (ct > 1.6 && ct < 6 ? 1 : 0), 0);
+    KRG.position.set(kx - fx * recoil * ks * 3, w + 1.2 - 6.4 * ks - (1 - up) * 14 * ks + Math.sin(t * 7) * 0.3 * ks * (clGrip(ct) ? 1 : 0) - recoil * 4 * ks, kz - fz * recoil * ks * 3);
+    KRG.rotation.set(-0.25 * recoil + 0.5 * du, face + Math.sin(t * 5.5) * 0.06 * (clGrip(ct) ? 1 : 0), 0.7 * du);   // dead: it rolls over as it sinks
     // darkness spreading through the water around the fight
-    const dk = Math.min(1, ct / 1.5) * (ct > 7.5 ? Math.max(0, 1 - (ct - 7.5) / 1.5) : 1);
+    const dk = Math.min(1, ct / 1.5) * (ct > 17 ? Math.max(0, 1 - (ct - 17) / 1.5) : 1);
     oceanMat.uniforms.krDark.value.set(kx, kz, clashD(K) * 1.6, 0.85 * dk);
     // four arms seize his neck and coil round it; four more lash the air around the head
     const N = m.segs.length, P = clV[0], A = clV[1], U = clV[2], V = clV[3];
-    const grow = ct < 1.2 ? 0 : ct < 2.1 ? ease((ct - 1.2) / 0.9) : ct < 5.4 ? 1 : Math.max(0, 1 - ease((ct - 5.4) / 0.9));
-    const loose = ct < 5.2 ? 1 - 0.06 * Math.sin(t * 6) : 1 + 1.4 * ease(Math.min(1, (ct - 5.2) / 0.8));   // squeezing, then flung off
+    // each grapple: the arms shoot up and coil, squeeze, then are flung off when he tears free
+    const gIn = (a) => ct < a - 0.8 ? 0 : ct < a ? ease((ct - a + 0.8) / 0.8) : 1;
+    const g1 = Math.min(gIn(CL.g1[0]), ct < CL.g1[1] - 0.1 ? 1 : Math.max(0, 1 - ease((ct - CL.g1[1] + 0.1) / 0.9)));
+    const g2 = ct < CL.g2[0] - 0.8 ? 0 : Math.min(gIn(CL.g2[0]), ct < CL.g2[1] - 0.1 ? 1 : Math.max(0, 1 - ease((ct - CL.g2[1] + 0.1) / 0.9)));
+    const second = ct > (CL.g1[1] + CL.g2[0]) / 2, grow = second ? g2 : g1, gEnd = second ? CL.g2[1] : CL.g1[1];
+    const loose = ct < gEnd - 0.1 ? 1 - 0.06 * Math.sin(t * 6) * (second ? 1.5 : 1) : 1 + 1.4 * ease(Math.min(1, (ct - gEnd + 0.1) / 0.8));   // squeezing, then flung off
     const rB = 1.26 * ks;
     for (let i = 0; i < 8; i++) {
       const q = KR.tents[i];
@@ -8374,7 +8392,7 @@
         if (grow <= 0.01) { q.g.visible = false; continue; }
         const sideA = face + (i - 1.5) * 0.45, rx = kx + Math.sin(sideA) * ks * 6, rz = kz + Math.cos(sideA) * ks * 6;
         const ctrl = [new THREE.Vector3(rx, w - 4 * ks, rz), new THREE.Vector3(rx + fx * ks * 5, w + ks * 6 + i * ks * 0.8, rz + fz * ks * 5)];
-        const k0 = 1.2 + i * 1.6, slip = ct > 5.2 ? (ct - 5.2) * 0.8 : 0;
+        const k0 = (second ? 5 : 1.2) + i * 1.6, slip = ct > gEnd - 0.1 ? (ct - gEnd + 0.1) * 0.8 : 0;   // the second time it seizes him lower down
         for (let j = 0; j < 8; j++) {
           const k = Math.min(N - 3, k0 + j * 0.3 + slip);
           clashSegPos(m, k, P); clashSegPos(m, k + 1, A); A.sub(P).normalize();
@@ -8384,14 +8402,15 @@
           ctrl.push(pt);
         }
         clashTent(q, ctrl, grow, rB);
-        if (ct > 1.6 && ct < 5.2 && Math.random() < dt * 3) { const tp = q.pts[KR_SEG - 6]; puff(tp.x, tp.y, tp.z, { color: 0xe6f6ff, size: SC * 1.6, life: 0.9, grow: 1.8, vy: 2, op: 0.7 }); }   // spray wrung out of the coils
+        if (clGrip(ct) && Math.random() < dt * 3) { const tp = q.pts[KR_SEG - 6]; puff(tp.x, tp.y, tp.z, { color: 0xe6f6ff, size: SC * 1.6, life: 0.9, grow: 1.8, vy: 2, op: 0.7 }); }   // spray wrung out of the coils
       } else {
-        const a = up * (ct > 0.8 ? 1 : 0) * Math.min(1, Math.max(0, (ct - 0.8) / 1.0));
+        const a = up * Math.min(1, Math.max(0, (ct - 0.8) / 1.0));
         if (a <= 0.01) { q.g.visible = false; continue; }
         const sideA = face + (i < 6 ? 1 : -1) * (1.1 + (i % 2) * 0.9), rx = kx + Math.sin(sideA) * ks * 7, rz = kz + Math.cos(sideA) * ks * 7;
         const ox = Math.sin(sideA), oz = Math.cos(sideA), ph = t * (2.2 + i * 0.3) + i, L = ks * 7;
         const ctrl = [new THREE.Vector3(rx, w - 4 * ks, rz)];
-        for (let j = 1; j <= 4; j++) { const wv = Math.sin(ph - j * 0.9) * L * 0.35 * j / 4; ctrl.push(new THREE.Vector3(rx + ox * L * 0.5 * j + fz * wv, w + L * (0.9 * j - 0.12 * j * j) + Math.cos(ph - j) * L * 0.15, rz + oz * L * 0.5 * j - fx * wv)); }
+        const limp = du;   // dead: the arms go slack and flop down onto the water
+        for (let j = 1; j <= 4; j++) { const wv = Math.sin(ph - j * 0.9) * L * 0.35 * j / 4 * (1 - limp); ctrl.push(new THREE.Vector3(rx + ox * L * (0.5 + 0.4 * limp) * j + fz * wv, w + L * (0.9 * j - 0.12 * j * j) * (1 - limp) + Math.cos(ph - j) * L * 0.15 * (1 - limp) - limp * ks * j, rz + oz * L * (0.5 + 0.4 * limp) * j - fx * wv)); }
         clashTent(q, ctrl, a, rB * 0.9);
       }
     }
@@ -8400,14 +8419,15 @@
     if (near) {
       const prev = ct - dt, crossed = at => prev < at && ct >= at;
       if (crossed(0.15)) { for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28, r = ks * (6 + Math.random() * 6); wSplash(kx + Math.sin(a) * r, 3, kz + Math.cos(a) * r, true); } SFX.splash({ x: kx, z: kz }, true); }
-      if (crossed(1.7)) SFX.roar();   // the Kraken's shriek
+      if (crossed(2.1) || crossed(CL.g2[0] + 0.2)) SFX.roar();   // the Kraken's shriek as it seizes him
+      if (crossed(CLASH_B1)) { for (let i = 0; i < 6; i++) wSplash(kx + (Math.random() - 0.5) * ks * 12, 3, kz + (Math.random() - 0.5) * ks * 12, true); for (let i = 0; i < 6; i++) puff(kx + (Math.random() - 0.5) * ks * 10, w + Math.random() * ks * 2, kz + (Math.random() - 0.5) * ks * 10, { color: 0x0b0710, size: ks * 3, life: 3, grow: 2.5, vy: 0.5, op: 0.75 }); SFX.crash({ x: kx, z: kz }); SFX.roar(); }
       if (crossed(CLASH_BITE)) {
         for (let i = 0; i < 10; i++) wSplash(kx + (Math.random() - 0.5) * ks * 14, 3, kz + (Math.random() - 0.5) * ks * 14, true);
         for (let i = 0; i < 16; i++) puff(kx + (Math.random() - 0.5) * ks * 12, w + Math.random() * ks * 3, kz + (Math.random() - 0.5) * ks * 12, { color: 0x0b0710, size: ks * (3 + Math.random() * 3), life: 4 + Math.random() * 2, grow: 3, vy: 0.6, op: 0.85 });
-        SFX.crash({ x: kx, z: kz }); SFX.roar();
+        SFX.crash({ x: kx, z: kz }); SFX.roar(); setTimeout(() => SFX.roar(), 700);   // its death shriek
       }
-      if (ct > CLASH_BITE && ct < 8.6 && Math.random() < dt * 6) puff(kx + (Math.random() - 0.5) * ks * 16, w + 0.5, kz + (Math.random() - 0.5) * ks * 16, { color: 0x120a18, size: ks * 4, life: 4, grow: 2.5, vy: 0.3, op: 0.7 });   // ink spreading as it sinks
-      if (ct < 7.5 && Math.random() < dt * 8) { const a = Math.random() * 6.28, r = ks * (5 + Math.random() * 8); wSplash(kx + Math.sin(a) * r, 2, kz + Math.cos(a) * r, Math.random() < 0.3); }   // the sea boiling round them
+      if (ct > CLASH_BITE && ct < 17.5 && Math.random() < dt * 6) puff(kx + (Math.random() - 0.5) * ks * 16, w + 0.5, kz + (Math.random() - 0.5) * ks * 16, { color: 0x120a18, size: ks * 4, life: 4, grow: 2.5, vy: 0.3, op: 0.7 });   // ink spreading as it sinks
+      if (ct < 16 && Math.random() < dt * 8) { const a = Math.random() * 6.28, r = ks * (5 + Math.random() * 8); wSplash(kx + Math.sin(a) * r, 2, kz + Math.cos(a) * r, Math.random() < 0.3); }   // the sea boiling round them
     }
   }
   // close in at full speed, circle, rear up and strike
@@ -8649,7 +8669,7 @@
       if (gr >= 0) { E.gr = E.grFrom === el[12] ? (E.gr ?? gr) + dt : gr; E.grFrom = el[12]; } else { E.gr = -1; E.grFrom = null; }
       if ((el[4] ?? 1) < 1 && (el[4] ?? 1) > 0.05 && Math.random() < dt * 10) { const a = Math.random() * 6.28, rr = K.scale * (4 + Math.random() * 10); wSplash(E.x + Math.cos(a) * rr, 2, E.z + Math.sin(a) * rr, Math.random() < 0.4); }
       const ctN = typeof el[15] === 'number' && el[15] >= 0 ? el[15] : -1;   // locked with the Kraken
-      if (ctN >= 0) { E.ct = E.ctFrom === el[15] ? (E.ct ?? ctN) + dt : ctN; E.ctFrom = el[15]; if (!(E.lastCt >= 0)) elderRoar(0.9, E.x, E.z, K); if (E.lastCt < 5.3 && E.ct >= 5.3) elderRoar(0.6, E.x, E.z, K); } else { E.ct = -1; E.ctFrom = null; }
+      if (ctN >= 0) { E.ct = E.ctFrom === el[15] ? (E.ct ?? ctN) + dt : ctN; E.ctFrom = el[15]; if (!(E.lastCt >= 0)) elderRoar(0.9, E.x, E.z, K); for (const at of [CL.s1 + 0.1, CL.s2 + 0.1]) if (E.lastCt < at && E.ct >= at) elderRoar(0.6, E.x, E.z, K); if (E.lastCt < 15.6 && E.ct >= 15.6) elderRoar(1.3, E.x, E.z, K); } else { E.ct = -1; E.ctFrom = null; }
       E.lastCt = E.ct; E.co = clashOpts(E.ct);
       const cl = typeof el[13] === 'number' && el[13] >= 0 ? el[13] : -1;
       if (cl >= 0) { E.cl = E.clFrom === el[13] ? (E.cl ?? cl) + dt : cl; E.clFrom = el[13]; if (!(E.lastCl >= 0)) elderRoar(1.3, E.x, E.z, K); } else { E.cl = -1; E.clFrom = null; }
