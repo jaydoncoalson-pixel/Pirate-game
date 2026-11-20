@@ -8037,7 +8037,7 @@
     }
     return { K, g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10, eyeGlow };
   }
-  function elderResetTrail(m, x, z, h) { const st = m.K.trail; m.trail.length = 0; for (let k = 0; k < m.N * m.SPACING / st + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * st, z: z - Math.cos(h) * k * st }); }
+  function elderResetTrail(m, x, z, h) { const st = m.K.trail; m.trail.length = 0; m.sh = undefined; for (let k = 0; k < m.N * m.SPACING / st + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * st, z: z - Math.cos(h) * k * st }); }
   // lay the body along its path; lift rears the head up (to strike), emerge lowers the whole beast below the waves
   // ---- how a horn serpent moves ----
   // Swimming: an S-curve runs down the body side to side as well as the up-and-down humps, stronger the faster he goes;
@@ -8062,6 +8062,8 @@
     const mv = m.lx === undefined ? 0 : Math.hypot(x - m.lx, z - m.lz) / Math.max(dt, 1e-3); m.lx = x; m.lz = z;
     m.spd = (m.spd || 0) + (Math.min(mv, K.max * 1.2) - (m.spd || 0)) * Math.min(1, dt * 3);
     const swim = Math.min(1, m.spd / (K.max * 0.45));
+    // a smoothed heading for the head, so tiny steering corrections don't make it twitch when he's slow
+    m.sh = m.sh === undefined ? h : m.sh + angDiff(m.sh, h) * Math.min(1, dt * 5); h = m.sh;
     const rate = m.lh === undefined ? 0 : angDiff(m.lh, h) / Math.max(dt, 1e-3); m.lh = h; m.turn = (m.turn || 0) + (rate - (m.turn || 0)) * Math.min(1, dt * 4);
     const SP = strikePose(opts.sk), I = opts.idle && opts.idle.k ? opts.idle : null, iu = I ? I.u : 0, bell = Math.sin(Math.PI * iu);
     if (SP) lift = SP.lift;
@@ -8084,8 +8086,16 @@
     const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
     m.g.visible = near && emerge > 0.02; if (!m.g.visible) return;
     const freq = K.elder ? 1.5 : 2.6, latA = SC * (K.elder ? 0.9 : 0.6) * (0.25 + 0.75 * swim), tailK = Math.floor(m.N * 0.72);
+    // sample the trail at an exact distance behind the head, blending between its points, so the body glides
+    // smoothly instead of hopping a whole trail step at a time (very visible when he's swimming slowly)
+    const tr = m.trail, d0 = Math.hypot(x - tr[0].x, z - tr[0].z), _p = { x: 0, z: 0 }, _q = { x: 0, z: 0 };
+    const along = (s2, o) => {
+      if (s2 <= d0) { const u = d0 > 1e-6 ? s2 / d0 : 0; o.x = x + (tr[0].x - x) * u; o.z = z + (tr[0].z - z) * u; return o; }
+      const f = (s2 - d0) / st, i0 = Math.min(tr.length - 1, Math.floor(f)), i1 = Math.min(tr.length - 1, i0 + 1), u = Math.min(1, f - Math.floor(f));
+      o.x = tr[i0].x + (tr[i1].x - tr[i0].x) * u; o.z = tr[i0].z + (tr[i1].z - tr[i0].z) * u; return o;
+    };
     for (let k = 0; k < m.N; k++) {
-      const idx = Math.min(m.trail.length - 1, Math.round(k * m.SPACING / st)), p = m.trail[idx], q = m.trail[Math.min(m.trail.length - 1, idx + 3)];
+      const p = along(k * m.SPACING, _p), q = along(k * m.SPACING + 3 * st, _q);
       let dx = p.x - q.x, dz = p.z - q.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
       // side-to-side S-curve, growing from nothing at the neck toward the tail
       const ph = k * 0.32 - m.t * (1.4 + 1.6 * swim), lat = latA * Math.sin(ph) * Math.min(1, k / 6);
