@@ -151,7 +151,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     const el = Array.isArray(q.p.el) ? q.p.el : null;   // their Elder Serpent bites too
     if (Math.min(Math.hypot(px - r.x, pz - r.z), Math.hypot(q.p.x - r.x, q.p.z - r.z), el ? Math.hypot(el[0] - r.x, el[1] - r.z) : 1e9) > 1000) return;   // cannon, kraken or serpent range
     // the Elder Serpent sinks any ship in one bite (only the horn's owner has one, and he must be right there)
-    if (elKill && el && hornOwns(q) && Math.hypot(el[0] - r.x, el[1] - r.z) < 300) r.hp = 0;
+    if (elKill && el && hornOwns(q) && Math.hypot(el[0] - r.x, el[1] - r.z) < 700) r.hp = 0;
     else r.hp -= Math.max(0, Math.min(40, +dmg || 0));
     r.lastHitBy = from; r.lastHitKr = !!kr;
     if (r.hp <= 0) sinkRaider(r, from, r.lastHitKr);

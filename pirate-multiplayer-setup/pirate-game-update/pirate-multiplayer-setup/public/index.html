@@ -7912,15 +7912,15 @@
   }
 
   // ---------- The Elder Serpent ----------
-  // Sound the Serpent Horn (3) and he rises from the deep: ten times the size of the shoal serpents and much faster (248 m/s).
+  // Sound the Serpent Horn (3) and he rises from the deep: ten times the size of the shoal serpents and much faster (400 m/s).
   // Guard: he keeps by yer ship and falls on anything that attacks ye (raiders, rival captains, serpents, even the Kraken).
   // Attack: sound the horn again to pick a ship (or the Kraken) for him to hunt. Mount: he waits beside yer ship and ye ride him.
   // He belongs to whoever sounded the horn: their game moves him, everyone else sees him through their presence.
   // two kinds answer a horn: the true Serpent Horn's Elder Serpent (10x a shoal serpent's size, 3x its 55 m/s hunting speed, sinks ships in one bite),
   // and the common sea serpent that answers anyone else's horn once the true one has been claimed
   const ELD_KINDS = {
-    elder: { elder: true, scale: 10, max: 248, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, segN: 84, segSp: 21, waveK: 0.21, neckN: 14, baseY: -12, amp: 8, neck: 8, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
-    common: { elder: false, scale: 1, max: 83, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, segN: 28, segSp: 4.2, waveK: 0.42, neckN: 7, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
+    elder: { elder: true, scale: 10, max: 400, trail: 2, probe: 90, circle: 80, strikeR: 160, approachR: 110, guardOff: 120, guardBack: 60, mountOff: 70, mountR: 45, mountReach: 150, segN: 84, segSp: 21, waveK: 0.21, neckN: 14, baseY: -12, amp: 8, neck: 8, liftH: 130, headY: 16, headAmp: 8, sink: 90, rideDist: 75, spawn: [180, 420] },
+    common: { elder: false, scale: 1, max: 140, trail: 0.5, probe: 14, circle: 36, strikeR: 50, approachR: 70, guardOff: 45, guardBack: 20, mountOff: 22, mountR: 10, mountReach: 40, segN: 28, segSp: 4.2, waveK: 0.42, neckN: 7, baseY: -1.6, amp: 3.4, neck: 2.5, liftH: 18, headY: 2.6, headAmp: 1.5, sink: 12, rideDist: 22, spawn: [60, 160] },
   };
   const ELD = { K: ELD_KINDS.elder, on: false, mode: 'guard', x: 0, z: 0, h: 0, speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, hit: false, tg: null, pick: null, scanT: 0, emerge: 0, leaving: false, side: 1, threats: new Map(), mesh: null, waiting: false, landT: 0 };
   const RIDE = { on: false };
@@ -8167,7 +8167,7 @@
     const desired = Math.atan2(w.x - ELD.x, w.z - ELD.z);
     let nh = ELD.h + Math.max(-turn * dt, Math.min(turn * dt, angDiff(ELD.h, desired)));
     for (let tries = 0; tries < 8; tries++) { const ax = ELD.x + Math.sin(nh) * ELD.K.probe, az = ELD.z + Math.cos(nh) * ELD.K.probe; if (heightAt(ax, az) < -4.5) break; nh += (tries % 2 ? -1 : 1) * 0.45 * (tries + 1); }
-    ELD.h = nh; ELD.speed += (want - ELD.speed) * Math.min(1, dt * 1.2);
+    ELD.h = nh; ELD.speed += (want - ELD.speed) * Math.min(1, dt * 2);
     const moved = elderMove(dt);
     // stuck: hardly moving though he wants to go somewhere
     ELD.stuckT = (!moved || (want > 10 && ELD.speed < want * 0.25)) ? (ELD.stuckT || 0) + dt : Math.max(0, (ELD.stuckT || 0) - dt);
@@ -8322,10 +8322,10 @@
       // ye hold the reins: W/S for pace, A/D to turn
       if (!talk && !uiOpen) {
         const f = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0), s = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0);
-        ELD.thr = Math.max(0, Math.min(1, ELD.thr + f * dt * 0.7));
+        ELD.thr = Math.max(0, Math.min(1, ELD.thr + f * dt * 1.3));
         ELD.h -= s * dt * (0.5 + 0.6 * (1 - ELD.thr * 0.5));
       }
-      ELD.speed += (ELD.thr * ELD.K.max - ELD.speed) * Math.min(1, dt * 0.9);
+      ELD.speed += (ELD.thr * ELD.K.max - ELD.speed) * Math.min(1, dt * 1.8);   // quick to surge up to speed
       if (!elderMove(dt)) { ELD.thr = 0; if (t - ELD.landT > 4) { ELD.landT = t; toast("He won't swim into the shallows. Turn him about!"); } }
       // F / Space: rear up and bite whatever is in front of his jaws
       if (ELD.st === 'strike') {
@@ -8364,7 +8364,7 @@
         // keep station off yer quarter, matching yer pace
         ELD.st = 'swim';
         const sx = Math.sin(H.h), sz = Math.cos(H.h), off = ELD.K.guardOff * ELD.side, tx = H.x + sz * off - sx * ELD.K.guardBack, tz = H.z - sx * off - sz * ELD.K.guardBack, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
-        elderSteer(tx, tz, Math.min(ELD.K.max, H.sp + ds * 0.25), dt, 1.2);
+        elderSteer(tx, tz, Math.min(ELD.K.max, H.sp + ds * 0.5), dt, 1.4);
       }
     }
     const lift = ELD.st === 'strike' ? elderLift(ELD.sk) : 0;
