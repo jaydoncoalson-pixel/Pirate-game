@@ -4612,7 +4612,7 @@
       const scalesM = new THREE.MeshPhongMaterial({ map: scaleTex, color: 0xffffff, specular: 0xffffff, shininess: 160, emissive: 0x102830 });
       const pearlM = new THREE.MeshPhongMaterial({ color: 0xfff6f0, specular: 0xffffff, shininess: 200, emissive: 0x2a2028 });
       const shellM = new THREE.MeshPhongMaterial({ color: 0xffc8d6, specular: 0xffffff, shininess: 120, emissive: 0x2a0a14, side: THREE.DoubleSide });
-      const finM = new THREE.MeshPhongMaterial({ color: 0x5fe8d8, specular: 0xffffff, shininess: 160, emissive: 0x0a3a40, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+      const finM = new THREE.MeshPhongMaterial({ color: 0x5fe8d8, specular: 0xffffff, shininess: 160, emissive: 0x0e4a50, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
       const glassM = new THREE.MeshPhongMaterial({ color: 0x9ff2f0, specular: 0xffffff, shininess: 230, emissive: 0x0e4a52, transparent: true, opacity: 0.72 });
       const bladeScales = new THREE.MeshPhongMaterial({ map: scaleTex, color: 0xdffcff, specular: 0xffffff, shininess: 200, emissive: 0x0e3a44, transparent: true, opacity: 0.92 });
       const moon = new THREE.MeshBasicMaterial({ color: 0xe8fdff });
@@ -4622,32 +4622,59 @@
       // pommel: a pearl resting in an open clam
       [-1, 1].forEach(sd => { const half = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), shellM); half.scale.set(1, 0.35, 1); half.position.set(0, sd * 0.01, -0.23); half.rotation.set(sd > 0 ? 0 : Math.PI, 0, 0); half.rotation.x += -sd * 0.5; g.add(half); for (let r = 0; r < 5; r++) { const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.003, 0.08), shellM); rib.position.set((r - 2) * 0.016, sd * 0.022, -0.23); rib.rotation.y = (r - 2) * 0.3; g.add(rib); } });
       const pearl = g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), pearlM), 0, 0, -0.235)) && g.children[g.children.length - 1];
-      // the guard: a mermaid's tail fluke sweeping out to both sides, a starfish at its heart, little shells on the flukes
+      // the guard: a mermaid's tail fluke, one smooth curved lobe sweeping back to each side, with a starfish at its heart
+      const flat = (shape, mat) => { const m = new THREE.Mesh(new THREE.ShapeGeometry(shape, 16), mat); m.rotation.y = Math.PI / 2; return m; };   // shape (-along, side) -> world (side on y, along on z)
       [-1, 1].forEach(sd => {
-        const fluke = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 3, 1), finM); fluke.scale.set(1, 1, 0.22); fluke.position.set(0, sd * 0.12, 0.0); fluke.rotation.set(0, 0, sd * -2.2); g.add(fluke);
-        for (let k = 0; k < 4; k++) { const ray = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.16, 0.004), new THREE.MeshBasicMaterial({ color: 0xbff8ff })); ray.position.set(0.012, sd * (0.09 + k * 0.012), -0.01 - k * 0.012); ray.rotation.x = sd * (0.9 + k * 0.25); g.add(ray); }
-        const sh = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.025, 8, 1, true), shellM); sh.position.set(0.016, sd * 0.19, -0.03); sh.rotation.z = Math.PI / 2; g.add(sh);
+        const f = new THREE.Shape(); f.moveTo(-0.02, sd * 0.02);
+        f.quadraticCurveTo(0.03, sd * 0.1, 0.09, sd * 0.215);     // the leading edge sweeps out and back toward the hand
+        f.quadraticCurveTo(0.045, sd * 0.16, 0.035, sd * 0.11);   // the trailing notch of the fluke
+        f.quadraticCurveTo(0.02, sd * 0.06, -0.03, sd * 0.022);
+        f.lineTo(-0.02, sd * 0.02);
+        const fl = flat(f, finM); fl.position.z = 0.03; fl.scale.set(1.3, 1.3, 1.3); g.add(fl);
+        for (let k = 0; k < 4; k++) { const u = 0.25 + k * 0.17, pts = [new THREE.Vector3(0, sd * 0.022, 0.03 + 0.015), new THREE.Vector3(0, sd * (0.05 + u * 0.12), 0.03 - u * 0.03), new THREE.Vector3(0, sd * (0.07 + u * 0.15), 0.03 - u * 0.075)];
+          const ray = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 8, 0.0018, 4), moon); g.add(ray); }   // fine fin rays
+        const sh = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.02, 8, 1, true), shellM); sh.position.set(0.004, sd * 0.2, -0.05); sh.rotation.z = Math.PI / 2; g.add(sh);
       });
       g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), scalesM), 0, 0, 0.03)).scale.set(0.9, 1.2, 0.9);
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, arm = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.04, 5), new THREE.MeshPhongMaterial({ color: 0xff8a6a, emissive: 0x3a1006 })); arm.position.set(0.032, Math.sin(a) * 0.02, 0.03 + Math.cos(a) * 0.02); arm.rotation.set(a, 0, 0); g.add(arm); }
-      // the blade: scales at the hilt melting into clear sea glass, a fin rippling along the back, a moonlit edge
-      const fins = [], edges = [];
-      bladeKit(g, { len: lk.len, curve: lk.curve, body: glassM, edge: moon, thick: 0.026, segs: 14, tipMat: glassM,
-        w: t => 0.115 * (1 - 0.55 * t) * (1 + 0.08 * Math.sin(t * Math.PI * 5)) + 0.012,
-        each: (i, tm, cy, cz, rx, w, L) => {
-          if (tm < 0.4) { const sc = new THREE.Mesh(new THREE.BoxGeometry(0.03, w * 0.9, L * 1.02), bladeScales); sc.position.set(0, cy, cz); sc.rotation.x = rx; sc.material = bladeScales; g.add(sc); }   // scales near the hilt
-          if (tm > 0.04 && tm < 0.8) { const fh = 0.035 + 0.03 * Math.sin(tm / 0.8 * Math.PI), pg = new THREE.PlaneGeometry(L * 1.05, fh); pg.translate(0, fh / 2, 0); const f = new THREE.Mesh(pg, finM); f.position.set(0, cy + w / 2, cz); f.rotation.set(rx, Math.PI / 2, 0, 'XYZ'); g.add(f); fins.push({ m: f, rx, tm });
-            const ray = new THREE.Mesh(new THREE.BoxGeometry(0.002, fh * 0.95, 0.002), moon); ray.position.set(0, fh * 0.47, 0); f.add(ray); }   // a soft dorsal fin with a bright ray, like a fish's
-          const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.005, L), moon); sp.position.set(0, cy - w / 2, cz); sp.rotation.x = rx; g.add(sp); edges.push(sp);
-        } });
-      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9ff6ff, transparent: true, depthWrite: false, opacity: 0.5 })); gl.scale.set(0.85, 0.85, 1); gl.position.z = 0.07 + lk.len * 0.55; g.add(gl);
-      const glP = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffd6ec, transparent: true, depthWrite: false, opacity: 0.6 })); glP.scale.set(0.2, 0.2, 1); glP.position.z = -0.235; g.add(glP);
+      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; [-1, 1].forEach(sd => { const arm = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.036, 5), new THREE.MeshPhongMaterial({ color: 0xff8a6a, emissive: 0x3a1006 })); arm.position.set(sd * 0.03, Math.sin(a) * 0.019, 0.03 + Math.cos(a) * 0.019); arm.rotation.set(a, 0, 0); g.add(arm); }); }
+      // the blade: one smooth, curved sea-glass blade (an extruded outline, not blocks), its edge a thin line of moonlight
+      const len = lk.len, curve = lk.curve * 0.35, z0 = 0.06, wAt = t => 0.11 * (1 - 0.6 * t) + 0.012, spine = t => curve * t * t;
+      const B = new THREE.Shape(), N = 24;   // drawn with x along the blade and y across it
+      B.moveTo(0, spine(0) - wAt(0) * 0.45);
+      for (let i = 1; i <= N; i++) { const t = i / N; B.lineTo(t * len, spine(t) - wAt(t) * 0.45 * (1 - 0.3 * t)); }            // the cutting edge
+      B.quadraticCurveTo(len + 0.06, spine(1) + 0.01, len + 0.15, spine(1) + 0.035);                                              // up to the point
+      B.quadraticCurveTo(len + 0.02, spine(1) + wAt(1) * 0.55, len * 0.96, spine(0.96) + wAt(0.96) * 0.55);
+      for (let i = N - 1; i >= 0; i--) { const t = i / N; B.lineTo(t * len, spine(t) + wAt(t) * 0.55); }                           // back along the spine
+      B.lineTo(0, spine(0) - wAt(0) * 0.45);
+      const ex = { depth: 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.005, bevelSegments: 2, curveSegments: 10 };
+      const bladeGeo = new THREE.ExtrudeGeometry(B, ex); bladeGeo.translate(0, 0, -0.006);
+      const blade = new THREE.Mesh(bladeGeo, glassM); blade.rotation.y = -Math.PI / 2; blade.position.z = z0; g.add(blade);   // shape x -> along the blade (+z)
+      // fish scales covering the first third of the blade, fading into the glass
+      const SC = new THREE.Shape(), m3 = 0.36; SC.moveTo(0, spine(0) - wAt(0) * 0.42);
+      for (let i = 1; i <= 10; i++) { const t = i / 10 * m3; SC.lineTo(t * len, spine(t) - wAt(t) * 0.42); }
+      for (let i = 10; i >= 0; i--) { const t = i / 10 * m3, dip = i === 10 ? 0 : 0.012 * Math.sin(i * 1.7); SC.lineTo(t * len - (i === 10 ? 0 : dip), spine(t) + wAt(t) * 0.5); }
+      const scGeo = new THREE.ExtrudeGeometry(SC, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.003, bevelSegments: 1 }); scGeo.translate(0, 0, -0.01);
+      scaleTex.repeat.set(9, 9); const scales = new THREE.Mesh(scGeo, bladeScales); scales.rotation.y = -Math.PI / 2; scales.position.z = z0; g.add(scales);
+      // the moonlit edge: a fine glowing line along the cutting edge to the point
+      const edgePts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; edgePts.push(new THREE.Vector3(0, spine(t) - wAt(t) * 0.45 * (1 - 0.3 * t) - 0.004, z0 + t * len)); } edgePts.push(new THREE.Vector3(0, spine(1) + 0.035, z0 + len + 0.15));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edgePts), 40, 0.0045, 5), moon));
+      // a soft dorsal fin along the spine: one smooth scalloped membrane with bright rays, rippling as if swimming
+      const F = new THREE.Shape(), f0 = 0.1, f1 = 0.78, fh = u => 0.065 * Math.sin(Math.PI * u) * (1 - 0.25 * u);
+      F.moveTo(f0 * len, spine(f0) + wAt(f0) * 0.5);
+      for (let i = 1; i <= 30; i++) { const u = i / 30, t = f0 + (f1 - f0) * u, sc = 1 - 0.18 * Math.abs(Math.sin(u * Math.PI * 6)); F.lineTo(t * len, spine(t) + wAt(t) * 0.5 + fh(u) * sc); }
+      for (let i = 30; i >= 0; i--) { const u = i / 30, t = f0 + (f1 - f0) * u; F.lineTo(t * len, spine(t) + wAt(t) * 0.5 - 0.004); }
+      const finMesh = new THREE.Mesh(new THREE.ShapeGeometry(F, 4), finM); finMesh.rotation.y = -Math.PI / 2; finMesh.position.z = z0; g.add(finMesh);
+      const fins = [];
+      for (let k = 0; k < 7; k++) { const u = (k + 0.5) / 7, t = f0 + (f1 - f0) * u, base = new THREE.Vector3(0, spine(t) + wAt(t) * 0.5, z0 + t * len), top = new THREE.Vector3(0, base.y + fh(u) * 0.9, base.z - 0.025);
+        const r = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([base, base.clone().lerp(top, 0.5).add(new THREE.Vector3(0, 0, 0.006)), top]), 6, 0.0018, 4), moon); g.add(r); fins.push(r); }
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9ff6ff, transparent: true, depthWrite: false, opacity: 0.25 })); gl.scale.set(0.55, 0.35, 1); gl.position.set(0, 0.03, z0 + len * 0.5); g.add(gl);
+      const glP = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffd6ec, transparent: true, depthWrite: false, opacity: 0.5 })); glP.scale.set(0.14, 0.14, 1); glP.position.z = -0.235; g.add(glP);
       g.userData.seaTick = t => {
-        const p = 0.5 + 0.5 * Math.sin(t * 1.4), hue = 0.48 + 0.08 * Math.sin(t * 0.6);   // shimmer from teal toward pink and back
-        moon.color.setHSL(0.5, 0.8, 0.82 + 0.12 * p); gl.material.opacity = 0.32 + 0.28 * p; glP.material.opacity = 0.45 + 0.35 * p;
-        finM.color.setHSL(hue, 0.75, 0.62); glassM.emissive.setHSL(hue, 0.7, 0.14 + 0.06 * p); scalesM.emissive.setHSL(0.9 + 0.1 * Math.sin(t * 0.8), 0.6, 0.08 + 0.05 * p);
-        scaleTex.offset.y = (t * 0.05) % 1;   // the scales glint as light runs over them
-        fins.forEach(f => { f.m.scale.y = 0.8 + 0.3 * Math.sin(t * 3 - f.tm * 12); f.m.rotation.z = 0.15 * Math.sin(t * 2.4 - f.tm * 9); });   // the fin ripples like it's swimming
+        const p = 0.5 + 0.5 * Math.sin(t * 1.4), hue = 0.48 + 0.06 * Math.sin(t * 0.6);   // shimmer from teal toward pink and back
+        moon.color.setHSL(0.5, 0.75, 0.84 + 0.1 * p); gl.material.opacity = 0.16 + 0.14 * p; glP.material.opacity = 0.35 + 0.3 * p;
+        finM.color.setHSL(hue, 0.7, 0.62); glassM.emissive.setHSL(hue, 0.7, 0.12 + 0.05 * p); scalesM.emissive.setHSL(0.9 + 0.08 * Math.sin(t * 0.8), 0.6, 0.07 + 0.04 * p);
+        scaleTex.offset.y = (t * 0.04) % 1;
+        finMesh.scale.set(1, 1 + 0.06 * Math.sin(t * 3), 1); finMesh.position.y = -0.06 * Math.sin(t * 3) * 0.06;   // a gentle ripple
       };
       SEA_BLADES.add(g); return g;
     }
