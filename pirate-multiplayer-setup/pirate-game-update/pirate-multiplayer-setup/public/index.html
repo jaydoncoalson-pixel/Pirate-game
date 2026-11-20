@@ -3535,7 +3535,7 @@
   updateGold();
 
   // ---------- Ship shop ----------
-  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 25000], ['galleon', 'Galleon', "big, grand and terrifyin'", 100000], ['upgrade', 'Upgrade yer ship', 'hull, sails, guns, crew and plating', 0], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
+  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 15000], ['galleon', 'Galleon', "big, grand and terrifyin'", 25000], ['upgrade', 'Upgrade yer ship', 'hull, sails, guns, crew and plating', 0], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
   function openUpgrades() {
     const el = document.getElementById('upgr'), body = document.getElementById('upgrBody'), key = ownKey(), nm = (SHIP_TYPES[key] || {}).name || 'ship';
     document.getElementById('upgrTitle').textContent = `Upgrade yer ${nm}`;
