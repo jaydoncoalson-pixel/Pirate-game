@@ -81,7 +81,7 @@ const SITES = [
   { i: 7, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 34, n: 3 },
   { i: 5, kind: 'camp', name: 'Blackwater raider', a: -2.4, f: 0.5, r: 36, n: 4 },
   { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
-  { i: 4, kind: 'fort', name: 'Blackwater soldier', a: 0, f: 0, r: 108, n: 12 },   // Skull Isle: the Blackwater fortress, crowning the hill
+  { i: 4, kind: 'fort', name: 'Blackwater soldier', a: 0, f: 0, r: 400, n: 20, A: 390, B: 250, h: 14 },   // Skull Isle: Fort Blackwater, walls round most of the island and a harbour bay
 ];
 ISLANDS.forEach(I => I.sites = []);
 SITES.forEach(S => {
@@ -89,6 +89,8 @@ SITES.forEach(S => {
   if (S.kind === 'town') {
     const F = S.i === 0 ? { origin: TOWN, dir: DOCK_DIR } : PORT_FRAME;
     S.x = F.origin.x + F.dir.x * S.u; S.z = F.origin.y + F.dir.y * S.u; S.h = 4.2;
+  } else if (S.kind === 'fort') {
+    S.x = I.c.x; S.z = I.c.y; S.ux = I.cs; S.uz = I.sn;   // its long axis runs along the island's
   } else {
     const ca = Math.cos(S.a), sa = Math.sin(S.a), dx = I.toHome.x * ca - I.toHome.y * sa, dz = I.toHome.x * sa + I.toHome.y * ca;
     let f = S.f, x = I.c.x + dx * I.r * f, z = I.c.y + dz * I.r * f;
@@ -132,6 +134,7 @@ function islandHeight(I, x, z, raw) {
     h += (4.2 - h) * w;
   }
   if (!raw && I.sites) for (const S of I.sites) {
+    if (S.kind === 'fort') { h = fortHeight(S, x, z, h); continue; }
     const dd = Math.hypot(x - S.x, z - S.z);
     if (dd < S.r + 30) { const w = sstep(S.r + 30, S.r, dd) * sstep(-3, 1.5, h); h += (S.h - h) * w; }
   }
@@ -173,6 +176,21 @@ const TOWER = { x: MIST.x, z: MIST.z, flat: 46, foot: 80, top: 3.2 };
 function towerH(x, z) {
   const d = Math.hypot(x - TOWER.x, z - TOWER.z); if (d > TOWER.foot) return -100;
   return -7 + (TOWER.top + 7) * sstep(TOWER.foot, TOWER.flat, d);
+}
+// Fort Blackwater's ground: everything inside its elliptical wall is levelled (filling any sea), the ground eases
+// back down outside, and a harbour bay is dug into the long end: a round basin with a channel out to sea.
+function fortLocal(S, x, z) { const dx = x - S.x, dz = z - S.z; return [dx * S.ux + dz * S.uz, -dx * S.uz + dz * S.ux]; }
+function fortBayDist(S, u, v) {
+  const bu = S.A * 0.6, d1 = Math.hypot(u - bu, v) - 120;                       // the basin
+  const t = Math.max(0, Math.min(1, (u - bu) / (S.A + 140 - bu))), d2 = Math.hypot(u - (bu + (S.A + 140 - bu) * t), v) - 42;   // the channel out
+  return Math.min(d1, d2);
+}
+function fortHeight(S, x, z, h) {
+  const dx = x - S.x, dz = z - S.z; if (dx * dx + dz * dz > (S.A + 200) * (S.A + 200)) return h;
+  const [u, v] = fortLocal(S, x, z), e = (Math.hypot(u / S.A, v / S.B) - 1) * S.B;   // roughly metres outside the wall line
+  const w = sstep(60, 6, e); h += (S.h - h) * w;
+  const db = fortBayDist(S, u, v); if (db < 30) h += (-7.6 - h) * sstep(30, 0, db);
+  return h;
 }
 function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
 
@@ -223,12 +241,18 @@ function siteCamp(S) {
   for (let i = 0; i < S.n; i++) { const a = i / S.n * 6.28; out.push({ name: S.name, home: { x: c.x, z: c.z }, x: c.x + Math.cos(a) * 5, z: c.z + Math.sin(a) * 5, facing: a }); }
   return out;
 }
-// the fortress garrison: soldiers posted round the courtyard, on the gate and by the keep (same spots as the game's buildFort)
-function fortGarrison(S) {
+// the fortress garrison: soldiers posted round the fort (same posts as the game's buildFort), each keeping to their post
+function fortPosts(S) {
   const out = [];
-  for (let i = 0; i < S.n; i++) { const a = i / S.n * 6.28 + 0.3, r = i % 3 === 0 ? 62 : i % 3 === 1 ? 40 : 24; out.push({ name: S.name, home: { x: S.x, z: S.z }, x: S.x + Math.cos(a) * r, z: S.z + Math.sin(a) * r, facing: a }); }
+  for (let i = 0; i < S.n; i++) {
+    const f = [0.22, 0.48, 0.74][i % 3], a = i / S.n * 6.28 + 0.3;
+    let u = S.A * f * Math.cos(a), v = S.B * f * Math.sin(a);
+    if (fortBayDist(S, u, v) < 25) u = -u;   // not in the harbour
+    out.push([S.x + S.ux * u - S.uz * v, S.z + S.uz * u + S.ux * v, a]);
+  }
   return out;
 }
+function fortGarrison(S) { return fortPosts(S).map(([x, z, a]) => ({ name: S.name, home: { x: S.x, z: S.z }, post: { x, z }, x, z, facing: a })); }
 const BANDIT_SPAWNS = [
   ...campBandits({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }, 4, 'Bandit'),
   ...campBandits({ x: SPOT_X.x + 14, z: SPOT_X.z + 10 }, 3, 'Blackwater thug'),
@@ -248,4 +272,4 @@ function blockedAt(T, cx, cz, h) {
 }
 const raidSea = (x, z) => Math.abs(x) < EDGE - 300 && Math.abs(z) < EDGE - 300 && heightAt(x, z) < -6.5 && ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r * 1.25 + 60);
 
-module.exports = { WS, ISLANDS, SITES, EDGE, MIST, TOWER, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };
+module.exports = { WS, ISLANDS, SITES, fortPosts, fortLocal, fortBayDist, EDGE, MIST, TOWER, heightAt, onDock, walkable, blockedAt, raidSea, campColliders, BANDIT_SPAWNS, RAIDER_SPAWNS, SPOT_X };

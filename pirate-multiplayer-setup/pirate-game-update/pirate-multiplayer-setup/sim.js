@@ -14,7 +14,7 @@ const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => false }) {
   // ---------- state ----------
   const bandits = W.BANDIT_SPAWNS.map(s => ({
-    name: s.name, home: s.home, x: s.x, z: s.z, facing: s.facing,
+    name: s.name, home: s.home, post: s.post || s.home, x: s.x, z: s.z, facing: s.facing,
     hp: 50, max: 50, state: 'idle', atkT: 0, slashT: 0, hitAt: 0, target: null, victim: null, wait: Math.random() * 3, deadT: 0,
   }));
   const raiders = W.RAIDER_SPAWNS.map(s => ({
@@ -43,7 +43,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     for (const b of bandits) {
       if (b.state === 'gone') {
         b.deadT -= dt; if (b.deadT > 0) continue;
-        b.state = 'idle'; b.hp = b.max; b.x = b.home.x; b.z = b.home.z; b.target = null;
+        b.state = 'idle'; b.hp = b.max; b.x = b.post.x; b.z = b.post.z; b.target = null;
       }
       if (b.state === 'dead') { b.deadT += dt; if (b.deadT > 6) { b.state = 'gone'; b.deadT = 150; } continue; }
       // nearest player on foot
@@ -63,7 +63,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
         }
       } else if (!b.target || Math.hypot(b.target.x - b.x, b.target.z - b.z) < 0.8) {
         b.wait -= dt;
-        if (b.wait <= 0) { const a = Math.random() * 6.28, r = Math.random() * 10; b.target = { x: b.home.x + Math.cos(a) * r, z: b.home.z + Math.sin(a) * r }; b.wait = 2 + Math.random() * 4; }
+        if (b.wait <= 0) { const a = Math.random() * 6.28, r = Math.random() * 10; b.target = { x: b.post.x + Math.cos(a) * r, z: b.post.z + Math.sin(a) * r }; b.wait = 2 + Math.random() * 4; }
       } else { tx = b.target.x; tz = b.target.z; want = 1.6; }
       if (want > 0 && tx !== undefined) {
         b.facing = angLerp(b.facing, Math.atan2(tx - b.x, tz - b.z), Math.min(1, dt * 8));
