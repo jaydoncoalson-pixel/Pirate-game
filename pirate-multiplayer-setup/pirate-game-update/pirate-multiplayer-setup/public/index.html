@@ -1080,9 +1080,22 @@
   const V_SHIRTS = [0xe9e2d0, 0xb03a2e, 0x2c5f8a, 0xd9c7a0, 0x5d6d3e, 0x8a5a9a, 0xc98a3a], V_PANTS = [0x3a3226, 0x2d2a33, 0x4f3a28, 0x5a5a5a, 0x2f4050], V_SKINS = [0xf0c8a0, 0xe0ac7e, 0xc98f62, 0xa8714f, 0x8d5a3b, 0x6b4430], V_HAIRS = [0x1a1a1a, 0x3b2414, 0x6b3a1f, 0xb5651d, 0xd0d0d0];
   const villagerLook = () => ({ shirt: pickV(V_SHIRTS), pants: pickV(V_PANTS), skin: pickV(V_SKINS), hair: pickV(V_HAIRS), hat: pickV([undefined, 'straw', 'cap', 'bandana']), hatColor: pickV([0xc9b078, 0x5d6d3e, 0x8e1f1f, 0x2c5f8a]), ...(rand() < 0.4 ? { dress: pickV([0x6c3483, 0x2b6cb0, 0x9a5b48, 0x5d6d3e]), longHair: true } : {}) });
   const VILLAGER_NAMES = ['Ned', 'Hester', 'Wat', 'Agnes', 'Cobb', 'Mabel', 'Tam', 'Ida', 'Jory', 'Bess', 'Abel', 'Nell', 'Osric', 'Win', 'Hob', 'Peg', 'Dunstan', 'Ivy'];
-  function addVillagers(F, n, uR, vR) {
-    for (let i = 0; i < n; i++) VILLAGE_NPCS.push({ name: VILLAGER_NAMES[(VILLAGE_NPCS.length) % VILLAGER_NAMES.length], wander: true, speed: 1.6,
-      area: () => frameLocal(F, (rand() - 0.5) * 2 * uR, (rand() - 0.5) * 2 * vR), look: villagerLook(), lines: VILLAGER_LINES[(VILLAGE_NPCS.length + i) % VILLAGER_LINES.length] });
+  function addVillagers(F, n, uR, vR, u0 = 0) {
+    for (let i = 0; i < n; i++) VILLAGE_NPCS.push({ name: VILLAGER_NAMES[(VILLAGE_NPCS.length) % VILLAGER_NAMES.length], wander: true, speed: 1.3 + rand() * 0.8, far: 420,
+      area: () => frameLocal(F, u0 + (rand() - 0.5) * 2 * uR, (rand() - 0.5) * 2 * vR), look: villagerLook(), lines: VILLAGER_LINES[(VILLAGE_NPCS.length + i) % VILLAGER_LINES.length] });
+  }
+  // folk with a job and a spot: stall-keepers, a sweeper, porters hauling crates, a fisherman, a watchman, children
+  const SELLER_LINES = [["Fresh fish! Caught this mornin', still flappin'!"], ["Oranges, limes, coconuts! Keep the scurvy off, captain!"], ["Rope, tar and canvas! Everything a ship needs, cheap as ye like."], ["Bread, still warm. Take a loaf for the voyage."], ["Spices from the far isles! Pepper, clove, cinnamon!"]];
+  const WORK_LINES = { sweep: ["Mud, sand and gull muck. Every blessed day."], carry: ["Mind yer back! Heavy crates comin' through!"], haul: ["Pull, pull... the nets are full today!"], watch: ["All quiet. Keep yer blade sheathed in town, sailor."], kid: ["Are ye a real pirate? Have ye got a parrot?"] };
+  function addTownFolk(F, big) {
+    const name = () => VILLAGER_NAMES[(VILLAGE_NPCS.length) % VILLAGER_NAMES.length];
+    const stalls = big ? [[30, 1], [36, 1], [30, -1], [36, -1]] : [[6, 1], [-6, -1]];
+    stalls.forEach(([u, sd], k) => { const at = frameLocal(F, u, sd * (big ? 9.6 : 9)); VILLAGE_NPCS.push({ name: name() + ' the trader', at, face: F.perp.clone().multiplyScalar(-sd), look: villagerLook(), lines: SELLER_LINES[(VILLAGE_NPCS.length + k) % SELLER_LINES.length], far: 420, action: 'write' }); });
+    VILLAGE_NPCS.push({ name: name() + ' the sweeper', wander: true, speed: 1.0, far: 420, area: () => frameLocal(F, (rand() - 0.5) * 30, (rand() - 0.5) * 8), look: villagerLook(), lines: WORK_LINES.sweep, action: 'swab', props: ['mop'] });
+    for (let k = 0; k < (big ? 3 : 1); k++) VILLAGE_NPCS.push({ name: name() + ' the porter', patrol: big ? [frameLocal(F, 78, (k % 2 ? 1 : -1) * 27), frameLocal(F, 60 + k * 6, 0), frameLocal(F, 92, (k - 1) * 2)] : [frameLocal(F, 36, -27), frameLocal(F, 10, 0)], speed: 1.5, far: 420, carry: true, look: villagerLook(), lines: WORK_LINES.carry, props: ['crate'] });
+    VILLAGE_NPCS.push({ name: name() + ' the watchman', patrol: [frameLocal(F, -40, 3), frameLocal(F, big ? 70 : 40, 3), frameLocal(F, big ? 70 : 40, -3), frameLocal(F, -40, -3)], speed: 1.4, far: 420, look: { coat: 0x3a4a6a, shirt: 0xe8dfc9, pants: 0x2d2a33, hat: 'tricorn', hatColor: 0x1c1c1c, skin: pickV(V_SKINS), hair: pickV(V_HAIRS) }, lines: WORK_LINES.watch });
+    for (let k = 0; k < (big ? 3 : 2); k++) VILLAGE_NPCS.push({ name: name(), wander: true, speed: 2.6, far: 420, area: () => frameLocal(F, (rand() - 0.5) * 50, (rand() - 0.5) * 20), look: Object.assign(villagerLook(), { scale: 0.68, hat: undefined }), lines: WORK_LINES.kid });
+    if (!big) VILLAGE_NPCS.push({ name: name() + ' the farmer', at: frameLocal(F, 32, 35), face: F.dir, look: Object.assign(villagerLook(), { hat: 'straw', hatColor: 0xc9b078 }), lines: ["Turnips, cabbages, and a scarecrow that frightens nothin' but me."], far: 420, action: 'haul' });
   }
   // the two big towns grow outward: side lanes lined with townhouses, a chapel behind the tavern, a market, warehouses
   // by the harbour, lamp posts down the main street, and gardens on the edge of town
@@ -1105,7 +1118,8 @@
     }
     chapel(F, -60, 0, 0);
     well(F, 24, 0);
-    addVillagers(F, 4, 55, 40);
+    addVillagers(F, 10, 55, 40); addVillagers(F, 4, 20, 8, 55);   // the streets, and the harbour end
+    addTownFolk(F, true);
     decoParent = null;
   }
   // a new village: a main street down to the sea, a cross street, a plaza with a well and market, a chapel at the top
@@ -1124,7 +1138,8 @@
     field(F, 20, 24, 44, 46);
     haystack(F, 50, -20); haystack(F, 47, -24); haystack(F, 52, -26);
     cart(F, 30, -22, 0.4);
-    addVillagers(F, 3, 40, 10);
+    addVillagers(F, 5, 40, 10); addVillagers(F, 2, 8, 35);
+    addTownFolk(F, false);
     decoParent = null;
   }
   for (const S of SITES) {
@@ -2003,6 +2018,7 @@
   const hudTitle = document.querySelector('#hud h1');
   const npcs = NPC_DEFS.map(def => {
     const ch = makeCharacter(def.look);
+    (def.props || []).forEach(k => addProp(ch, k));
     scene.add(ch.root);
     const start = def.at || (def.patrol ? def.patrol[0] : (def.area ? def.area() : streetPoint()));
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = def.name; tagLayer.appendChild(tag);
@@ -9796,7 +9812,8 @@
       const d = n.def;
       let spd = 0;
       const pdist = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z);
-      if (inInterior || pdist > 900) { n.ch.root.visible = !inInterior && pdist < 1500; n.tag.style.display = 'none'; continue; }
+      const farU = d.far || 900;
+      if (inInterior || pdist > farU) { n.ch.root.visible = !inInterior && pdist < farU * 1.6; n.tag.style.display = 'none'; continue; }
       n.ch.root.visible = true;
       if (talk && talk.npc === n) {
         n.facing = angLerp(n.facing, Math.atan2(P.pos.x - n.pos.x, P.pos.z - n.pos.z), Math.min(1, dt * 8));
@@ -9824,7 +9841,7 @@
       n.pos.y = groundAt(n.pos.x, n.pos.z);
       n.ch.root.position.copy(n.pos);
       n.ch.root.rotation.y = n.facing;
-      n.ch.update(dt, spd, false);
+      n.ch.update(dt, spd, false, false, spd < 0.1 && !(talk && talk.npc === n) ? d.action : (d.carry && spd > 0 ? 'carry' : null));
 
       // name tag
       const pd = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z);
