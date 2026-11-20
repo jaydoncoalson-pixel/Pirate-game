@@ -868,7 +868,7 @@ window.__pgBoot = () => {
     mk(ROCK_GEO, rockMat, floraBin.rocks); mk(ROCK_GEO, darkRockMat, floraBin.darkRocks); mk(BUSH_GEO, bushMat, floraBin.bushes);
   }
   const SPOTS = []; // places to keep clear of trees: {x, z, r}
-  let WRECK_SPOT, SPOT_X, GEM_SPOT, HERMIT_POS, QUINT_POS, gemMesh;
+  let WRECK_SPOT, SPOT_X, GEM_SPOT, HERMIT_POS, QUINT_POS, gemMesh, SKULL_SPOT;
   // --- Palm Key: a shipwreck on the beach ---
   {
     const I = ISLANDS[1], toHome = ISLAND.clone().sub(I.c).normalize();
@@ -902,7 +902,7 @@ window.__pgBoot = () => {
     skull.rotation.y = Math.atan2(toHome.x, toHome.y);
     ISLANDS[4].group.add(skull);
     colliders.push({ x: p.x, z: p.y, r: 10.5 });
-    SPOTS.push({ x: p.x, z: p.y, r: 18 });
+    SPOTS.push({ x: p.x, z: p.y, r: 18 }); SKULL_SPOT = { x: p.x, z: p.y };
     let xp = I.c.clone().addScaledVector(toHome, -I.r * 0.35);
     for (let t = 0.35; t > 0 && heightAt(xp.x, xp.y) < 4.5; t -= 0.02) xp = I.c.clone().addScaledVector(toHome, -I.r * t);
     const xm = lam(0xb3261e);
@@ -1215,6 +1215,63 @@ window.__pgBoot = () => {
   for (const S of SITES) {
     if (S.kind === 'town') growTown(S); else if (S.kind === 'village') buildVillage(S);
     SPOTS.push({ x: S.x, z: S.z, r: S.r + 6 });
+  }
+
+  // ---------- The Ghost Blade: the old graveyard behind Gull Town's chapel, and the wreck of the Widow's Lament ----------
+  const GRAVE_F = SITES[0].F, GRAVE_SPOT = (() => { const p = frameLocal(GRAVE_F, -74, 30); return { x: p.x, z: p.y }; })();
+  const LAMENT = { x: 5200, z: 5600 };   // where Captain Hollowell's ship went down: open sea, south-east
+  const GHOST_LIGHTS = [];               // will-o'-wisps that only come out at night
+  {
+    decoParent = ISLANDS[0].group; const F = GRAVE_F;
+    const stoneM = lam(0x8d8a84), mossM = lam(0x5f6f4a), darkM = lam(0x4a4640), ironM = lam(0x2a2a2e), earthM = lam(0x4a3a2a);
+    // a low stone wall with an iron gate
+    const wall = (u0, v0, u1, v1) => { const g = new THREE.Group(), L = Math.hypot(u1 - u0, v1 - v0); const w = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, L), stoneM); w.position.y = 0.55; g.add(w); const cap = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, L), mossM); cap.position.y = 1.15; g.add(cap); place(F, g, (u0 + u1) / 2, (v0 + v1) / 2, -Math.atan2(v1 - v0, u1 - u0)); };
+    wall(-86, 20, -62, 20); wall(-86, 42, -62, 42); wall(-86, 20, -86, 42); wall(-62, 20, -62, 24); wall(-62, 30, -62, 42);
+    { const g = new THREE.Group(); [-3, 3].forEach(o => { const pst = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.4, 0.8), stoneM); pst.position.set(0, 1.2, o); g.add(pst); });
+      for (let k = -2.5; k <= 2.5; k += 0.5) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2, 0.06), ironM); bar.position.set(0, 1, k); g.add(bar); }
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(3, 0.08, 4, 16, Math.PI), ironM); arch.rotation.y = Math.PI / 2; arch.position.y = 2.1; g.add(arch); place(F, g, -62, 27, 0); }
+    // rows of crooked headstones and crosses
+    for (let u = -83; u <= -66; u += 3.4) for (let v = 23.5; v <= 39; v += 3.8) {
+      if (Math.abs(u + 74) < 3 && Math.abs(v - 30) < 3) continue;
+      const g = new THREE.Group(), k = Math.floor(rand() * 3);
+      if (k === 0) { const hs = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.2), rand() < 0.5 ? stoneM : darkM); hs.position.y = 0.55; g.add(hs); const top = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.2, 10, 1, false, 0, Math.PI), hs.material); top.rotation.set(Math.PI / 2, 0, Math.PI / 2); top.position.y = 1.15; g.add(top); }
+      else if (k === 1) { const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.5, 0.16), darkM); c1.position.y = 0.7; g.add(c1); const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.16, 0.16), darkM); c2.position.y = 1.1; g.add(c2); }
+      else { const hs = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.9, 0.25), mossM); hs.position.y = 0.4; g.add(hs); }
+      const mound = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.25, 2), earthM); mound.position.set(0, 0.05, -1.1); g.add(mound);
+      g.children.forEach(c => { c.rotation.z += (rand() - 0.5) * 0.25; });
+      place(F, g, u, v, Math.PI / 2 + (rand() - 0.5) * 0.2);
+    }
+    // Hollowell's grave: a tall weathered stone with a carved anchor, and an open, empty pit before it
+    { const g = new THREE.Group();
+      const hs = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.35), darkM); hs.position.y = 1.15; hs.rotation.z = 0.06; g.add(hs);
+      const an = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 4, 10, Math.PI), stoneM); an.position.set(0, 1.4, 0.19); an.rotation.z = Math.PI; g.add(an);
+      const sh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.05), stoneM); sh.position.set(0, 1.6, 0.19); g.add(sh);
+      const pit = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 2.4), lam(0x1a1410)); pit.position.set(0, 0.02, -1.6); g.add(pit);
+      const heap = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), earthM); heap.scale.set(1, 0.45, 1.3); heap.position.set(1.6, 0.25, -1.5); g.add(heap);
+      const spade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.08), lam(0x6b4a2e)); spade.position.set(1.7, 0.9, -1.2); spade.rotation.z = 0.35; g.add(spade);
+      place(F, g, -74, 30, Math.PI / 2); }
+    // a crypt in the corner, and a dead tree
+    { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 4.5), stoneM); b.position.y = 1.8; g.add(b);
+      const rs = new THREE.Shape(); rs.moveTo(-2.9, 0); rs.lineTo(0, 1.6); rs.lineTo(2.9, 0); rs.lineTo(-2.9, 0); const rf = new THREE.Mesh(new THREE.ExtrudeGeometry(rs, { depth: 5, bevelEnabled: false }), darkM); rf.position.set(0, 3.6, -2.5); g.add(rf);
+      const dr = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.15), ironM); dr.position.set(0, 1.2, 2.3); g.add(dr);
+      [-1.9, 1.9].forEach(x => { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 3.6, 8), stoneM); c.position.set(x, 1.8, 2.4); g.add(c); });
+      place(F, g, -82, 38, Math.PI / 2 + Math.PI / 4); const p = frameLocal(F, -82, 38); colliders.push({ x: p.x, z: p.y, r: 3.3 }); }
+    { const g = new THREE.Group(), bark = lam(0x3a2e24); const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 5, 6), bark); tr.position.y = 2.5; tr.rotation.z = 0.1; g.add(tr);
+      for (let i = 0; i < 6; i++) { const br = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.14, 2.4, 5), bark); const a = i * 1.05; br.position.set(Math.cos(a) * 0.7, 3.6 + (i % 3) * 0.6, Math.sin(a) * 0.7); br.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9); g.add(br); }
+      place(F, g, -66, 39); const p = frameLocal(F, -66, 39); colliders.push({ x: p.x, z: p.y, r: 0.5 }); }
+    // will-o'-wisps over the graves
+    for (let i = 0; i < 7; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0 })); sp.scale.set(0.9, 0.9, 1); const p = frameLocal(F, -84 + rand() * 20, 22 + rand() * 18); sp.position.set(p.x, heightAt(p.x, p.y) + 1.5, p.y); scene.add(sp); GHOST_LIGHTS.push({ sp, x: p.x, z: p.y, y: sp.position.y, ph: rand() * 6 }); }
+    decoParent = null;
+    SPOTS.push({ x: GRAVE_SPOT.x, z: GRAVE_SPOT.z, r: 22 });
+    // the Widow's Lament: two broken masts and a tattered sail standing out of the sea, with a ghost-light at her masthead
+    { const g = new THREE.Group(), wood = lam(0x3a3028), sail = lam(0x6a7a6a); sail.side = THREE.DoubleSide;
+      const m1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.55, 22, 7), wood); m1.position.set(0, 6, 0); m1.rotation.z = 0.25; g.add(m1);
+      const m2 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 14, 7), wood); m2.position.set(9, 2, 4); m2.rotation.set(0.3, 0, -0.4); g.add(m2);
+      const yd = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 9, 6), wood); yd.position.set(-1.6, 12, 0); yd.rotation.set(0, 0, Math.PI / 2 + 0.25); g.add(yd);
+      const sl = new THREE.Mesh(new THREE.PlaneGeometry(8, 5, 4, 3), sail); sl.position.set(-1.0, 9.5, 0.2); sl.rotation.z = 0.25; const pp = sl.geometry.attributes.position; for (let i = 0; i < pp.count; i++) pp.setZ(i, (Math.random() - 0.5) * 0.8); g.add(sl);
+      const lt = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.5 })); lt.scale.set(5, 5, 1); lt.position.set(-2.6, 17, 0); g.add(lt);
+      g.position.set(LAMENT.x, -4, LAMENT.z); scene.add(g); GHOST_LIGHTS.push({ sp: lt, wreck: true });
+    }
   }
 
   // ---------- Forests: broad-leaved trees in the lowlands, pines up on the hills ----------
@@ -2084,11 +2141,22 @@ window.__pgBoot = () => {
     { name: 'Sera the navigator', at: frameLocal(PORT_FRAME, -27, 5), face: PORT_FRAME.dir, look: { shirt: 0x4d6680, dress: 0x40546b, hair: 0x5a3425, longHair: true, skin: 0xd6a17b }, lines: ["Charts are only guesses until someone sails the route."] },
   ];
   NPC_DEFS.push(...VILLAGE_NPCS);   // the folk of the towns and villages
+  NPC_DEFS.push({ name: 'Mother Morrow', at: frameLocal(GRAVE_F, -66, 26), face: GRAVE_F.perp, look: { shirt: 0x3a3a3a, dress: 0x2a2a2e, pants: 0x2a2a2e, hair: 0xd0d0d0, longHair: true, skin: 0xd6b89a, hat: 'bandana', hatColor: 0x1c1c1c },
+    lines: ["I dig the graves and I tend 'em. The dead mostly keep to themselves.", "Mostly."] });
+  NPC_DEFS.push({ name: 'Ghost of Captain Hollowell', ghost: true, night: true, at: frameLocal(GRAVE_F, -74, 32.5), face: GRAVE_F.perp.clone().negate(), far: 300,
+    look: { coat: 0x9fd8c8, shirt: 0xd8fff0, pants: 0x7ab8a8, hat: 'tricorn', hatColor: 0x6aa898, hair: 0xd8fff0, beard: 0xd8fff0, skin: 0xbfeee0, belt: 0x5a9888 },
+    lines: ["...cold... so cold, down in the dark...", "Leave me be, living one. Unless ye've come to set me free."] });
   const tagLayer = document.getElementById('tags');
   const hudTitle = document.querySelector('#hud h1');
   const npcs = NPC_DEFS.map(def => {
     const ch = makeCharacter(def.look);
     (def.props || []).forEach(k => addProp(ch, k));
+    if (def.ghost) {   // a ghost: pale, see-through and glowing faintly, with a cold light about him
+      const seen = new Set();
+      ch.root.traverse(o => { if (!o.material || seen.has(o.material)) return; const ms = Array.isArray(o.material) ? o.material : [o.material];
+        o.material = ms.map(m => { const c = m.clone(); c.transparent = true; c.opacity = 0.42; c.depthWrite = false; if (c.emissive) c.emissive.setHex(0x2a6a58); return c; }); if (o.material.length === 1) o.material = o.material[0]; seen.add(o.material); });
+      const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.35 })); aura.scale.set(3.2, 4.4, 1); aura.position.y = 1.4; ch.root.add(aura);
+    }
     scene.add(ch.root);
     const start = def.at || (def.patrol ? def.patrol[0] : (def.area ? def.area() : streetPoint()));
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = def.name; tagLayer.appendChild(tag);
@@ -2108,7 +2176,7 @@ window.__pgBoot = () => {
       for (const c of interior.crew) { const d = Math.hypot(c.lp.x - IP.x, c.lp.z - IP.z); if (d < bd) { bd = d; best = c; } }
       return best;
     }
-    for (const n of npcs) { const d = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z); if (d < bd) { bd = d; best = n; } }
+    for (const n of npcs) { if (n.def.night && !isNight()) continue; const d = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z); if (d < bd) { bd = d; best = n; } }
     if (ship && ship.crew) for (const c of ship.crew) {
       if (c.silent) continue;
       const d = Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z);
@@ -4322,6 +4390,33 @@ window.__pgBoot = () => {
         { type: 'kraken', at: () => KRAKEN_DEEP, r: 150, text: 'Sail into the deep north of Mermaid Cove and drive off what lives there' },
         { type: 'talk', npc: 'Sera the navigator', text: 'Tell Sera the navigator what ye found', lines: ["Ye fought the Kraken?! And lived?!", "The chart was a warning, not a treasure map. Here, captain, ye've earned every coin."] },
       ] },
+    ghostblade: { title: 'The Ghost Blade', reward: 3000, giver: 'Mother Morrow', hint: "Mother Morrow, the gravedigger in the old graveyard behind Gull Town's chapel, has seen things at night.",
+      start: ["Ye've a brave face, captain. Brave enough for the dead?", "Every night this month the old grave at the back has stood open, and every morning I fill it in again.", "It's Captain Elias Hollowell's grave. Drowned forty years back with his ship, the Widow's Lament. They buried an empty coffin.", "Go and read his stone after dark. If somethin' answers... well. Don't say I didn't warn ye."],
+      done: ["The grave's stayed shut since ye laid him down. First quiet nights I've had in a month.", "That blade of his still gives me the shivers, mind. Keep it sheathed in my graveyard."],
+      stages: [
+        { type: 'spot', at: () => GRAVE_SPOT, r: 6, cond: isNight, condText: "The letters are too worn to read by daylight. Come back after dark (8 in the evening).", label: "Read the weathered headstone", text: "Read Hollowell's headstone in the graveyard behind the Gull Town chapel, after dark",
+          act: () => { SFX.wail && SFX.wail(); toast("'CAPT. ELIAS HOLLOWELL. TAKEN BY THE SEA.' The grave is empty... and the air turns cold as the deep."); } },
+        { type: 'talk', npc: 'Ghost of Captain Hollowell', cond: isNight, condText: "...", text: "Speak to the ghost risen over the empty grave (only at night)",
+          lines: ["...ye can see me? Forty years, and not one living soul has looked me in the eye.", "I am Elias Hollowell. My crew mutinied off the south-east reefs. They ran the Widow's Lament onto the rocks, cut my throat and left me to the sharks.", "Then they robbed me even of my grave. My compass, my ring, my very skull... scattered across these islands by the thieves who sold them on.", "The Blackwater raiders in the hills keep the last of my grave goods. Take them back, and I'll tell ye where my bones lie."] },
+        { type: 'kill', what: 'Blackwater raider', n: 6, text: "Defeat Blackwater raiders in their hill camps to recover Hollowell's grave goods", at: () => { const S = SITES.find(q => q.kind === 'camp'); return { x: S.x, z: S.z }; } },
+        { type: 'spot', at: () => WRECK_SPOT, r: 16, label: "Search the wreck for Hollowell's compass", text: "Find Hollowell's compass in the wreck on Palm Key",
+          act: () => toast("Wedged in the rotten keel: a brass compass. The needle doesn't point north. It points at Gull Island... at the graveyard.") },
+        { type: 'spot', at: () => SKULL_SPOT, r: 18, cond: isNight, condText: "Something in the rock's shadow only shows itself by moonlight. Come back after dark.", label: "Search the skull rock by moonlight", text: "Find Hollowell's skull at the skull rock on Skull Isle (at night)",
+          act: () => { SFX.wail && SFX.wail(); toast("In the skull rock's eye socket, a real skull, grinning. It's cold as ice, and ye could swear it whispers yer name."); } },
+        { type: 'spot', at: () => GEM_SPOT, r: 12, label: "Sift the black sand for the ring", text: "Find Hollowell's signet ring on the black sand of Smoke Peak",
+          act: () => toast("A heavy silver ring, black with ash: an anchor and the letters E.H. The sand around it is frosted over, in the heat of a volcano.") },
+        { type: 'talk', npc: 'Mother Morrow', need: { mats: { pearl: 2, iron: 3 } }, text: "Bring the relics to Mother Morrow, with 2 pearls (for the dead man's eyes) and 3 iron (for the coffin nails)",
+          lines: ["Compass, ring and skull. Lord above, ye actually found him.", "Pearls on the eyes so he can find his way, iron nails so he stays put. Old ways, but they work.", "There's one more thing the dead need: their killers. His crew's long gone, but their heirs sail under the Blackwater flag.", "First, though, the Lament herself. He'll not rest till someone stands over where she went down."] },
+        { type: 'sail', at: () => LAMENT, r: 140, text: "Sail to where the Widow's Lament went down, far out in the south-east sea (look for the ghost-light)" },
+        { type: 'kill', what: 'raider', n: 2, text: "Sink two Blackwater raider ships: the mutineers' heirs still sail under that flag" },
+        { type: 'spot', at: () => GRAVE_SPOT, r: 6, cond: isNight, condText: "The dead are laid to rest by night. Come back after dark.", label: "Lay Hollowell's relics in his grave", text: "Return to the graveyard after dark and lay Hollowell's relics in his grave",
+          act: () => { SFX.wail && SFX.wail(); for (let i = 0; i < 12; i++) puff(GRAVE_SPOT.x + (Math.random() - 0.5) * 3, heightAt(GRAVE_SPOT.x, GRAVE_SPOT.z) + Math.random() * 3, GRAVE_SPOT.z + (Math.random() - 0.5) * 3, { color: 0x9fffd0, size: 1.4, life: 2.5, grow: 2, vy: 1.4, op: 0.7 }); toast("Ye lay the skull, the ring and the compass in the coffin and drive the nails home. A cold wind rises from the open grave..."); } },
+        { type: 'talk', npc: 'Ghost of Captain Hollowell', cond: isNight, condText: "...", text: "Speak to Captain Hollowell's ghost one last time",
+          lines: ["My bones are home. My ship is mourned. My murderers' heirs are at the bottom of the sea.", "For the first time in forty years, captain... I'm warm.", "Take my blade. It came back from the deep with me, and it's no use to a man at peace.", "It drinks the life of those it cuts, and the dead will answer when ye call. Fair winds... and farewell."],
+          end: () => { if (!STATE.swords.includes('ghost')) STATE.swords.push('ghost'); STATE.sword = 'ghost'; save(); refreshBlade(); onSwordChanged(); SFX.wail && SFX.wail(); toast("Ye received Hollowell's Ghost Blade! (Equipped. R: Wail of the Dead)"); } },
+        { type: 'talk', npc: 'Mother Morrow', text: "Tell Mother Morrow that Captain Hollowell is at peace",
+          lines: ["He's gone, then. Properly gone. I felt the graveyard sigh, just before dawn.", "Ye've done a kindness most wouldn't, captain. Here: the parish pays for a proper burial, and I'd say ye've earned it."] },
+      ] },
   };
   // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
   STATE.qprog = STATE.qprog || {};
@@ -4992,11 +5087,12 @@ window.__pgBoot = () => {
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
+    ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. The sea speeds yer ship 35% faster, yer cannons hit 50% harder, and when ye raise it (R) the kraken answers. Press B at the wheel to dive beneath the waves and hide from raiders.', dmg: 150, cool: 0.32, reach: 4.2, arc: -0.35, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
-    return STATE.sword === 'tidecaller' && night ? Object.assign({}, s, { dmg: Math.round(s.dmg * 1.3) }) : s; };   // Tidecaller: moonlit edge
+    return (STATE.sword === 'tidecaller' || STATE.sword === 'ghost') && night ? Object.assign({}, s, { dmg: Math.round(s.dmg * (STATE.sword === 'ghost' ? 1.4 : 1.3)) }) : s; };   // moonlit edge   // Tidecaller: moonlit edge
   function addMat(k, n) { STATE.mats[k] = (STATE.mats[k] || 0) + n; save(); SFX.pickup(); toast(`+${n} ${MATS[k].name}`); }
   // the Sword of the Sea: a wave-shaped blade that runs from deep ocean blue at the hilt to sea-foam at the tip,
   // a guard of branching coral with a scallop shell, a grip wrapped in seaweed and a pearl for a pommel
@@ -5190,6 +5286,36 @@ window.__pgBoot = () => {
         w: t => 0.105 * (1 - 0.45 * t) + 0.012,
         each: (i, tm, cy, cz, rx, w, L) => { if (tm > 0.08 && tm < 0.5) [-1, 1].forEach(sd => { const et = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.004, L * 0.95), gold ? metal(0xfff6d0, 200) : metal(0xe2b84a, 140)); et.position.set(sd * 0.0116, cy - w * 0.1 + Math.sin(tm * 24) * w * 0.12, cz); et.rotation.x = rx; g.add(et); }); } });
       return g;
+    }
+    if (S === 'ghost') {
+      // Hollowell's Ghost Blade: a blade of cold green spirit-light (see-through, glowing brighter at the edge and
+      // flickering), a crossguard of curved rib bones, a grip of black sailcloth bound with a rusted chain, and a small
+      // grinning skull for a pommel. Wisps of mist peel off the blade and drift away.
+      const bone = matte(0xd9d2bf), boneD = matte(0xa89f88), cloth = matte(0x1a1a1e), chain = metal(0x5a5048, 40);
+      const spirit = new THREE.MeshBasicMaterial({ color: 0x8fffd0, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
+      const edgeM = new THREE.MeshBasicMaterial({ color: 0xd8fff0, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+      const coreM = new THREE.MeshBasicMaterial({ color: 0x3affb0, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending });
+      gripKit(g, { len: 0.2, r: 0.03, mat: cloth, band: chain, bands: 6 });
+      // the skull pommel
+      const sk = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), bone); sk.scale.set(0.9, 1, 1.05); g.add(at3(sk, 0, 0.004, -0.235));
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.035), bone); g.add(at3(jaw, 0, -0.032, -0.235));
+      const eyeM = new THREE.MeshBasicMaterial({ color: 0x3affb0 });
+      [-1, 1].forEach(sd => g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), eyeM), sd * 0.017, 0.01, -0.272)));
+      // rib-bone crossguard: three curved ribs a side, sweeping toward the blade
+      [-1, 1].forEach(sd => { for (let k = 0; k < 3; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(0.075 - k * 0.012, 0.007, 5, 10, Math.PI * 0.6), k % 2 ? boneD : bone); rib.position.set(0, sd * (0.02 + k * 0.012), 0.035 + k * 0.012); rib.rotation.set(0, Math.PI / 2, sd > 0 ? -0.3 : Math.PI + 0.3); g.add(rib); } });
+      g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.16, 0.035), bone), 0, 0, 0.035));
+      // the blade itself: a faint spirit body, a bright edge and a burning core line
+      const wisps = [], cores = [];
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: spirit, edge: edgeM, tipMat: edgeM, thick: 0.03, w: t => 0.11 * (1 - 0.35 * t) + 0.012, segs: 12,
+        each: (i, tm, cy, cz, rx, w, L) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.008, L), coreM); c.position.set(0, cy + w * 0.12, cz); c.rotation.x = rx; g.add(c); cores.push(c); } });
+      for (let i = 0; i < 6; i++) { const wp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.4, blending: THREE.AdditiveBlending })); wp.scale.set(0.16, 0.16, 1); g.add(wp); wisps.push({ wp, ph: i / 6 }); }
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x6affc0, transparent: true, depthWrite: false, opacity: 0.4, blending: THREE.AdditiveBlending })); gl.scale.set(0.7, 1.4, 1); gl.position.z = 0.07 + lk.len * 0.5; g.add(gl);
+      g.userData.seaTick = t => {
+        const f = 0.5 + 0.5 * Math.sin(t * 7) * Math.sin(t * 2.9 + 1);   // a ghostly flicker
+        spirit.opacity = 0.32 + 0.2 * f; coreM.opacity = 0.45 + 0.35 * f; gl.material.opacity = 0.25 + 0.25 * f;
+        wisps.forEach(w => { const u = (t * 0.35 + w.ph) % 1; w.wp.position.set(Math.sin(t * 2 + w.ph * 9) * 0.04, 0.05 + u * 0.12, 0.12 + w.ph * lk.len * 0.9); w.wp.material.opacity = 0.45 * Math.sin(u * Math.PI); w.wp.scale.setScalar(0.1 + u * 0.18); });
+      };
+      SEA_BLADES.add(g); return g;
     }
     if (S === 'flame') {
       // Flame Blade: black volcanic steel split by glowing seams of magma, a flame-tongued spine, a blackened guard with fire gems
@@ -5405,7 +5531,7 @@ window.__pgBoot = () => {
       const cv = document.createElement('canvas'); cv.width = 200; cv.height = 68; drawSwordIcon(cv, S.look); card.appendChild(cv);
       const info = document.createElement('div');
       const speed = S.cool < 0.35 ? 'Very fast' : S.cool < 0.55 ? 'Normal' : 'Slow', arc = S.arc < 0 ? 'Very wide' : S.arc < 0.12 ? 'Wide' : S.arc > 0.4 ? 'Narrow' : 'Normal';
-      const reqs = owned ? '<span>Owned</span>' : S.legendary ? '<span>Only the worthy may claim it. Seek the sword in the stone at Mermaid Cove.</span>' : [...Object.entries(S.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= S.gold ? '' : 'no'}">${S.gold} gold</span>`].join(' · ');
+      const reqs = owned ? '<span>Owned</span>' : S.legendary ? `<span>${S.claim || 'Only the worthy may claim it. Seek the sword in the stone at Mermaid Cove.'}</span>` : [...Object.entries(S.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= S.gold ? '' : 'no'}">${S.gold} gold</span>`].join(' · ');
       info.innerHTML = `<h3>${S.name}</h3><p>${S.desc}</p><div class="stats"><span>Damage <b>${S.dmg}</b></span><span>Speed <b>${speed}</b></span><span>Reach <b>${S.reach.toFixed(1)}</b></span><span>Arc <b>${arc}</b></span></div><div class="req">${reqs}</div>`;
       card.appendChild(info);
       const b = document.createElement('button');
@@ -5634,6 +5760,7 @@ window.__pgBoot = () => {
   }
   function hurtPlayer(n) {
     if (window.__god || PLAYER.hp <= 0 || STOM.on || STOM.done || MERM.held) return;
+    if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
     if (PLAYER.hp <= 0) playerDefeated();
   }
@@ -5914,7 +6041,7 @@ window.__pgBoot = () => {
         for (const b of bandits) {
           if (b.state === 'dead' || b.state === 'gone') continue;
           const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-          const sw = curSword(); if (d < sw.reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > sw.arc) hitBandit(b, sw.dmg);
+          const sw = curSword(); if (d < sw.reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > sw.arc) { hitBandit(b, sw.dmg); if (STATE.sword === 'ghost') ghostDrain(b.pos); }
         }
         krSwordHit(curSword());
         serpentSwordHit(curSword());
@@ -6299,6 +6426,20 @@ window.__pgBoot = () => {
       },
       // A menacing grumble: a slow, threatening growl that builds from deep in the chest, swells into a snarl with a
       // sour tritone and a wet, ragged rattle in the throat, then sinks back down into a low hiss through the teeth.
+      wail() {
+        if (!ctx || muted) return; const o = out(null, 0.6); if (!o) return; const t = ctx.currentTime, dur = 2.6;
+        const voices = [[620, 1], [930, 0.6], [470, 0.7]];
+        const lp = ctx.createBiquadFilter(); lp.type = 'bandpass'; lp.frequency.value = 900; lp.Q.value = 0.8;
+        const env = ctx.createGain(); env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(0.5, t + 0.35); env.gain.setValueAtTime(0.5, t + 1.2); env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        const vib = ctx.createOscillator(); vib.frequency.value = 6.5; const vg = ctx.createGain(); vg.gain.value = 18; vib.connect(vg);
+        voices.forEach(([f, v]) => { const os = ctx.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(f * 0.7, t); os.frequency.exponentialRampToValueAtTime(f * 1.25, t + 0.5); os.frequency.exponentialRampToValueAtTime(f * 0.45, t + dur); vg.connect(os.frequency);
+          const g = ctx.createGain(); g.gain.value = 0.3 * v; os.connect(g); g.connect(lp); os.start(t); os.stop(t + dur + 0.1); });
+        const br = ctx.createBufferSource(); br.buffer = noiseBuf; br.loop = true; const bf = ctx.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 1400; bf.Q.value = 1.2; const bg = ctx.createGain(); bg.gain.value = 0.12; br.connect(bf); bf.connect(bg); bg.connect(lp);
+        if (!SFX._verb) { const L = Math.floor(ctx.sampleRate * 3.6), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 3); } SFX._verb = ir; }
+        const verb = ctx.createConvolver(); verb.buffer = SFX._verb; const wet = ctx.createGain(); wet.gain.value = 0.8;
+        lp.connect(env); env.connect(o); env.connect(verb); verb.connect(wet); wet.connect(o);
+        vib.start(t); vib.stop(t + dur + 0.1); br.start(t); br.stop(t + dur + 0.1);
+      },
       beastGrumble(pos, size = 1) {
         if (!ctx || muted) return; const o = out(pos, 0.55 + 0.25 * size); if (!o) return;
         const t = ctx.currentTime, dur = 3.6 + Math.random() * 1.8, k = 1 / Math.max(0.3, size), f0 = (27 + Math.random() * 4) * Math.pow(k, 0.5);
@@ -6701,7 +6842,7 @@ window.__pgBoot = () => {
     if (onShip || sailing || inInterior || STATE.tidecaller || MERM.state !== 'hidden') return false;
     return Math.hypot(P.pos.x - STONE_POS.x, P.pos.z - STONE_POS.z) < 6;
   }
-  const isWorthy = () => Object.keys(QUESTS).every(k => STATE.quests[k] === 'done');
+  const isWorthy = () => Object.keys(QUESTS).filter(k => k !== 'ghostblade').every(k => STATE.quests[k] === 'done');
   MERM.pulls = 0;
   function summonMermaid() {
     if (!isWorthy()) {
@@ -9570,6 +9711,36 @@ window.__pgBoot = () => {
     }
   }
   addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; const k = e.key.toLowerCase(); if (!tideOn()) return; if (k === 'r') tideWave(); if (k === 'g') tideWhirlpool(); });
+  // ---- Hollowell's Ghost Blade ----
+  const GHOST = { cd: 0, CD: 30, rings: [] };
+  function ghostDrain(at) {   // the blade drinks: a wisp of life flows from the wound back into ye
+    PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 6);
+    for (let i = 0; i < 4; i++) { const u = i / 3; puff(at.x + (P.pos.x - at.x) * u, at.y + 1.4, at.z + (P.pos.z - at.z) * u, { color: 0x9fffd0, size: 0.6, life: 0.5, grow: 0.8, op: 0.7 }); }
+  }
+  function ghostWail() {
+    if (STATE.sword !== 'ghost' || PLAYER.weapon !== 'cutlass' || !playerTargetable()) return;
+    if (GHOST.cd > 0) { toast(`The dead are still answerin' yer last call... (${Math.ceil(GHOST.cd)}s)`); return; }
+    GHOST.cd = GHOST.CD; SFX.wail && SFX.wail();
+    // a ring of spectral force bursts out; every foe within 18 m is torn at, and the blade drinks from each
+    for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.TorusGeometry(1, 0.18, 6, 32), new THREE.MeshBasicMaterial({ color: 0x9fffd0, transparent: true, opacity: 0.7, depthWrite: false })); m.rotation.x = Math.PI / 2; m.position.set(P.pos.x, P.pos.y + 1 + i * 0.5, P.pos.z); scene.add(m); GHOST.rings.push({ m, t: -i * 0.12 }); }
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28; puff(P.pos.x + Math.cos(a) * 3, P.pos.y + 1.5, P.pos.z + Math.sin(a) * 3, { color: 0xd8fff0, size: 1.8, life: 1.4, grow: 2.5, vy: 1.2, op: 0.6 }); }
+    let n = 0;
+    for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone') continue; if (Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 18) { hitBandit(b, 45); ghostDrain(b.pos); n++; } }
+    for (const sv of SERP) if (serpAlive(sv) && Math.hypot(sv.x - P.pos.x, sv.z - P.pos.z) < 30) serpentHurt(sv, 45, { x: sv.x, y: 2, z: sv.z });
+    toast(n ? `Wail of the Dead! ${n} foe${n > 1 ? 's' : ''} torn by the dead.` : 'Wail of the Dead! The dead shriek... but no foe is near.');
+  }
+  addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; if (e.key.toLowerCase() === 'r' && STATE.sword === 'ghost') ghostWail(); });
+  function updateGhost(dt, t) {
+    GHOST.cd = Math.max(0, GHOST.cd - dt);
+    for (let i = GHOST.rings.length - 1; i >= 0; i--) { const R = GHOST.rings[i]; R.t += dt; const u = Math.max(0, R.t) / 0.7; R.m.scale.setScalar(1 + u * 17); R.m.material.opacity = Math.max(0, 0.7 * (1 - u)); if (u >= 1) { scene.remove(R.m); GHOST.rings.splice(i, 1); } }
+    // will-o'-wisps over the old graves and the ghost-light on the Lament's mast: only by night
+    const night = isNight();
+    for (const L of GHOST_LIGHTS) {
+      if (L.wreck) { L.sp.material.opacity = night ? 0.6 + 0.25 * Math.sin(t * 2.3) : 0.12; continue; }
+      L.sp.material.opacity += ((night ? 0.55 + 0.3 * Math.sin(t * 1.7 + L.ph) : 0) - L.sp.material.opacity) * Math.min(1, dt * 2);
+      L.sp.position.set(L.x + Math.sin(t * 0.4 + L.ph) * 2.5, L.y + Math.sin(t * 0.9 + L.ph * 2) * 0.6, L.z + Math.cos(t * 0.33 + L.ph) * 2.5);
+    }
+  }
 
   // ---------- Loop ----------
   // ---------- Multiplayer (room presence) ----------
@@ -9912,7 +10083,7 @@ window.__pgBoot = () => {
     updateShip(dt, t);
     updateCrew(dt);
     tickSeaBlades(t);
-    updateTide(dt, t);
+    updateTide(dt, t); updateGhost(dt, t);
     updateElder(dt, t); updateBrood(dt, t); if (MP.room) { updateRemoteElders(dt, t); updateRemoteBroods(dt, t); }
     mpUpdate(dt, t);
     if (STOM.on) {
@@ -10004,6 +10175,7 @@ window.__pgBoot = () => {
       let spd = 0;
       const pdist = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z);
       const farU = d.far || 900;
+      if (d.night && !isNight()) { n.ch.root.visible = false; n.tag.style.display = 'none'; continue; }   // the dead only walk at night
       if (inInterior || pdist > farU) { n.ch.root.visible = !inInterior && pdist < farU * 1.6; n.tag.style.display = 'none'; continue; }
       n.ch.root.visible = true;
       if (talk && talk.npc === n) {
@@ -10031,6 +10203,7 @@ window.__pgBoot = () => {
       }
       n.pos.y = groundAt(n.pos.x, n.pos.z);
       n.ch.root.position.copy(n.pos);
+      if (d.ghost) n.ch.root.position.y += 0.35 + Math.sin(clock.elapsedTime * 1.6) * 0.15;   // drifting just above the ground
       n.ch.root.rotation.y = n.facing;
       n.ch.update(dt, spd, false, false, spd < 0.1 && !(talk && talk.npc === n) ? d.action : (d.carry && spd > 0 ? 'carry' : null));
 
