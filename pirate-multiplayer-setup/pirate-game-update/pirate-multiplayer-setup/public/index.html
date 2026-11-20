@@ -918,22 +918,33 @@ window.__pgBoot = () => {
     colliders.push({ box: true, x: p.x, z: p.y, hw: 3.6, hd: 9, rot: wreck.rotation.y });
     SPOTS.push({ x: p.x, z: p.y, r: 12 });
   }
+  const EARLY_FIRES = [];   // fires made before the camp-fire flicker list exists (joined to it later)
   // --- Skull Isle: the skull rock and an X that marks a spot ---
   {
     const I = ISLANDS[4], toHome = ISLAND.clone().sub(I.c).normalize();
-    let p = I.c.clone().addScaledVector(toHome, I.r * 0.55);
-    for (let t = 0.55; t > 0.05 && heightAt(p.x, p.y) < 5; t -= 0.03) p = I.c.clone().addScaledVector(toHome, I.r * t);
+    // the skull rock: a colossal skull at the heart of Fort Blackwater, with fires burning in its eyes
+    const fortS = SITES.find(q => q.kind === 'fort' && q.i === 4), K = fortS ? 5 : 1;
+    let p = fortS ? new THREE.Vector2(fortS.x, fortS.z) : I.c.clone().addScaledVector(toHome, I.r * 0.55);
+    if (!fortS) for (let t = 0.55; t > 0.05 && heightAt(p.x, p.y) < 5; t -= 0.03) p = I.c.clone().addScaledVector(toHome, I.r * t);
     const skull = new THREE.Group(), bone = lam(0xd9d2bf), hole = new THREE.MeshBasicMaterial({ color: 0x15110d });
+    skull.scale.setScalar(K);
     const cranium = new THREE.Mesh(new THREE.SphereGeometry(10, 14, 10), bone); cranium.scale.set(1, 0.95, 1.05); skull.add(cranium);
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(11, 5, 9), bone); jaw.position.set(0, -8, 3); skull.add(jaw);
     [-3.8, 3.8].forEach(x => { const e = new THREE.Mesh(new THREE.SphereGeometry(2.7, 10, 8), hole); e.position.set(x, 0.5, 8.6); skull.add(e); });
     const nose = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.6, 3), hole); nose.position.set(0, -3.6, 9.4); nose.rotation.x = Math.PI; skull.add(nose);
     for (let i = -2; i <= 2; i++) { const t = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.8, 0.6), hole); t.position.set(i * 2, -6.2, 7.6); skull.add(t); }
-    skull.position.set(p.x, heightAt(p.x, p.y) + 10, p.y);
+    skull.position.set(p.x, heightAt(p.x, p.y) + 10 * K - (K > 1 ? 4 : 0), p.y);
     skull.rotation.y = Math.atan2(toHome.x, toHome.y);
+    if (K > 1) {   // cracks, moss and fires in the eyes
+      [-3.8, 3.8].forEach(x => { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff7a2a, transparent: true, depthWrite: false })); f.position.set(x, 0.2, 11.6); f.scale.set(3.6, 4.2, 1); skull.add(f); EARLY_FIRES.push(f); });
+      const crackM = new THREE.MeshBasicMaterial({ color: 0x3a3228 });
+      [[2, 6, 9.2, 0.4], [-5, 5, 8.2, -0.6], [6, 2, 7.6, 1.1]].forEach(([x, y, z, r]) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.5, 0.2), crackM); c.position.set(x, y, z); c.rotation.z = r; skull.add(c); });
+      for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(1.4 + Math.random(), 7, 5), lam(0x5f6f4a)); const a = i * 0.7; m.position.set(Math.cos(a) * 8, 6.5 + Math.sin(i) * 1.5, Math.sin(a) * 8 - 2); m.scale.y = 0.4; skull.add(m); }
+    }
     ISLANDS[4].group.add(skull);
-    colliders.push({ x: p.x, z: p.y, r: 10.5 });
-    SPOTS.push({ x: p.x, z: p.y, r: 18 }); SKULL_SPOT = { x: p.x, z: p.y };
+    colliders.push({ x: p.x, z: p.y, r: 10.5 * K });
+    SPOTS.push({ x: p.x, z: p.y, r: 18 * K });
+    { const f = p.clone().addScaledVector(toHome, K > 1 ? 10.5 * K + 9 : 0); SKULL_SPOT = { x: f.x, z: f.y }; }   // ye search at its feet, under the jaw
     let xp = I.c.clone().addScaledVector(toHome, -I.r * 0.35);
     for (let t = 0.35; t > 0 && heightAt(xp.x, xp.y) < 4.5; t -= 0.02) xp = I.c.clone().addScaledVector(toHome, -I.r * t);
     const xm = lam(0xb3261e);
@@ -5670,7 +5681,7 @@ window.__pgBoot = () => {
   }
 
   // ---------- Bandit camps ----------
-  const bandits = [], campFires = [];
+  const bandits = [], campFires = [...EARLY_FIRES];
   const banditLook = () => ({ shirt: pick([0x2a2a2a, 0x5a1e1e, 0x3a3226, 0x4a4a2a]), pants: pick([0x2d2a33, 0x3a3226, 0x1c1c1c]), skin: pick(SKINS), hair: pick(HAIRS),
     beard: crand() < 0.6 ? 0x1a1a1a : undefined, hat: 'bandana', hatColor: pick([0x8e1f1f, 0x1c1c1c, 0x5a1e1e]), eyepatch: crand() < 0.3, belt: 0x1a1a1a });
   function landNear(cx, cz, lo, hi) {
@@ -5870,7 +5881,7 @@ window.__pgBoot = () => {
         colliders.push({ x: p.x, z: p.y, r: 0.8 }); }
     }
     // the keep at the heart of the fort
-    { const kp = W(-30, 0), kg = new THREE.Group(); kg.position.set(kp.x, Y - 0.3, kp.y); kg.rotation.y = base; g.add(kg);
+    { const kp = W(-185, 0), kg = new THREE.Group(); kg.position.set(kp.x, Y - 0.3, kp.y); kg.rotation.y = base; g.add(kg);
       const body = new THREE.Mesh(new THREE.BoxGeometry(32, 26, 32), stone); body.position.y = 13; kg.add(body);
       const plinth = new THREE.Mesh(new THREE.BoxGeometry(34, 3, 34), stoneD); plinth.position.y = 1.5; kg.add(plinth);
       for (let k = -15; k <= 15; k += 3) for (const [x, z] of [[k, 15.6], [k, -15.6], [15.6, k], [-15.6, k]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.8, 1.4), stoneL); m.position.set(x, 26.9, z); kg.add(m); }
@@ -5883,7 +5894,7 @@ window.__pgBoot = () => {
       const flag = new THREE.Mesh(new THREE.PlaneGeometry(9, 5.6), new THREE.MeshLambertMaterial({ map: flagTex('jolly'), side: THREE.DoubleSide })); flag.position.set(0, 37, 4.6); flag.rotation.y = Math.PI / 2; kg.add(flag);
       colliders.push({ box: true, x: kp.x, z: kp.y, hw: 17.2, hd: 17.2, rot: base });
       // the commander's strongbox, under an awning by the keep door
-      const sb = W(-8, 7), sy = heightAt(sb.x, sb.y), box = new THREE.Group(); box.position.set(sb.x, sy, sb.y); box.rotation.y = base; g.add(box);
+      const sb = W(-163, 7), sy = heightAt(sb.x, sb.y), box = new THREE.Group(); box.position.set(sb.x, sy, sb.y); box.rotation.y = base; g.add(box);
       const chest = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 1.3), lam(0x4a2a14)); chest.position.y = 0.6; box.add(chest);
       const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 2, 10, 1, false, 0, Math.PI), lam(0x4a2a14)); lid.rotation.z = Math.PI / 2; lid.position.y = 1.2; box.add(lid);
       [-0.7, 0, 0.7].forEach(x => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.3, 1.36), lam(0xd4af37)); b.position.set(x, 0.65, 0); box.add(b); });
