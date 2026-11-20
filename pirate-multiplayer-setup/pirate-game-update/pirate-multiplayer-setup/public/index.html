@@ -492,6 +492,7 @@ window.__pgBoot = () => {
     { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
     { i: 4, kind: 'fort', name: 'Blackwater soldier', a: 0, f: 0, r: 400, n: 20, A: 390, B: 250, h: 14 },   // Skull Isle: Fort Blackwater, walls round most of the island and a harbour bay
   ];
+  const FORT_PIER_ANGLES = [Math.PI * 0.62, Math.PI, Math.PI * 1.38];
   ISLANDS.forEach(I => I.sites = []);
   SITES.forEach(S => {
     const I = ISLANDS[S.i];
@@ -610,7 +611,10 @@ window.__pgBoot = () => {
     const dx = x - S.x, dz = z - S.z; if (dx * dx + dz * dz > (S.A + 200) * (S.A + 200)) return h;
     const [u, v] = fortLocal(S, x, z), e = (Math.hypot(u / S.A, v / S.B) - 1) * S.B;   // roughly metres outside the wall line
     const w = sstep(60, 6, e); h += (S.h - h) * w;
-    const db = fortBayDist(S, u, v); if (db < 30) h += (-7.6 - h) * sstep(30, 0, db);
+    // the harbour: a low quayside terrace round the basin (at dock level), ramping up to the fort, then a sheer quay wall into deep water
+    const db = fortBayDist(S, u, v);
+    if (db < 95 && w > 0.01) h += (4.2 + (S.h - 4.2) * sstep(55, 95, db) - h) * w;
+    if (db < 4) h += (-7.6 - h) * sstep(4, -1, db);
     return h;
   }
   function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
@@ -1809,6 +1813,12 @@ window.__pgBoot = () => {
     { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, hw: DOCK_HW, head: DOCK_HEAD, headLen: DOCK_HEADLEN },
     { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 },
   ];
+  // Fort Blackwater's harbour piers (keep in step with the other side): out from the quay toward the middle of the basin
+  for (const S of SITES) if (S.kind === 'fort') for (const a of FORT_PIER_ANGLES) {
+    const bu = S.A * 0.6, cx = S.x + S.ux * bu, cz = S.z + S.uz * bu, ox = Math.cos(a), ov = Math.sin(a);   // pier root direction from the basin centre (fort-local)
+    const wx = S.ux * ox - S.uz * ov, wz = S.uz * ox + S.ux * ov, base = new THREE.Vector2(cx + wx * 121, cz + wz * 121), dir = new THREE.Vector2(-wx, -wz);
+    DOCKS.push({ base, dir, perp: new THREE.Vector2(-dir.y, dir.x), len: 62, hw: 4, head: 11, headLen: 8, fort: true });
+  }
   DOCKS.forEach(d => d.rr = Math.pow(d.len + d.headLen + d.head + 8, 2));
   function onDock(x, z) {
     for (const d of DOCKS) {
@@ -5798,6 +5808,7 @@ window.__pgBoot = () => {
       const p = W((u0 + u1) / 2, (v0 + v1) / 2), yaw = base - Math.atan2(v1 - v0, u1 - u0);
       const gW = new THREE.Group(); gW.position.set(p.x, Y - 0.5, p.y); gW.rotation.y = yaw; g.add(gW);
       const plinth = new THREE.Mesh(new THREE.BoxGeometry(6, 4, L + 0.4), stoneD); plinth.position.y = 0; gW.add(plinth);
+      { const gy = Math.min(heightAt(W(u0, v0).x, W(u0, v0).y), heightAt(W(u1, v1).x, W(u1, v1).y)); if (gy < Y - 1.5) { const fd = new THREE.Mesh(new THREE.BoxGeometry(6, Y - gy + 2, L + 0.4), stoneD); fd.position.y = -(Y - gy + 2) / 2; gW.add(fd); } }
       const body = new THREE.Mesh(new THREE.BoxGeometry(3.8, 11, L + 0.4), stone); body.position.y = 5.5; gW.add(body);
       const walk = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.4, L + 0.4), stoneL); walk.position.y = 11.1; gW.add(walk);
       gW.updateMatrixWorld(true); const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
@@ -5856,29 +5867,78 @@ window.__pgBoot = () => {
       instanced(new THREE.TorusGeometry(0.9, 0.18, 4, 8), iron, links, g);
     }
     instanced(new THREE.BoxGeometry(1, 1, 1), stoneL, towerMerl, g);
-    // the harbour: a stone quay round the basin with bollards, two timber piers, warehouses, cranes, and Blackwater ships moored
-    { const bu = A * 0.6, R = 124, quay = [];
-      for (let k = 0; k < 72; k++) { const a0 = k / 72 * Math.PI * 2, a1 = (k + 1) / 72 * Math.PI * 2, am = (a0 + a1) / 2; if (Math.abs(Math.atan2(Math.sin(am), Math.cos(am))) < 0.42) continue;   // the channel opening (toward +u)
-        const p0 = W(bu + Math.cos(a0) * R, Math.sin(a0) * R), p1 = W(bu + Math.cos(a1) * R, Math.sin(a1) * R), L = Math.hypot(p1.x - p0.x, p1.y - p0.y), yaw = Math.atan2(p1.x - p0.x, p1.y - p0.y);
-        quay.push(new THREE.Matrix4().compose(new THREE.Vector3((p0.x + p1.x) / 2, Y - 11, (p0.y + p1.y) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(3, 22.4, L + 0.3)));
-        if (k % 6 === 0) { const bb = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.8, 8), iron); const pm = W(bu + Math.cos(am) * (R + 2.2), Math.sin(am) * (R + 2.2)); bb.position.set(pm.x, Y + 0.4, pm.y); g.add(bb); }
-        const pc = W(bu + Math.cos(am) * (R + 1), Math.sin(am) * (R + 1)); colliders.push({ x: pc.x, z: pc.y, r: 1.6 });
+    // ---- the harbour ----
+    // A deep round basin behind the sea gate, ringed by a sheer stone quay with coping stones, iron bollards and
+    // mooring rings. Behind it a paved quayside terrace at dock level runs round the water: three walkable timber
+    // piers reach into the basin with Blackwater ships tied up alongside, cranes swing cargo, warehouses and the
+    // harbour master's house face the water, a ship stands half-built on the slipway, a battery of guns covers the
+    // channel, and a ramp climbs from the quayside up to the fort.
+    { const bu = A * 0.6, R = 121, QY = 4.3, quay = [], coping = [], paving = [];
+      const BW = (r, a) => W(bu + Math.cos(a) * r, Math.sin(a) * r);   // a point round the basin (radius r, angle a)
+      const open = a => Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.4;   // the channel mouth (toward +u)
+      for (let k = 0; k < 96; k++) {
+        const a0 = k / 96 * Math.PI * 2, a1 = (k + 1) / 96 * Math.PI * 2, am = (a0 + a1) / 2; if (open(am)) continue;
+        const p0 = BW(R, a0), p1 = BW(R, a1), L = Math.hypot(p1.x - p0.x, p1.y - p0.y), yaw = Math.atan2(p1.x - p0.x, p1.y - p0.y), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), m = BW(R, am);
+        quay.push(new THREE.Matrix4().compose(new THREE.Vector3(m.x, QY - 6.5, m.y), q, new THREE.Vector3(2.4, 13, L + 0.2)));       // the quay wall face
+        coping.push(new THREE.Matrix4().compose(new THREE.Vector3(m.x, QY + 0.15, m.y), q, new THREE.Vector3(2.8, 0.4, L + 0.25)));  // pale coping stones on top
+        if (k % 4 === 0) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.8, 8), iron); const pb = BW(R + 2.4, am); b.position.set(pb.x, QY + 0.6, pb.y); g.add(b); }
+        if (k % 4 === 2) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.06, 5, 10), iron); const pr = BW(R - 1.3, am); ring.position.set(pr.x, QY - 1.4, pr.y); ring.rotation.y = yaw; g.add(ring); }
+        const pc = BW(R + 0.6, am); colliders.push({ x: pc.x, z: pc.y, r: 1.3 });
+        for (const rr of [R + 6, R + 14, R + 22, R + 30]) { const pp = BW(rr, am); paving.push(new THREE.Matrix4().compose(new THREE.Vector3(pp.x, QY + 0.02, pp.y), q, new THREE.Vector3(7.4, 0.12, L * rr / R + 0.1))); }
       }
-      instanced(new THREE.BoxGeometry(1, 1, 1), stoneD, quay, g);
-      // two piers reaching into the basin
-      for (const v of [-50, 50]) { const pg = new THREE.Group(), p = W(bu - R + 40, v); pg.position.set(p.x, 0, p.y); pg.rotation.y = base + (v > 0 ? -0.4 : 0.4) + Math.PI / 2 * 0; g.add(pg);
-        const deck = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 46), DK.plankA); deck.position.set(0, Y - 10.2 + 10.2 - 0.1 - (Y - 3.6), 0); deck.position.y = 3.8; pg.add(deck);
-        for (let z = -22; z <= 22; z += 5) [-2.8, 2.8].forEach(x => { const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 12, 6), DK.pile); pl.position.set(x, -2.3, z); pg.add(pl); }); }
-      // ships moored in the basin, black sails furled
-      for (const [du, dv, h] of [[-30, -10, 0.2], [25, 45, 1.4], [20, -55, -1.2]]) {
-        try { const m = makeShip(du < 0 ? 'galleon' : 'brig', { sail: 0x2a2a2a, hull: 0x1c1c1c, trim: 0x8a1a1a, flag: 'jolly' }), p = W(bu + du, dv); m.group.position.set(p.x, 0, p.y); m.group.rotation.y = base + h; scene.add(m.group); (m.furl || []).forEach(f => { if (f.kind === 'sq') { f.pv.scale.y = 0.06; f.pv.scale.z = 0.2; } else f.pv.scale.z = 0.1; }); } catch (e) {}
-      }
-      // warehouses and cranes along the quay
-      for (const [du, dv] of [[-R - 22, -40], [-R - 22, 40], [-R - 30, 0]]) { const b = block(bu + du, dv, 16, 10, 7, slate, wood); }
-      for (const v of [-80, 80]) { const p = W(bu - 60, v), cr = new THREE.Group(); cr.position.set(p.x, Y, p.y); cr.rotation.y = Math.atan2(c.x - p.x, c.z - p.y) + Math.PI; g.add(cr);
-        const mast = new THREE.Mesh(new THREE.BoxGeometry(0.6, 10, 0.6), wood); mast.position.y = 5; cr.add(mast); const boom = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 9), wood); boom.position.set(0, 9.5, 4); boom.rotation.x = -0.2; cr.add(boom);
-        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 6, 4), DK.rope); rope.position.set(0, 7, 8); cr.add(rope); const load = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), DK.crate); load.position.set(0, 3.6, 8); cr.add(load);
-        colliders.push({ x: p.x, z: p.y, r: 0.8 }); }
+      instanced(new THREE.BoxGeometry(1, 1, 1), stoneD, quay, g); instanced(new THREE.BoxGeometry(1, 1, 1), stoneL, coping, g); instanced(new THREE.BoxGeometry(1, 1, 1), lam(0x7a756c), paving, g);
+      // steps down to the water, here and there
+      for (const a of [Math.PI * 0.8, Math.PI * 1.2]) { const st = new THREE.Group(), p = BW(R - 1, a); st.position.set(p.x, 0, p.y); st.rotation.y = Math.atan2(-Math.cos(a) * F.dir.x + -Math.sin(a) * F.perp.x, -Math.cos(a) * F.dir.y + -Math.sin(a) * F.perp.y); g.add(st);
+        for (let k = 0; k < 8; k++) { const step = new THREE.Mesh(new THREE.BoxGeometry(3, 0.5, 1), stoneL); step.position.set(0, QY - 0.5 - k * 0.6, k * 0.7); st.add(step); } }
+      // three walkable piers with ships tied up alongside (the docks themselves are shared with the server: FORT_PIER_ANGLES)
+      DOCKS.filter(d => d.fort).forEach((D, n) => {
+        buildDock(D, g);
+        const shipT = n === 1 ? 'galleon' : 'brig', side = n % 2 ? 1 : -1;
+        try { const m = makeShip(shipT, { sail: 0x2a2a2a, hull: 0x1c1c1c, trim: 0x8a1a1a, flag: 'jolly' }); const off = D.hw + m.T.B / 2 + 2.5, along = D.len * 0.55;
+          const px = D.base.x + D.dir.x * along + D.perp.x * side * off, pz = D.base.y + D.dir.y * along + D.perp.y * side * off;
+          m.group.position.set(px, 0, pz); m.group.rotation.y = Math.atan2(D.dir.x, D.dir.y); scene.add(m.group);
+          (m.furl || []).forEach(f => { if (f.kind === 'sq') { f.pv.scale.y = 0.06; f.pv.scale.z = 0.2; } else f.pv.scale.z = 0.1; }); } catch (e) {}
+      });
+      // a fourth ship riding at anchor in the middle of the basin
+      try { const m = makeShip('brig', { sail: 0x2a2a2a, hull: 0x1c1c1c, trim: 0x8a1a1a, flag: 'jolly' }), p = W(bu + 30, 25); m.group.position.set(p.x, 0, p.y); m.group.rotation.y = base + 2.2; scene.add(m.group); (m.furl || []).forEach(f => { if (f.kind === 'sq') { f.pv.scale.y = 0.06; f.pv.scale.z = 0.2; } else f.pv.scale.z = 0.1; }); } catch (e) {}
+      // cranes on the quay edge, each with a load on the hook
+      for (const a of [Math.PI * 0.5, Math.PI * 0.81, Math.PI * 1.19, Math.PI * 1.5]) { const p = BW(R + 4, a), cr = new THREE.Group(); cr.position.set(p.x, QY, p.y); cr.rotation.y = Math.atan2(-(p.x - W(bu, 0).x), -(p.y - W(bu, 0).y)); g.add(cr);
+        const mast = new THREE.Mesh(new THREE.BoxGeometry(0.7, 12, 0.7), wood); mast.position.y = 6; cr.add(mast);
+        [[-1, 0], [1, 0], [0, -1]].forEach(([x, z]) => { const st = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4, 0.22), wood); st.position.set(x * 1.1, 1.7, z * 1.1); st.rotation.set(-z * 0.5, 0, x * 0.5); cr.add(st); });
+        const boom = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 12), wood); boom.position.set(0, 11.2, 5.2); boom.rotation.x = -0.18; cr.add(boom);
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 8, 4), DK.rope); rope.position.set(0, 8.4, 10.6); cr.add(rope);
+        const load = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, 2), DK.crate); load.position.set(0, 3.8, 10.6); cr.add(load);
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.4, 12), wood); wheel.rotation.z = Math.PI / 2; wheel.position.set(1.2, 2, -0.6); cr.add(wheel);
+        colliders.push({ x: p.x, z: p.y, r: 1.4 }); }
+      // the quayside: warehouses and the harbour master's house facing the water, stacked cargo, lamp posts
+      const faceWater = (r, a) => { const p = BW(r, a), c0 = W(bu, 0); return Math.atan2(c0.x - p.x, c0.y - p.y); };
+      const shed = (r, a, w, d, h, roofM, wallM, sign) => { const p = BW(r, a), b = new THREE.Group(); b.position.set(p.x, QY - 0.2, p.y); b.rotation.y = faceWater(r, a); g.add(b);
+        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallM); body.position.y = h / 2; b.add(body);
+        const rs = new THREE.Shape(); rs.moveTo(-w / 2 - 0.6, 0); rs.lineTo(0, 3); rs.lineTo(w / 2 + 0.6, 0); rs.lineTo(-w / 2 - 0.6, 0);
+        const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(rs, { depth: d + 1, bevelEnabled: false }), roofM); roof.position.set(0, h, -d / 2 - 0.5); b.add(roof);
+        const dr = new THREE.Mesh(new THREE.BoxGeometry(w * 0.35, h * 0.65, 0.2), wood); dr.position.set(0, h * 0.33, d / 2 + 0.1); b.add(dr);
+        for (const x of [-w * 0.35, w * 0.35]) { const win = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), new THREE.MeshBasicMaterial({ color: 0xffc070 })); win.position.set(x, h * 0.65, d / 2 + 0.1); b.add(win); }
+        if (sign) { const sg = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 0.15), lam(0x8a1a1a)); sg.position.set(0, h - 0.6, d / 2 + 0.2); b.add(sg); }
+        colliders.push({ box: true, x: p.x, z: p.y, hw: w / 2 + 0.2, hd: d / 2 + 0.2, rot: b.rotation.y }); };
+      shed(R + 40, Math.PI * 0.68, 20, 11, 8, slate, wood); shed(R + 40, Math.PI * 1.32, 20, 11, 8, slate, wood);
+      shed(R + 42, Math.PI * 0.9, 14, 10, 7, slate, stone); shed(R + 42, Math.PI * 1.1, 14, 10, 7, slate, stone, true);   // the harbour master's house (red sign)
+      shed(R + 40, Math.PI * 0.47, 16, 10, 7, slate, wood); shed(R + 40, Math.PI * 1.53, 16, 10, 7, slate, wood);
+      for (let k = 0; k < 18; k++) { const a = Math.PI * 0.45 + k / 17 * Math.PI * 1.1; if (k % 3 === 1) continue;   // cargo along the quayside
+        const p = BW(R + 10 + (k % 2) * 6, a), c1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), k % 2 ? DK.crate : DK.crate2); c1.position.set(p.x, QY + 0.75, p.y); c1.rotation.y = k; g.add(c1);
+        if (k % 4 === 0) { const c2 = c1.clone(); c2.position.y += 1.5; c2.rotation.y += 0.4; g.add(c2); } colliders.push({ x: p.x, z: p.y, r: 1.2 }); }
+      for (let k = 0; k < 10; k++) { const a = Math.PI * 0.5 + k / 9 * Math.PI; const p = BW(R + 3.5, a), lp = new THREE.Group(); lp.position.set(p.x, QY, p.y); g.add(lp);   // lamp posts round the quay
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), wood); pole.position.y = 2.3; lp.add(pole); const lt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), lanternMat); lt.position.y = 4.8; lp.add(lt); colliders.push({ x: p.x, z: p.y, r: 0.3 }); }
+      // a ship half-built on the slipway: keel, ribs and a few strakes of planking, on the quayside by the channel
+      { const p = BW(R + 24, Math.PI * 0.32), sl = new THREE.Group(); sl.position.set(p.x, QY, p.y); sl.rotation.y = faceWater(R + 24, Math.PI * 0.32); g.add(sl);
+        const keel = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 26), wood); keel.position.y = 1.6; sl.add(keel);
+        for (let k = -11; k <= 11; k += 2.2) { const w = 4 * Math.cos(k / 13 * Math.PI / 2); const rib = new THREE.Mesh(new THREE.TorusGeometry(w, 0.2, 4, 10, Math.PI), wood); rib.rotation.z = Math.PI; rib.position.set(0, 1.6 + w, k); rib.scale.y = 1.2; sl.add(rib); }
+        for (const sd of [-1, 1]) for (let r = 0; r < 2; r++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 18), DK.plankA); pl.position.set(sd * (2.6 + r * 0.7), 2.6 + r * 1.2, 0); pl.rotation.z = sd * (0.6 - r * 0.25); sl.add(pl); }
+        for (const z of [-10, -4, 2, 8]) for (const sd of [-1, 1]) { const prop = new THREE.Mesh(new THREE.BoxGeometry(0.25, 4, 0.25), wood); prop.position.set(sd * 3.6, 1.8, z); prop.rotation.z = sd * 0.4; sl.add(prop); }
+        colliders.push({ box: true, x: p.x, z: p.y, hw: 4.5, hd: 13.5, rot: sl.rotation.y }); }
+      // a battery of guns on the quay, trained on the channel
+      for (const a of [Math.PI * 0.42, -Math.PI * 0.42]) { const p = BW(R + 6, a), gun = new THREE.Group(); gun.position.set(p.x, QY, p.y); const mouth = W(A + 40, 0); gun.rotation.y = Math.atan2(mouth.x - p.x, mouth.y - p.y); g.add(gun);
+        const carr = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 2.6), wood); carr.position.y = 0.4; gun.add(carr); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.46, 3.4, 10), iron); barrel.rotation.x = Math.PI / 2 - 0.08; barrel.position.set(0, 1.1, 1.4); gun.add(barrel);
+        colliders.push({ x: p.x, z: p.y, r: 1.4 }); FORT_GUNS.push({ x: p.x, y: QY + 2, z: p.y, reload: 3 + Math.random() * 3 }); }
     }
     // the keep at the heart of the fort
     { const kp = W(-185, 0), kg = new THREE.Group(); kg.position.set(kp.x, Y - 0.3, kp.y); kg.rotation.y = base; g.add(kg);

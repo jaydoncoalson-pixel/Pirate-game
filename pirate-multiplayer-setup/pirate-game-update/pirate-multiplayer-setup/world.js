@@ -83,6 +83,7 @@ const SITES = [
   { i: 6, kind: 'camp', name: 'Blackwater raider', a: 0.0, f: 0.2, r: 32, n: 3 },
   { i: 4, kind: 'fort', name: 'Blackwater soldier', a: 0, f: 0, r: 400, n: 20, A: 390, B: 250, h: 14 },   // Skull Isle: Fort Blackwater, walls round most of the island and a harbour bay
 ];
+const FORT_PIER_ANGLES = [Math.PI * 0.62, Math.PI, Math.PI * 1.38];
 ISLANDS.forEach(I => I.sites = []);
 SITES.forEach(S => {
   const I = ISLANDS[S.i];
@@ -189,7 +190,10 @@ function fortHeight(S, x, z, h) {
   const dx = x - S.x, dz = z - S.z; if (dx * dx + dz * dz > (S.A + 200) * (S.A + 200)) return h;
   const [u, v] = fortLocal(S, x, z), e = (Math.hypot(u / S.A, v / S.B) - 1) * S.B;   // roughly metres outside the wall line
   const w = sstep(60, 6, e); h += (S.h - h) * w;
-  const db = fortBayDist(S, u, v); if (db < 30) h += (-7.6 - h) * sstep(30, 0, db);
+  // the harbour: a low quayside terrace round the basin (at dock level), ramping up to the fort, then a sheer quay wall into deep water
+  const db = fortBayDist(S, u, v);
+  if (db < 95 && w > 0.01) h += (4.2 + (S.h - 4.2) * sstep(55, 95, db) - h) * w;
+  if (db < 4) h += (-7.6 - h) * sstep(4, -1, db);
   return h;
 }
 function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
@@ -199,6 +203,12 @@ const DOCKS = [
   { base: DOCK_BASE, dir: DOCK_DIR, perp: PERP, len: DOCK_LEN, hw: DOCK_HW, head: DOCK_HEAD, headLen: DOCK_HEADLEN },
   { base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 },
 ];
+// Fort Blackwater's harbour piers (keep in step with the other side): out from the quay toward the middle of the basin
+for (const S of SITES) if (S.kind === 'fort') for (const a of FORT_PIER_ANGLES) {
+  const bu = S.A * 0.6, cx = S.x + S.ux * bu, cz = S.z + S.uz * bu, ox = Math.cos(a), ov = Math.sin(a);   // pier root direction from the basin centre (fort-local)
+  const wx = S.ux * ox - S.uz * ov, wz = S.uz * ox + S.ux * ov, base = new V2(cx + wx * 121, cz + wz * 121), dir = new V2(-wx, -wz);
+  DOCKS.push({ base, dir, perp: new V2(-dir.y, dir.x), len: 62, hw: 4, head: 11, headLen: 8, fort: true });
+}
 DOCKS.forEach(d => d.rr = Math.pow(d.len + d.headLen + d.head + 8, 2));
 function onDock(x, z) {
   for (const d of DOCKS) {
