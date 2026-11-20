@@ -6788,6 +6788,49 @@ window.__pgBoot = () => {
         oscs.forEach(os => { os.start(t); os.stop(t + dur + 0.1); }); br.start(t, Math.random()); br.stop(t + dur + 0.1);
         setTimeout(() => { try { [envG, mix, verb, wet, dry, dark].forEach(n => n.disconnect()); } catch (e) {} }, (dur + 4) * 1000);
       },
+      // A roar of pure fury, for the Elder Serpent's finale: a snarling bark to open, then a long raging scream that
+      // climbs and cracks, torn ragged by a fast rasp in the throat and heavy clipping, with a shrieking edge on top,
+      // ending in a guttural snarl and the clack of jaws. Sits on top of his deep roar, which gives it the weight.
+      furyRoar(pos, durMul = 1) {
+        if (!ctx || muted) return; const o = out(pos, 2.2); if (!o) return;
+        const t = ctx.currentTime, dur = 4.6 * durMul, f0 = 52;   // loud: it has to cut through everything
+        const pitch = p => { p.setValueAtTime(f0 * 1.9, t); p.exponentialRampToValueAtTime(f0 * 0.9, t + 0.18);   // the bark
+          p.exponentialRampToValueAtTime(f0 * 1.25, t + 0.45); p.exponentialRampToValueAtTime(f0 * 1.75, t + dur * 0.35);   // climbing in rage
+          p.exponentialRampToValueAtTime(f0 * 1.45, t + dur * 0.7); p.exponentialRampToValueAtTime(f0 * 0.7, t + dur); };   // and breaking down into a snarl
+        const voice = ctx.createGain(); voice.gain.value = 0.55;
+        // the rasp: a fast, uneven tremor that tears the sound apart
+        const trem = ctx.createGain(); trem.gain.value = 0.45; trem.connect(voice);
+        const lfo = ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.setValueAtTime(34, t); lfo.frequency.linearRampToValueAtTime(24, t + dur * 0.5); lfo.frequency.linearRampToValueAtTime(42, t + dur);
+        const lfoG = ctx.createGain(); lfoG.gain.value = 0.55; lfo.connect(lfoG); lfoG.connect(trem.gain);
+        // snarling pitch jitter
+        const jit = ctx.createBufferSource(); jit.buffer = noiseBuf; jit.loop = true; jit.playbackRate.value = 0.02; const jitG = ctx.createGain(); jitG.gain.value = f0 * 0.18; jit.connect(jitG);
+        const oscs = [lfo];
+        [-22, -7, 6, 19, 600, 1200].forEach((d, i) => { const os = ctx.createOscillator(); os.type = i < 4 ? 'sawtooth' : 'square'; os.detune.value = d; pitch(os.frequency); jitG.connect(os.frequency); const g = ctx.createGain(); g.gain.value = i < 4 ? 1 : 0.35; os.connect(g); g.connect(trem); oscs.push(os); });
+        const sub = ctx.createOscillator(); sub.type = 'sawtooth'; pitch(sub.frequency); sub.detune.value = -1200; const subG = ctx.createGain(); subG.gain.value = 0.9; sub.connect(subG); subG.connect(voice); oscs.push(sub);
+        // the scream on top: a high, shrieking band that rises with the rage
+        const shr = ctx.createOscillator(); shr.type = 'sawtooth'; shr.frequency.setValueAtTime(f0 * 9, t); shr.frequency.exponentialRampToValueAtTime(f0 * 15, t + dur * 0.38); shr.frequency.exponentialRampToValueAtTime(f0 * 8, t + dur); jitG.connect(shr.frequency);
+        const shrF = ctx.createBiquadFilter(); shrF.type = 'bandpass'; shrF.Q.value = 2.5; shrF.frequency.value = 1900; const shrG = ctx.createGain(); shrG.gain.setValueAtTime(0.0001, t); shrG.gain.exponentialRampToValueAtTime(0.32, t + dur * 0.3); shrG.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.85);
+        shr.connect(shrF); shrF.connect(shrG); shrG.connect(trem); oscs.push(shr);
+        // breath forced through the throat
+        const br = ctx.createBufferSource(); br.buffer = noiseBuf; br.loop = true; br.playbackRate.value = 0.9;
+        const brF = ctx.createBiquadFilter(); brF.type = 'bandpass'; brF.Q.value = 0.9; brF.frequency.setValueAtTime(900, t); brF.frequency.exponentialRampToValueAtTime(1500, t + dur * 0.35); brF.frequency.exponentialRampToValueAtTime(400, t + dur);
+        const brG = ctx.createGain(); brG.gain.value = 0.9; br.connect(brF); brF.connect(brG); brG.connect(voice);
+        // driven hard into clipping
+        const ws = ctx.createWaveShaper(), curve = new Float32Array(2048); for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; curve[i] = Math.max(-0.85, Math.min(0.85, Math.tanh(x * 9))); } ws.curve = curve; voice.connect(ws);
+        // a wide-open, snarling mouth
+        const mix = ctx.createGain(); mix.gain.value = 0.8;
+        [[750, 3, 1.1], [1250, 4, 0.7], [2600, 5, 0.35]].forEach(([fq, q, gn]) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q; f.frequency.setValueAtTime(fq * 0.8, t); f.frequency.exponentialRampToValueAtTime(fq * 1.1, t + dur * 0.35); f.frequency.exponentialRampToValueAtTime(fq * 0.6, t + dur); const g = ctx.createGain(); g.gain.value = gn; ws.connect(f); f.connect(g); g.connect(mix); });
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; const lpG = ctx.createGain(); lpG.gain.value = 0.8; ws.connect(lp); lp.connect(lpG); lpG.connect(mix);
+        const envG = ctx.createGain(); envG.gain.setValueAtTime(0.0001, t); envG.gain.exponentialRampToValueAtTime(1, t + 0.06); envG.gain.setValueAtTime(0.75, t + 0.2); envG.gain.exponentialRampToValueAtTime(1, t + 0.5); envG.gain.setValueAtTime(1, t + dur * 0.7); envG.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        mix.connect(envG);
+        if (!SFX._verb) { const L = Math.floor(ctx.sampleRate * 3.6), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 2.5); } SFX._verb = ir; }
+        const verb = ctx.createConvolver(); verb.buffer = SFX._verb; const wet = ctx.createGain(); wet.gain.value = 0.35; const dry = ctx.createGain(); dry.gain.value = 0.9;
+        envG.connect(dry); dry.connect(o); envG.connect(verb); verb.connect(wet); wet.connect(o);
+        oscs.forEach(os => { os.start(t); os.stop(t + dur + 0.1); }); br.start(t, Math.random()); br.stop(t + dur + 0.1); jit.start(t, Math.random()); jit.stop(t + dur + 0.1);
+        // the jaws snapping shut as the snarl dies
+        [0, 0.16].forEach(dd => noise({ dur: 0.07, type: 'bandpass', f0: 1800, f1: 900, q: 2, vol: 0.5, pos, delay: dur * 0.86 + dd }));
+        setTimeout(() => { try { [envG, mix, verb, wet, dry].forEach(n => n.disconnect()); } catch (e) {} }, (dur + 4) * 1000);
+      },
       // A menacing grumble: a slow, threatening growl that builds from deep in the chest, swells into a snarl with a
       // sour tritone and a wet, ragged rattle in the throat, then sinks back down into a low hiss through the teeth.
       wail() {
@@ -10070,7 +10113,7 @@ window.__pgBoot = () => {
   // them, or right behind them; his shadow sweeps straight under their keel; something thuds against the hull; the sea
   // boils beside them; a roar rolls in from somewhere far off. Then he's gone again. He never actually bites.
   const STK_EV = ['none', 'peek', 'behind', 'pass', 'bump', 'boil', 'roar', 'leap', 'rise', 'eyes', 'circle', 'hush', 'finale', 'dodge'];
-  const finaleRoar = (x, z) => { SFX.beastRoar({ x, z, range: 20000 }, 1.7, 2.3); setTimeout(() => SFX.beastRoar({ x, z, range: 20000 }, 1.2, 2.0), 120); setTimeout(() => SFX.beastRoar({ x, z, range: 20000 }, 2.2, 2.6), 260); };   // three roars layered: the loudest thing on the sea
+  const finaleRoar = (x, z) => { SFX.furyRoar({ x, z, range: 20000 }, 1.15); SFX.beastRoar({ x, z, range: 20000 }, 0.9, 1.5); };   // a raging scream over his deep roar: the loudest, angriest thing on the sea
   const stalkLook = T => window.__mpPeerLook ? window.__mpPeerLook(T.peer) : 0;
   const STK_TOLD = { peek: 'The Elder Serpent lifts his head from the sea and stares at {n}...', behind: 'The Elder Serpent surfaces right behind {n}...', pass: 'The Elder Serpent sweeps beneath {n}\'s keel.', bump: 'The Elder Serpent nudges {n}\'s hull from below.', boil: 'The sea boils beside {n}.', roar: 'The Elder Serpent roars from the deep. {n} will have heard that.', leap: 'The Elder Serpent bursts from the sea in front of {n}!', eyes: 'The Elder Serpent watches {n} from just beneath the surface...', finale: 'The Elder Serpent rears up over {n} and ROARS!', dodge: 'The Elder Serpent charges {n}... and veers away at the last moment.', circle: 'The Elder Serpent circles {n}, closer and closer...', rise: 'The Elder Serpent\'s body heaves up out of the sea right beside {n}...' };
   function stalkFire(kind, x, z) { const S = ELD.stk; S.ev++; S.evK = STK_EV.indexOf(kind); S.evX = x; S.evZ = z; if (STK_TOLD[kind] && ELD.pick) etoast(STK_TOLD[kind].replace('{n}', elderName(ELD.pick))); }   // the horn's owner hears how the haunting goes
