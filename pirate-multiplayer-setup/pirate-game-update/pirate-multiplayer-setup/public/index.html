@@ -1455,7 +1455,7 @@
         const aL = q % TAU, aR = (q + Math.PI) % TAU, rec = a => Math.max(0, Math.sin(a - Math.PI)) ;   // recovery: the over-water half of the circle
         const breathe = Math.sin(q * 0.5);   // head turns to breathe every other stroke, to alternating sides
         const cr = {
-          shL: Math.PI - aL, shR: Math.PI - aR,
+          shL: aL - Math.PI, shR: aR - Math.PI,   // overhead -> reach forward -> pull down past the hip -> back and up over the water
           shLz: -0.12 - 0.5 * rec(aL), shRz: 0.12 + 0.5 * rec(aR),
           elL: -0.15 - 1.3 * rec(aL), elR: -0.15 - 1.3 * rec(aR),
           hipL: Math.sin(ch.phase * 6) * 0.28, hipR: -Math.sin(ch.phase * 6) * 0.28,
