@@ -10069,14 +10069,14 @@ window.__pgBoot = () => {
   // always that). Every so often he does something to fray their nerves: his head and eyes break the surface ahead of
   // them, or right behind them; his shadow sweeps straight under their keel; something thuds against the hull; the sea
   // boils beside them; a roar rolls in from somewhere far off. Then he's gone again. He never actually bites.
-  const STK_EV = ['none', 'peek', 'behind', 'pass', 'bump', 'boil', 'roar', 'leap', 'rise'];
+  const STK_EV = ['none', 'peek', 'behind', 'pass', 'bump', 'boil', 'roar', 'leap', 'rise', 'eyes', 'circle', 'hush'];
   const stalkLook = T => window.__mpPeerLook ? window.__mpPeerLook(T.peer) : 0;
-  const STK_TOLD = { peek: 'The Elder Serpent lifts his head from the sea and stares at {n}...', behind: 'The Elder Serpent surfaces right behind {n}...', pass: 'The Elder Serpent sweeps beneath {n}\'s keel.', bump: 'The Elder Serpent nudges {n}\'s hull from below.', boil: 'The sea boils beside {n}.', roar: 'The Elder Serpent roars from the deep. {n} will have heard that.', leap: 'The Elder Serpent bursts from the sea in front of {n}!', rise: 'The Elder Serpent\'s body heaves up out of the sea right beside {n}...' };
+  const STK_TOLD = { peek: 'The Elder Serpent lifts his head from the sea and stares at {n}...', behind: 'The Elder Serpent surfaces right behind {n}...', pass: 'The Elder Serpent sweeps beneath {n}\'s keel.', bump: 'The Elder Serpent nudges {n}\'s hull from below.', boil: 'The sea boils beside {n}.', roar: 'The Elder Serpent roars from the deep. {n} will have heard that.', leap: 'The Elder Serpent bursts from the sea in front of {n}!', eyes: 'The Elder Serpent watches {n} from just beneath the surface...', circle: 'The Elder Serpent circles {n}, closer and closer...', rise: 'The Elder Serpent\'s body heaves up out of the sea right beside {n}...' };
   function stalkFire(kind, x, z) { const S = ELD.stk; S.ev++; S.evK = STK_EV.indexOf(kind); S.evX = x; S.evZ = z; if (STK_TOLD[kind] && ELD.pick) etoast(STK_TOLD[kind].replace('{n}', elderName(ELD.pick))); }   // the horn's owner hears how the haunting goes
   function startStalk(T) {
     if (RIDE.on) elderDismount();
     ELD.mode = 'stalk'; ELD.pick = T; ELD.st = 'swim'; ELD.tg = null; ELD.roared = true;
-    ELD.stk = { ph: 'dive', t: 0, sil: 0, silT: 0, ev: ELD.stk ? ELD.stk.ev : 0, evK: 0, evX: 0, evZ: 0, next: 8, r: 550, rT: 550, side: Math.random() < 0.5 ? 1 : -1, hideT: 0, step: 0, last: '' };
+    ELD.stk = { tension: 0, hush: false, ph: 'dive', t: 0, sil: 0, silT: 0, ev: ELD.stk ? ELD.stk.ev : 0, evK: 0, evX: 0, evZ: 0, next: 8, r: 550, rT: 550, side: Math.random() < 0.5 ? 1 : -1, hideT: 0, step: 0, last: '' };
     ELD.stkDive = true; elderRoar(1.4);
     etoast(`The Elder Serpent lets out a terrible roar... and dives. He has gone to stalk ${elderName(T)}.`);
   }
@@ -10087,6 +10087,9 @@ window.__pgBoot = () => {
     const look = stalkLook(T), dE = Math.hypot(e.x - ELD.x, e.z - ELD.z);
     const tpTo = (x, z, h) => { ELD.x = x; ELD.z = z; ELD.h = h; ELD.speed = 0; ELD.turnV = 0; elderResetTrail(ELD.mesh, x, z, h); };
     const faceV = (x, z) => Math.atan2(e.x - x, e.z - z);
+    S.tension = Math.min(1, S.tension + dt / 180);   // the longer he stalks them, the closer he comes and the less he rests
+    S.hush = S.step === 0 && ['peek', 'behind', 'pass', 'bump', 'leap', 'rise'].includes(S.ph) || (S.hushT > 0);   // the sea falls dead silent just before he shows himself
+    if (S.hushT > 0) S.hushT -= dt;
     const fadeThen = (place) => { S.silT = 0; ELD.speed *= Math.max(0, 1 - dt); elderMove(dt); if (S.t > 1.3) { if (!place()) { S.ph = 'lurk'; S.t = 0; } } };   // vanish into the deep, then turn up somewhere else
     S.sil += (S.silT - S.sil) * Math.min(1, dt * 1.6);
     const NN = ELD.mesh ? ELD.mesh.N : 84;
@@ -10103,7 +10106,7 @@ window.__pgBoot = () => {
     }
     if (S.ph === 'lurk') {   // circling far beneath them, slow and patient
       ELD.emerge = Math.max(0, ELD.emerge - dt / 1.5);
-      if (Math.random() < dt * 0.1) S.rT = 380 + Math.random() * 450;
+      if (Math.random() < dt * 0.1) S.rT = (380 + Math.random() * 450) * (1 - 0.55 * S.tension);
       S.r += (S.rT - S.r) * Math.min(1, dt * 0.2);
       const a = Math.atan2(ELD.x - e.x, ELD.z - e.z) + S.side * 0.3;
       elderSteer(e.x + Math.sin(a) * S.r, e.z + Math.cos(a) * S.r, 95, dt, 1.2);
@@ -10111,13 +10114,15 @@ window.__pgBoot = () => {
       if (dE > 1800) { if (S.sil < 0.05) { const q = deepSpotNear(e.x, e.z, 450, 750, K.probe * 0.8); if (q) tpTo(q.x, q.z, Math.atan2(q.x - e.x, q.z - e.z) + S.side * Math.PI / 2); } else S.hideT = Math.max(S.hideT, 1.5); }   // they've sailed off: he catches up unseen
       S.next -= dt;
       if (S.next <= 0) {
-        S.next = 9 + Math.random() * 12;
-        const W8 = [['peek', 3], ['behind', 2.2], ['pass', 2], ['bump', 1.4], ['boil', 1.4], ['roar', 0.8], ['vanish', 1.6], ['leap', 2], ['rise', 1.8]].filter(w => w[0] !== S.last);
+        const T2 = S.tension; S.next = (9 + Math.random() * 12) * (1 - 0.6 * T2);
+        const W8 = [['peek', 3], ['behind', 2.2 + 2 * T2], ['pass', 2], ['bump', 1.4 + 1.5 * T2], ['boil', 1.4], ['roar', 0.8], ['vanish', 0.4 + 1.6 * (1 - T2)], ['leap', 2], ['rise', 1.8 + 1.5 * T2], ['eyes', 2.2], ['hush', 1.2], ['circle', T2 > 0.35 ? 2.5 * T2 : 0]].filter(w => w[0] !== S.last && w[1] > 0);
         let r = Math.random() * W8.reduce((a, w) => a + w[1], 0), k = W8[0][0]; for (const w of W8) { r -= w[1]; if (r <= 0) { k = w[0]; break; } }
         S.last = k;
         if (k === 'boil') { const q = deepSpotNear(e.x, e.z, 45, 130, 15) || e; stalkFire('boil', q.x, q.z); }
         else if (k === 'roar') { stalkFire('roar', ELD.x, ELD.z); elderRoar(1.2); S.hideT = 12 + Math.random() * 8; }
         else if (k === 'vanish') S.hideT = 10 + Math.random() * 12;
+        else if (k === 'eyes') { const q = deepSpotNear(e.x, e.z, 70, 160, 20); if (q) stalkFire('eyes', q.x, q.z); }   // two red eyes, glowing just under the surface
+        else if (k === 'hush') { S.hushT = 4 + Math.random() * 3; S.hideT = Math.max(S.hideT, S.hushT); }   // dead silence... and then nothing at all
         else { S.ph = k; S.t = 0; S.step = 0; S.passed = false; }
       }
       return;
@@ -10135,6 +10140,14 @@ window.__pgBoot = () => {
       ELD.emerge = S.t < up ? PE * S.t / up : S.t < up + hold ? PE : Math.max(0, PE * (1 - (S.t - up - hold) / 1.4));
       S.silT = 0.85;
       if (S.t > up + hold + 1.6) { S.ph = 'lurk'; S.t = 0; S.hideT = 4 + Math.random() * 4; }
+      return;
+    }
+    if (S.ph === 'circle') {   // his shadow wheels round and round them, tight and fast, the sea humming
+      if (S.step === 0) { S.step = 1; S.t = 0; stalkFire('circle', e.x, e.z); }
+      ELD.emerge = 0; S.silT = 1;
+      const a = Math.atan2(ELD.x - e.x, ELD.z - e.z) + S.side * 0.5, R = 150 - 30 * Math.min(1, S.t / 10);
+      elderSteer(e.x + Math.sin(a) * R, e.z + Math.cos(a) * R, 230, dt, 1.0);
+      if (S.t > 11) { S.ph = 'lurk'; S.t = 0; S.hideT = 6 + Math.random() * 4; }
       return;
     }
     if (S.ph === 'leap') {   // he bursts out of the sea some way ahead of them, arcs through the air, and plunges back in
@@ -10362,7 +10375,7 @@ window.__pgBoot = () => {
     elOpts.push({ label: 'Send him back to the deep', act: dismissElder });   // kept up top so a long target list can't push it off the menu
     if (ELD.K.elder) for (const q of (window.__mpPeople ? window.__mpPeople() : [])) {   // stalk a captain: dive, follow unseen, and haunt them
       const cur = ELD.mode === 'stalk' && ELD.pick && ELD.pick.peer === q.peer;
-      elOpts.push({ label: `Stalk ${q.name}`, sub: cur ? 'stalking them now' : 'he dives, follows them unseen, and never lets them rest', on: cur, act: () => startStalk({ kind: 'person', peer: q.peer }) });
+      elOpts.push({ label: `Stalk ${q.name}`, sub: cur ? `stalking them now · their dread ${Math.round(20 + 80 * ELD.stk.tension)}%` : 'he dives, follows them unseen, and never lets them rest', on: cur, act: () => startStalk({ kind: 'person', peer: q.peer }) });
     }
     const tg = [];
     if (raiders.some(r => r.state === 'patrol' || r.state === 'attack')) tg.push({ T: { kind: 'nearestRaider' }, label: 'Attack the nearest Blackwater raider' });
@@ -10452,7 +10465,7 @@ window.__pgBoot = () => {
       const cl = typeof el[13] === 'number' && el[13] >= 0 ? el[13] : -1;
       if (cl >= 0) { E.cl = E.clFrom === el[13] ? (E.cl ?? cl) + dt : cl; E.clFrom = el[13]; if (!(E.lastCl >= 0)) elderRoar(1.3, E.x, E.z, K); } else { E.cl = -1; E.clFrom = null; }
       E.lastCl = cl;
-      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl, devour: el[14] | 0, clash: E.co.clash, sil: typeof el[16] === 'number' ? el[16] : 0, calm: el[24] === 1, stkLift: el[24] === 1 ? el[22] : undefined, stkPitch: el[23] || 0, win: el[17] && typeof el[25] === 'number' ? [el[25], el[26]] : undefined });
+      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl, devour: el[14] | 0, clash: E.co.clash, sil: typeof el[16] === 'number' ? el[16] : 0, calm: el[24] === 1, stkLift: el[24] === 1 ? el[22] : undefined, stkPitch: el[23] || 0, win: el[17] && el[11] !== 1 && typeof el[25] === 'number' ? [el[25], el[26]] : undefined });
       if (E.ct >= 0) CLASH_DRAW.push({ m: E.m, K, t: E.ct, x: E.x, z: E.z });
       elderSil(E.m, typeof el[16] === 'number' ? el[16] : 0, t);
     }
@@ -10461,8 +10474,8 @@ window.__pgBoot = () => {
   // ---- being stalked: the hunted captain's side ----
   // A dread hum that swells as he nears, a heartbeat that quickens, the edges of yer sight darkening, whispers of
   // things half-seen, and each of his scares played out right in front of (or behind) ye.
-  const STV = { on: false, beatT: 0, whT: 25, lastEv: null, dread: 0, vig: null, boil: null, toldPass: false };
-  const STV_LINES = ['Something vast is moving beneath the waves...', 'The water has gone very still.', 'Ye feel eyes on ye.', 'The gulls have stopped crying.', 'Was that... a shadow under the hull?', 'The crew have gone quiet. None of them will look over the side.', 'A cold current brushes past, far too large to be a fish.', 'Somewhere below, something is breathing.', 'The compass needle trembles.'];
+  const STV = { on: false, beatT: 0, whT: 25, lastEv: null, dread: 0, vig: null, boil: null, toldPass: false, shake: 0, eyes: null, hum: 0 };
+  const STV_LINES = ['Something vast is moving beneath the waves...', 'The water has gone very still.', 'Ye feel eyes on ye.', 'The gulls have stopped crying.', 'Was that... a shadow under the hull?', 'The crew have gone quiet. None of them will look over the side.', 'A cold current brushes past, far too large to be a fish.', 'Somewhere below, something is breathing.', 'The compass needle trembles.', 'The sea is the wrong colour here. Darker.', 'Bubbles rise beside the hull, then stop.', 'A sailor swears he saw an eye the size of a cartwheel.', 'Ye could swear the ship just... lifted, for a moment.', 'Whatever it is, it is patient.', 'The wind has died. Everything has gone quiet.'];
   function stalkVignette(v) {
     if (!STV.vig) { if (v <= 0.005) return; STV.vig = document.createElement('div'); STV.vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;opacity:0;background:radial-gradient(ellipse at center, rgba(0,0,0,0) 38%, rgba(8,0,2,.75) 80%, rgba(0,0,0,.95) 100%)'; document.body.appendChild(STV.vig); }
     STV.vig.style.opacity = Math.max(0, Math.min(1, v)).toFixed(3);
@@ -10471,32 +10484,52 @@ window.__pgBoot = () => {
     const mine = ship && !ship.sinking && (onShip || sailing || inInterior);
     if (k === 'peek') { wSplash(x, 3, z, true); setTimeout(() => SFX.beastGrumble({ x, z, range: 1500 }, 0.8, 1.2), 1500); }
     else if (k === 'behind') { wSplash(x, 2, z, true); setTimeout(() => { SFX.beastGrumble({ x, z, range: 900 }, 0.6, 1.6); SFX.heartbeat(); }, 700); }
-    else if (k === 'pass') { if (mine) { ship.krJolt = 1.5; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.1; } SFX.beastGrumble({ x, z, range: 1200 }, 1.2, 0.9); if (!STV.toldPass || Math.random() < 0.4) { STV.toldPass = true; toast('A vast shadow sweeps beneath yer keel...'); } }
-    else if (k === 'bump') { if (mine) { ship.krJolt = 2.2; ship.krRx = (ship.krRx || 0) + 0.06; SFX.crash({ x: ship.x, z: ship.z }); } else SFX.splash({ x, z }, true); SFX.door(); toast('THUD. Something struck the hull from below.'); }
+    else if (k === 'pass') { STV.shake = Math.max(STV.shake, 0.6); if (mine) { ship.krJolt = 1.5; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.1; } SFX.beastGrumble({ x, z, range: 1200 }, 1.2, 0.9); if (!STV.toldPass || Math.random() < 0.4) { STV.toldPass = true; toast('A vast shadow sweeps beneath yer keel...'); } }
+    else if (k === 'bump') { STV.shake = Math.max(STV.shake, 1.1); if (mine) { ship.krJolt = 2.2; ship.krRx = (ship.krRx || 0) + 0.06; SFX.crash({ x: ship.x, z: ship.z }); } else SFX.splash({ x, z }, true); SFX.door(); toast('THUD. Something struck the hull from below.'); }
     else if (k === 'boil') { STV.boil = { x, z, t: 3.5 }; SFX.gurgle(); }
     else if (k === 'roar') elderRoar(1.3, x, z, ELD_KINDS.elder);
     else if (k === 'leap') {   // a great burst of white water, a roar... and the plunge
       for (let i = 0; i < 6; i++) wSplash(x + (Math.random() - 0.5) * 40, 4, z + (Math.random() - 0.5) * 40, true);
       SFX.splash({ x, z }, true); setTimeout(() => elderRoar(1.0, x, z, ELD_KINDS.elder), 300);
-      STV.plunge = 3.1;
+      STV.plunge = 3.1; STV.shake = Math.max(STV.shake, 0.3);
     }
-    else if (k === 'rise') { STV.heave = { x, z, t: 2.8 }; SFX.beastGrumble({ x, z, range: 900 }, 1.1, 0.8); if (mine) { ship.krJolt = 1.2; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.08; } }
+    else if (k === 'eyes') stalkEyes(x, z);
+    else if (k === 'circle') { STV.hum = 11; SFX.beastGrumble({ x, z, range: 600 }, 1.3, 0.7); toast('Something is circling the ship...'); }
+    else if (k === 'rise') { STV.shake = Math.max(STV.shake, 0.5); STV.heave = { x, z, t: 2.8 }; SFX.beastGrumble({ x, z, range: 900 }, 1.1, 0.8); if (mine) { ship.krJolt = 1.2; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.08; } }
+  }
+  // two great red eyes glowing up through the water beside ye... then they blink out
+  function stalkEyes(x, z) {
+    if (!STV.eyes) { STV.eyes = []; for (let i = 0; i < 2; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2008, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0 })); sp.renderOrder = 5; scene.add(sp); STV.eyes.push(sp); } }
+    const me = ship && !ship.sinking && (onShip || sailing || inInterior) ? ship : P.pos, a = Math.atan2(me.x - x, me.z - z), px = Math.cos(a), pz = -Math.sin(a);
+    STV.eyes.forEach((sp, i) => { const sd = i ? 1 : -1; sp.userData = { x: x + px * sd * 9, z: z + pz * sd * 9 }; });
+    STV.eyesT = 0; SFX.beastGrumble({ x, z, range: 500 }, 0.5, 1.8);
   }
   function stalkVictim(s, dt, t) {
     if (!s) {
-      if (STV.on) { STV.on = false; if (!DUN.on) SFX.dunDrone(0); setTimeout(() => toast('The sea feels lighter, somehow. Whatever was following ye has gone.'), 2500); }
+      if (STV.on) { STV.on = false; STV.shake = 0; if (mini) mini.style.opacity = '1'; if (STV.eyes) STV.eyes.forEach(sp => sp.material.opacity = 0); if (!DUN.on) SFX.dunDrone(0); setTimeout(() => toast('The sea feels lighter, somehow. Whatever was following ye has gone.'), 2500); }
       if (STV.dread > 0.002) { STV.dread = Math.max(0, STV.dread - dt * 0.4); stalkVignette(STV.dread * 0.6); }
       return;
     }
     if (!STV.on) { STV.on = true; STV.lastEv = s.el[18]; STV.whT = 16; STV.toldPass = false; setTimeout(() => toast('A roar rolls across the sea from somewhere far off... then silence. Ye have the feeling something is following ye.'), 2500); }
     const me = ship && !ship.sinking && (onShip || sailing || inInterior) ? ship : P.pos, E = s.p.elder;
     const d = E ? Math.hypot(E.x - me.x, E.z - me.z) : 2000, near = Math.max(0, 1 - d / 1500), sil = s.el[16] || 0;
-    const want = 0.2 + near * 0.65 + (sil > 0.3 ? 0.15 : 0);
+    const tension = s.el[28] || 0, hush = s.el[27] === 1;
+    const want = Math.min(1, 0.2 + near * 0.6 + (sil > 0.3 ? 0.15 : 0) + tension * 0.2 + (STV.hum > 0 ? 0.25 : 0));
     STV.dread += (want - STV.dread) * Math.min(1, dt * 0.5);
-    if (!DUN.on) SFX.dunDrone(STV.dread * 0.6);
-    STV.beatT -= dt; if (STV.beatT <= 0) { STV.beatT = 1.8 - STV.dread * 1.15; if (STV.dread > 0.3) SFX.heartbeat(); }
+    // just before he shows himself, everything goes quiet: no hum, no heartbeat... then the scare
+    STV.quiet = (STV.quiet || 0) + ((hush ? 1 : 0) - (STV.quiet || 0)) * Math.min(1, dt * (hush ? 3 : 1.2));
+    if (!DUN.on) SFX.dunDrone(STV.dread * 0.6 * (1 - STV.quiet) + (STV.hum > 0 ? 0.25 : 0));
+    if (STV.hum > 0) STV.hum -= dt;
+    STV.beatT -= dt; if (STV.beatT <= 0) { STV.beatT = 1.8 - STV.dread * 1.15; if (STV.dread > 0.3 && STV.quiet < 0.5) SFX.heartbeat(); }
+    // the minimap fizzles when he's close, as if something were interfering with it
+    if (mini) mini.style.opacity = STV.dread > 0.55 && Math.random() < dt * 10 * (STV.dread - 0.5) ? (0.15 + Math.random() * 0.4).toFixed(2) : '1';
+    // the eyes: fade in, stare, blink out
+    if (STV.eyes && STV.eyesT !== undefined && STV.eyesT >= 0) { STV.eyesT += dt; const u = STV.eyesT, op = u < 0.8 ? u / 0.8 : u < 3.2 ? 1 : Math.max(0, 1 - (u - 3.2) / 0.25), bl = u > 2.0 && u < 2.15 ? 0.1 : 1;
+      STV.eyes.forEach(sp => { const d = sp.userData; sp.position.set(d.x, waveHeight(d.x, d.z, t) + 0.4, d.z); sp.scale.set(10, 6 * bl, 1); sp.material.opacity = op * 0.9; });
+      if (u > 3.5) { STV.eyesT = -1; STV.eyes.forEach(sp => sp.material.opacity = 0); } }
+    if (STV.shake > 0) STV.shake = Math.max(0, STV.shake - dt * 0.9);
     stalkVignette(STV.dread * 0.6 * (0.9 + 0.1 * Math.sin(t * 6.5)));
-    STV.whT -= dt; if (STV.whT <= 0) { STV.whT = 28 + Math.random() * 32; toast(STV_LINES[Math.floor(Math.random() * STV_LINES.length)]); }
+    STV.whT -= dt; if (STV.whT <= 0) { STV.whT = (28 + Math.random() * 32) * (1 - 0.5 * tension); toast(STV_LINES[Math.floor(Math.random() * STV_LINES.length)]); }
     if (s.el[18] !== STV.lastEv) { STV.lastEv = s.el[18]; stalkEvent(STK_EV[s.el[19] | 0], s.el[20], s.el[21]); }
     if (STV.plunge > 0) { STV.plunge -= dt; if (STV.plunge <= 0 && s.p.elder) { const E2 = s.p.elder; for (let i = 0; i < 8; i++) wSplash(E2.x + (Math.random() - 0.5) * 50, 5, E2.z + (Math.random() - 0.5) * 50, true); SFX.splash({ x: E2.x, z: E2.z }, true); } }
     if (STV.heave) { STV.heave.t -= dt; const E2 = s.p.elder; if (E2 && Math.random() < dt * 16) { const k2 = Math.floor(Math.random() * E2.m.N * 0.5), sp = E2.m.segs[k2].position; wSplash(sp.x + (Math.random() - 0.5) * 30, 2, sp.z + (Math.random() - 0.5) * 30, Math.random() < 0.4); } if (STV.heave.t <= 0) STV.heave = null; }   // water streaming off him as he rises
@@ -10991,7 +11024,7 @@ window.__pgBoot = () => {
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
-          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [] : (ELD.stk.win || [-1, -1]))] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
+          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [-1, -1] : (ELD.stk.win || [-1, -1])), ELD.stk.hush ? 1 : 0, r(ELD.stk.tension)] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
         else if (GUEST.on && GUEST.p) st.ob = { o: GUEST.p.peer, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };   // ob: aboard a ship (whose, and where on deck)
@@ -11263,6 +11296,7 @@ window.__pgBoot = () => {
       camTarget.y + Math.sin(pitch) * dist,
       camTarget.z + Math.cos(yaw) * Math.cos(pitch) * dist
     );
+    if (STV.shake > 0 && !DUN.on) { const k = STV.shake * STV.shake * 0.9; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; }   // something huge just moved under ye
     if (DUN.on) {   // stay inside whichever hall ye're in
       const lx = P.pos.x - DUN.O.x, lz = P.pos.z - DUN.O.z, r = DUN.rects.find(([x0, x1, z0, z1]) => lx >= x0 - 0.5 && lx <= x1 + 0.5 && lz >= z0 - 0.5 && lz <= z1 + 0.5) || DUN.rects[0];
       camera.position.x = DUN.O.x + Math.max(r[0] + 0.4, Math.min(r[1] - 0.4, camera.position.x - DUN.O.x));
