@@ -3554,6 +3554,12 @@
     SFX.anvil(); toast(`Hal's shipwrights fit ${U.name.toLowerCase()} (level ${L + 1}): ${U.what(L + 1)}.`);
     openUpgrades();
   }
+  // the ships ye've bought (the sloop is always free, and whatever ye sailed before this change counts as bought)
+  function ownedShips() {
+    STATE.ownedShips = Array.isArray(STATE.ownedShips) ? STATE.ownedShips : [];
+    for (const k of ['sloop', STATE.shipKey]) if (k && !STATE.ownedShips.includes(k)) STATE.ownedShips.push(k);
+    return STATE.ownedShips;
+  }
   function chooseShip(i) {
     if (!talk || !talk.options) return;
     if (talk.choice) { pickChoice(i); return; }
@@ -3563,19 +3569,33 @@
     if (opt[0] === 'paint') { closeDialog(); openUI('custom', 'ship'); return; }
     if (opt[0] === 'upgrade') { closeDialog(); if (!ship) { toast("Ye'll need a ship before Hal can upgrade her."); return; } openUpgrades(); return; }
     talk.final = true;
+    // ships are bought once: any ship ye own can be brought round again for free
+    const own = ownedShips(), key = opt[0], name = opt[1];
+    if (own.includes(key)) {
+      if (ship && !ship.sinking && STATE.shipKey === key) {
+        if (Math.hypot(ship.x - DOCK_BASE.x, ship.z - DOCK_BASE.y) < 300) { say(talk.npc.def.name, `The ${name} is already yer ship, captain, and she's right there at the dock. Fair winds!`); return; }
+        const frac = ship.hp / ship.maxHp; spawnShip(key); ship.hp = Math.max(1, ship.maxHp * frac);   // fetched back to the dock, damage and all
+        say(talk.npc.def.name, `My lads will fetch the ${name} back to the dock for ye, captain. She's tied up at the end o' the pier.`); return;
+      }
+      const swapped = spawnShip(key);
+      say(talk.npc.def.name, (swapped ? 'Yer other ship stays moored in the harbour; ye can switch back any time, no charge. ' : '') + `Here's yer ${name}, tied up at the end o' the dock. Walk up to her and press E to climb aboard.`);
+      return;
+    }
     if (STATE.gold < opt[3]) { say(talk.npc.def.name, `The ${opt[1]} costs ${opt[3].toLocaleString()} gold, captain, and ye've only got ${STATE.gold.toLocaleString()}. Odd jobs around town and floatin' cargo out at sea pay well. Come back when yer purse is heavier.`); return; }
     if (opt[3]) addGold(-opt[3], `Bought a ${opt[1]}`);
+    own.push(key); save();
     const replaced = spawnShip(opt[0]);
-    say(talk.npc.def.name, (replaced ? "I've sent yer old ship off to the boneyard. " : '') + `There she be! Yer ${opt[1]} is tied up at the end o' the dock. ${opt[0] === 'sloop' ? '' : 'She comes with a full crew, too. '}Walk up to her and press E to climb aboard, then find the wheel at the back to take her out.`);
+    say(talk.npc.def.name, (replaced ? "Yer old ship stays moored in the harbour; she's still yers to switch back to, free. " : '') + `There she be! Yer ${opt[1]} is tied up at the end o' the dock. ${opt[0] === 'sloop' ? '' : 'She comes with a full crew, too. '}Walk up to her and press E to climb aboard, then find the wheel at the back to take her out.`);
   }
   function openShop(n) {
     talk = { npc: n, options: true };
-    say(n.def.name, (ship ? "Back again, captain? I can swap yer ship, or give her a fresh coat o' paint." : "Ahoy, captain! Harbormaster Hal at yer service. Which ship will ye be takin' out today?") + ` (You have ${STATE.gold} gold.)`);
+    say(n.def.name, (ship ? "Back again, captain? I can bring round any ship ye own, sell ye a new one, upgrade her, or give her a fresh coat o' paint." : "Ahoy, captain! Harbormaster Hal at yer service. Which ship will ye be takin' out today?") + ` (You have ${STATE.gold.toLocaleString()} gold.)`);
     dlgHint.style.display = 'none';
     dlgOpts.innerHTML = '';
     SHOP.forEach((o, i) => {
       const b = document.createElement('button');
-      const price = o[0] && o[0] !== 'paint' && o[0] !== 'upgrade' ? ` <span>· ${o[3] ? o[3].toLocaleString() + ' gold' : 'free'}</span>` : '';
+      const isShip = o[0] && o[0] !== 'paint' && o[0] !== 'upgrade', mine = isShip && ownedShips().includes(o[0]);
+      const price = isShip ? ` <span>· ${mine ? (ship && !ship.sinking && STATE.shipKey === o[0] ? 'owned · sailing her now' : 'owned · switch for free') : o[3] ? o[3].toLocaleString() + ' gold' : 'free'}</span>` : '';
       b.innerHTML = `<b>${i + 1}</b> ${o[1]}${o[2] ? ` <span>— ${o[2]}</span>` : ''}${price}`;
       b.addEventListener('click', e => { e.stopPropagation(); chooseShip(i); });
       dlgOpts.appendChild(b);
