@@ -8128,7 +8128,7 @@
   // where a held ship sits: across his jaws
   const elderJaw = m => { m.head.updateMatrixWorld(); return m.head.localToWorld(new THREE.Vector3(0, -0.55, 2.6)); };
   // his roar: a full-throated one, heard far across the sea (shorter for a strike's hiss); a common serpent's is smaller and higher
-  const elderRoar = (durMul = 1, x = ELD.x, z = ELD.z, K = ELD.K) => SFX.beastRoar({ x, z, range: K.elder ? 4500 : 1500 }, K.elder ? 1 : 0.4, durMul);
+  const elderRoar = (durMul = 1, x = ELD.x, z = ELD.z, K = ELD.K) => SFX.beastRoar({ x, z, range: K.elder ? 16000 : 3500 }, K.elder ? 1 : 0.4, durMul);
   const elderLift = sk => sk < 0.9 ? sk / 0.9 : sk < 1.15 ? 1 : Math.max(0, 1 - (sk - 1.15) / 0.6);
   // steer for a point, feeling ahead for land: he's too big for the shallows
   // Pathfinding: when land or rocks stand between him and where he's going, he follows a route from the same
