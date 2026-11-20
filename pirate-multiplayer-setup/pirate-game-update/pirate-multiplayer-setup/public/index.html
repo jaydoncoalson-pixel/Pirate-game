@@ -7634,7 +7634,7 @@ window.__pgBoot = () => {
   // down a stair into torchlit halls cut from the bedrock: an entry chamber, a long passage lined with bones, the
   // treasure vault (heaps of gold, gems, crowns, a dozen chests), and at the bottom a vast dark cavern where the
   // Blackwater Beast paces in an enormous iron cage, its red eyes burning in the dark. Its own scene, far from the map.
-  const DUN = { on: false, scene: null, O: new THREE.Vector3(20000, 0, 20000), rects: [], cols: [], chests: [], beast: null, savedDist: 13, found: false, lungeT: 0, gateZ: -150, penZ: -188 };
+  const DUN = { on: false, scene: null, O: new THREE.Vector3(20000, 0, 20000), rects: [], cols: [], chests: [], beast: null, savedDist: 13, found: false, lungeT: 0, gateZ: -150, penZ: -262 };
   const dunDoor = () => { const S = SITES.find(q => q.kind === 'fort' && q.i === 4), I = ISLANDS[4]; if (!S) return null; const th = ISLAND.clone().sub(I.c).normalize(); return { x: S.x + th.x * 55, z: S.z + th.y * 55, f: Math.atan2(th.x, th.y) }; };
   function nearDunDoor() { if (DUN.on || onShip || sailing || inInterior || STOM.on || RIDE.on) return false; const d = dunDoor(); return d && Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 6; }
   function dunBuild() {
@@ -7645,9 +7645,9 @@ window.__pgBoot = () => {
     const gold = new THREE.MeshPhongMaterial({ color: 0xe8b830, specular: 0xfff0a0, shininess: 90, emissive: 0x3a2400 });
     const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
     // rooms: [x0, x1, z0, z1, ceiling]; openings are where they meet (all along the middle line, x -3..3)
-    const R = DUN.rects = [[-7, 7, -12, 2, 7], [-3, 3, -52, -12, 5], [-18, 18, -82, -52, 9], [-3, 3, -110, -82, 5], [-40, 40, -215, -110, 32]];
+    const R = DUN.rects = [[-7, 7, -12, 2, 7], [-3, 3, -52, -12, 5], [-18, 18, -82, -52, 9], [-3, 3, -110, -82, 5], [-50, 50, -150, -110, 64, 'gate']];
     const openAt = (z, x) => R.some(r => Math.abs(r[2] - z) < 0.01 || Math.abs(r[3] - z) < 0.01) && Math.abs(x) < 3;
-    for (const [x0, x1, z0, z1, H] of R) {
+    for (const [x0, x1, z0, z1, H, tag] of R) {
       const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.4, d), floorM), cx, -0.2, cz);
       add(new THREE.Mesh(new THREE.BoxGeometry(w + 1, 1, d + 1), rockD), cx, H + 0.5, cz);
@@ -7655,6 +7655,7 @@ window.__pgBoot = () => {
       for (const z of [z0, z1]) {   // end walls, with a doorway where the next room carries on
         const isOpen = R.some(r => r !== R.find(q => q[2] === z0 && q[3] === z1) && (Math.abs(r[2] - z) < 0.01 || Math.abs(r[3] - z) < 0.01));
         const zz = z === z0 ? z0 - 0.5 : z1 + 0.5;
+        if (tag === 'gate' && z === z0) continue;   // the beast's gate is built separately
         if (!isOpen) { add(new THREE.Mesh(new THREE.BoxGeometry(w + 2, H, 1), rock), cx, H / 2, zz); continue; }
         if (w > 6.5) { const sw = (w - 6) / 2; add(new THREE.Mesh(new THREE.BoxGeometry(sw + 1, H, 1), rock), x0 + sw / 2 - 0.5, H / 2, zz); add(new THREE.Mesh(new THREE.BoxGeometry(sw + 1, H, 1), rock), x1 - sw / 2 + 0.5, H / 2, zz); }
         if (H > 4.6) add(new THREE.Mesh(new THREE.BoxGeometry(6, H - 4.6, 1), rock), cx, 4.6 + (H - 4.6) / 2, zz);
@@ -7708,33 +7709,46 @@ window.__pgBoot = () => {
     // ---- the beast's cavern ----
     { const GZ = DUN.gateZ, kx = 0, kz = DUN.penZ;
       // stalactites hanging from the high roof, rubble on the floor (none in the beast's pen: it has crushed it all flat)
-      const stal = []; for (let k = 0; k < 110; k++) { const x = -38 + Math.random() * 76, z = -213 + Math.random() * 101; const l = 3 + Math.random() * 9; stal.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 32 - l / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(0.6 + Math.random(), l, 0.6 + Math.random()))); }
+      const stal = []; for (let k = 0; k < 70; k++) { const x = -48 + Math.random() * 96, z = -148 + Math.random() * 37; const l = 4 + Math.random() * 14; stal.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 64 - l / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(0.6 + Math.random(), l, 0.6 + Math.random()))); }
       instanced(new THREE.ConeGeometry(1, 1, 6), rock, stal, root);
-      for (let k = 0; k < 30; k++) { const x = -38 + Math.random() * 76, z = -146 + Math.random() * 34; if (Math.abs(x) < 5) continue; const s0 = 0.4 + Math.random() * 1.6; const rb = new THREE.Mesh(new THREE.DodecahedronGeometry(s0, 0), rockD); add(rb, x, s0 * 0.4, z); if (s0 > 1) DUN.cols.push({ x, z, r: s0 * 0.9 }); }
-      for (let k = 0; k < 30; k++) { const b = new THREE.Mesh(k % 3 ? new THREE.CylinderGeometry(0.15, 0.2, 2.2, 5) : new THREE.SphereGeometry(0.5, 6, 5), boneM); b.rotation.set(Math.PI / 2, Math.random() * 6, 0); add(b, -36 + Math.random() * 72, 0.2, -212 + Math.random() * 58); }   // the remains of its meals
+      for (let k = 0; k < 30; k++) { const x = -48 + Math.random() * 96, z = -146 + Math.random() * 34; if (Math.abs(x) < 5) continue; const s0 = 0.4 + Math.random() * 1.6; const rb = new THREE.Mesh(new THREE.DodecahedronGeometry(s0, 0), rockD); add(rb, x, s0 * 0.4, z); if (s0 > 1) DUN.cols.push({ x, z, r: s0 * 0.9 }); }
+      // the pen behind the gate: a cavern far vaster than the hall, big enough for a crab the size of a fortress
+      { const PW = 110, PZ0 = GZ - 200, PH = 110, pcz = (GZ + PZ0) / 2;
+        add(new THREE.Mesh(new THREE.BoxGeometry(PW * 2, 0.4, GZ - PZ0), floorM), 0, -0.2, pcz);
+        add(new THREE.Mesh(new THREE.BoxGeometry(PW * 2 + 4, 2, GZ - PZ0 + 4), rockD), 0, PH + 1, pcz);
+        [-1, 1].forEach(sd => add(new THREE.Mesh(new THREE.BoxGeometry(2, PH, GZ - PZ0), rock), sd * (PW + 1), PH / 2, pcz));
+        add(new THREE.Mesh(new THREE.BoxGeometry(PW * 2 + 4, PH, 2), rock), 0, PH / 2, PZ0 - 1);
+        const st2 = []; for (let k = 0; k < 80; k++) { const x = -PW + Math.random() * PW * 2, z = PZ0 + Math.random() * (GZ - PZ0); const l = 8 + Math.random() * 22; st2.push(new THREE.Matrix4().compose(new THREE.Vector3(x, PH - l / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(1.5 + Math.random() * 2, l, 1.5 + Math.random() * 2))); }
+        instanced(new THREE.ConeGeometry(1, 1, 6), rock, st2, root);
+        for (let k = 0; k < 60; k++) { const b = new THREE.Mesh(k % 3 ? new THREE.CylinderGeometry(0.4, 0.55, 6, 5) : new THREE.SphereGeometry(1.4, 6, 5), boneM); b.rotation.set(Math.PI / 2, Math.random() * 6, 0); add(b, -PW + 5 + Math.random() * (PW * 2 - 10), 0.5, PZ0 + 5 + Math.random() * (GZ - PZ0 - 15)); }   // the remains of its meals: whole ships' crews
+        for (let k = 0; k < 4; k++) { const wr = new THREE.Group(); wr.position.set((k % 2 ? 1 : -1) * (60 + k * 8), 0, PZ0 + 30 + k * 35); wr.rotation.set(0.3, k * 1.7, 0.4); root.add(wr);   // and a few ships' broken ribs
+          for (let r = 0; r < 7; r++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(5, 0.4, 5, 10, Math.PI), wood); rib.position.z = r * 2.4 - 7; wr.add(rib); } }
+        // the front wall either side of the gate, closing the pen off from the hall
+        [[-PW - 2, -50], [50, PW + 2]].forEach(([a, b]) => add(new THREE.Mesh(new THREE.BoxGeometry(b - a, PH, 3), rock), (a + b) / 2, PH / 2, GZ));
+        add(new THREE.Mesh(new THREE.BoxGeometry(100, PH - 64, 3), rock), 0, 64 + (PH - 64) / 2, GZ); }
       // the gate: a rock wall right across the cavern, with a vast iron portcullis in a stone frame
-      const GW = 22, GH = 26;
-      [[-40, -GW], [GW, 40]].forEach(([a, b]) => add(new THREE.Mesh(new THREE.BoxGeometry(b - a, 32, 3), rock), (a + b) / 2, 16, GZ));
-      add(new THREE.Mesh(new THREE.BoxGeometry(GW * 2, 32 - GH, 3), rock), 0, GH + (32 - GH) / 2, GZ);
-      [-1, 1].forEach(sd => { add(new THREE.Mesh(new THREE.BoxGeometry(4, GH + 4, 4.4), rockL), sd * (GW + 1.5), (GH + 4) / 2, GZ);
+      const GW = 36, GH = 52;
+      [[-50, -GW], [GW, 50]].forEach(([a, b]) => add(new THREE.Mesh(new THREE.BoxGeometry(b - a, 64, 3), rock), (a + b) / 2, 32, GZ));
+      add(new THREE.Mesh(new THREE.BoxGeometry(GW * 2, 64 - GH, 3), rock), 0, GH + (64 - GH) / 2, GZ);
+      [-1, 1].forEach(sd => { add(new THREE.Mesh(new THREE.BoxGeometry(5, GH + 4, 5.4), rockL), sd * (GW + 1.5), (GH + 4) / 2, GZ);
         const cap = add(new THREE.Mesh(new THREE.BoxGeometry(5, 1.2, 5.2), rockL), sd * (GW + 1.5), GH + 4.6, GZ);
-        const sk = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 8), boneM); sk.scale.set(1, 1.1, 0.9); add(sk, sd * (GW + 1.5), GH + 6.4, GZ + 0.8);
+        const sk = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 8), boneM); sk.visible = GH + 8 < 64; sk.scale.set(1, 1.1, 0.9); add(sk, sd * (GW + 1.5), GH + 6.4, GZ + 0.8);
         [-0.45, 0.45].forEach(o => add(new THREE.Mesh(new THREE.SphereGeometry(0.33, 6, 5), new THREE.MeshBasicMaterial({ color: 0x050403 })), sd * (GW + 1.5) + o, GH + 6.6, GZ + 1.85));
         torch(sd * (GW - 0.5), GZ + 2.6, 5); DUN.cols.push({ x: sd * (GW + 1.5), z: GZ + 1, r: 3 }); });
       add(new THREE.Mesh(new THREE.BoxGeometry(GW * 2 + 8, 2, 5), rockL), 0, GH + 1, GZ);   // the great lintel
       const gate = new THREE.Group(); gate.position.set(0, 0, GZ + 0.2); root.add(gate); DUN.gate = gate;
-      const vb = []; for (let x = -GW + 0.9; x <= GW - 0.8; x += 1.75) vb.push(new THREE.Matrix4().compose(new THREE.Vector3(x, GH / 2, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
-      instanced(new THREE.CylinderGeometry(0.32, 0.32, GH, 7), iron, vb, gate);
+      const vb = []; for (let x = -GW + 1.1; x <= GW - 1; x += 2.3) vb.push(new THREE.Matrix4().compose(new THREE.Vector3(x, GH / 2, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
+      instanced(new THREE.CylinderGeometry(0.5, 0.5, GH, 7), iron, vb, gate);
       const sp = vb.map(m => { const v = new THREE.Vector3().setFromMatrixPosition(m); return new THREE.Matrix4().compose(new THREE.Vector3(v.x, 0.35, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(1, 1, 1)); });
-      instanced(new THREE.ConeGeometry(0.4, 0.9, 6), iron, sp, gate);
-      for (const y of [2.5, 8, 13.5, 19, 24.5]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(GW * 2, 0.7, 0.9), iron); cb.position.set(0, y, 0); gate.add(cb);
+      instanced(new THREE.ConeGeometry(0.6, 1.2, 6), iron, sp, gate);
+      for (const y of [3, 11, 19, 27, 35, 43, 50.5]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(GW * 2, 1, 1.3), iron); cb.position.set(0, y, 0); gate.add(cb);
         for (let x = -GW + 2; x < GW; x += 5) { const rv = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.3, 6), lam(0x3a3a40)); rv.rotation.x = Math.PI / 2; rv.position.set(x, y, 0.55); gate.add(rv); } }
       // a padlocked bar and chains running up to great winches in the wall
       { const lock = new THREE.Group(); const lb = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.8, 0.9), lam(0x5a4a2a)); lock.add(lb); const sh = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.2, 6, 12, Math.PI), iron); sh.position.y = 1.4; lock.add(sh); lock.position.set(0, 5.2, 0.9); gate.add(lock); }
       [-1, 1].forEach(sd => { const links = []; for (let i = 0; i <= 10; i++) links.push(new THREE.Matrix4().compose(new THREE.Vector3(sd * (GW - 3), GH + 0.5 + i * 0.6, 1.4), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i % 2 ? Math.PI / 2 : 0, 0)), new THREE.Vector3(1.3, 1.3, 1.3)));
         instanced(new THREE.TorusGeometry(0.35, 0.1, 4, 8), iron, links, root); const wn = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 3, 12), wood); wn.rotation.z = Math.PI / 2; add(wn, sd * (GW - 3), GH + 7.5, GZ + 2.2); });
       // claw gouges in the floor in front of the gate
-      for (let k = 0; k < 8; k++) { const g = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 4 + Math.random() * 3), lam(0x161310)); g.position.set(-16 + k * 4.3 + Math.random(), 0.02, GZ - 6); g.rotation.y = (Math.random() - 0.5) * 0.4; root.add(g); }
+      for (let k = 0; k < 8; k++) { const g = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 4 + Math.random() * 3), lam(0x161310)); g.position.set(-28 + k * 8 + Math.random(), 0.02, GZ + 6 + Math.random() * 4); g.rotation.y = (Math.random() - 0.5) * 0.4; root.add(g); }
 
       // ---- the Blackwater Beast: a monstrous crab ----
       // A crab the size of a house: a black-and-blood-red shell crusted with barnacles and spikes, eight jointed legs
@@ -7743,7 +7757,7 @@ window.__pgBoot = () => {
       const shell = new THREE.MeshPhongMaterial({ color: 0x3a1210, specular: 0x553333, shininess: 40 }), shellD = new THREE.MeshPhongMaterial({ color: 0x1c0a09, specular: 0x332222, shininess: 30 });
       const under = lam(0x6a4a3a), barn = lam(0x8a8478), spikeM = lam(0x120808), clawTip = lam(0x0d0606);
       const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
-      const B = new THREE.Group(); B.position.set(kx, 0, kz); B.scale.setScalar(1.35); root.add(B);   // as wide as a ship; the pen behind the gate is big enough for it
+      const B = new THREE.Group(); B.position.set(kx, 0, kz); B.scale.setScalar(4.05); root.add(B);   // a crab the size of a fortress; the pen behind the gate is built to hold it
       const seg = (par, a, b, r0, r1, m) => { const d = new THREE.Vector3().subVectors(b, a), len = d.length(); const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); par.add(c); return c; };
       const body = new THREE.Group(); body.position.y = 7.5; B.add(body);
       const cara = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), shell); cara.scale.set(9.5, 3.4, 7); body.add(cara);
@@ -7758,7 +7772,7 @@ window.__pgBoot = () => {
         seg(st, new THREE.Vector3(0, 0, 0), new THREE.Vector3(sd * 0.4, 2.6, 0.4), 0.35, 0.25, shellD);
         const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), eyeM); e.position.set(sd * 0.4, 2.9, 0.4); st.add(e);
         const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(3, 3, 1); gl.position.copy(e.position); st.add(gl); eyes.push(gl); });
-      const eyeLight = new THREE.PointLight(0xff3010, 0.9, 18, 1.8); eyeLight.position.set(0, 4.5, 7); body.add(eyeLight);
+      const eyeLight = new THREE.PointLight(0xff3010, 1.6, 70, 1.2); eyeLight.position.set(0, 4.5, 7); body.add(eyeLight);
       // eight walking legs, each two jointed segments with a pointed tip, the upper joints cuffed in iron
       const legs = [];
       for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
@@ -7786,8 +7800,8 @@ window.__pgBoot = () => {
       { const links = []; for (let i = 0; i <= 12; i++) { const u = i / 12; links.push(new THREE.Matrix4().compose(new THREE.Vector3(0, 4 - u * 4 + Math.sin(u * Math.PI) * -0.6, -6 - u * 7), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i % 2 ? Math.PI / 2 : 0, Math.PI / 2)), new THREE.Vector3(1.4, 1.4, 1.4))); } instanced(new THREE.TorusGeometry(0.35, 0.1, 4, 8), iron, links, B); }
       DUN.beast = { B, body, legs, claws, stalks, mouth, eyes, eyeLight, t: 0, pace: 0, growlT: 6 };
       // a dim glow on the gate so its outline shows in the gloom, and a thin grey light from a crack far above the pen
-      const cg = new THREE.PointLight(0x8070a0, 1.0, 60, 1.4); add(cg, 0, 22, GZ + 22);
-      const shaft = new THREE.SpotLight(0x8090c0, 2.4, 90, 0.75, 0.6, 1); const penL = new THREE.PointLight(0x804050, 1.2, 55, 1.3); add(penL, 0, 16, kz + 22); shaft.target.position.set(0, 0, kz); add(shaft, 6, 31, kz + 8); root.add(shaft.target);
+      const cg = new THREE.PointLight(0x8070a0, 1.2, 100, 1.2); add(cg, 0, 40, GZ + 30);
+      const shaft = new THREE.SpotLight(0x8090c0, 2.6, 260, 0.6, 0.6, 1); const penL = new THREE.PointLight(0x804050, 1.6, 220, 1); add(penL, 0, 60, kz + 70); shaft.target.position.set(0, 0, kz); add(shaft, 25, 108, kz + 20); root.add(shaft.target);
     }
     DUN.found = true;
   }
@@ -7849,12 +7863,13 @@ window.__pgBoot = () => {
     // the crab: breathing, sidling round the cage, turning to face ye, clacking its claws; close up, it charges the bars
     const Bs = DUN.beast; if (!Bs) return;
     Bs.t += dt; const br = Math.sin(Bs.t * 1.1);
-    const gd = l.z - DUN.gateZ, near = gd < 32, px = l.x - Bs.B.position.x, pz = l.z - Bs.B.position.z;
+    { const big = l.z < -100 ? 1 : 0; DUN.scene.fog.near += ((big ? 45 : 14) - DUN.scene.fog.near) * Math.min(1, dt * 3); DUN.scene.fog.far += ((big ? 340 : 75) - DUN.scene.fog.far) * Math.min(1, dt * 3); }   // the beast's cavern is vast: see further into it
+    const gd = l.z - DUN.gateZ, near = gd < 38, px = l.x - Bs.B.position.x, pz = l.z - Bs.B.position.z;
     Bs.pace += dt * (near ? 0.25 : 0.12); const ang = near ? Math.max(-0.6, Math.min(0.6, Math.atan2(px, pz))) : Math.sin(Bs.pace * 0.6) * 0.5;
     const prevRot = Bs.B.rotation.y; Bs.B.rotation.y += angDiff(Bs.B.rotation.y, ang) * Math.min(1, dt * (near ? 1.6 : 0.5));
     const LG = DUN.lungeT; let lu = 0; if (LG > 0) { DUN.lungeT -= dt; const u = 1 - DUN.lungeT / 2.2; lu = Math.sin(Math.min(1, u * 1.6) * Math.PI); }
     // crabs walk sideways: idle, it scuttles from wall to wall of its pen; when ye're near, it shadows ye along the gate
-    const tx = near ? Math.max(-10, Math.min(10, l.x)) : Math.sin(Bs.pace * 0.9) * 9, tz = DUN.penZ + (near ? 5 : Math.sin(Bs.pace * 1.7) * 2 - 1) + lu * 2;   // claws just reach the gate at the top of a charge
+    const tx = near ? Math.max(-14, Math.min(14, l.x)) : Math.sin(Bs.pace * 0.9) * 18, tz = DUN.penZ + (near ? 22 : Math.sin(Bs.pace * 1.7) * 4 - 2) + lu * 3;   // claws just reach the gate at the top of a charge
     const ox = Bs.B.position.x, oz = Bs.B.position.z;
     Bs.B.position.x += (tx - ox) * Math.min(1, dt * 2); Bs.B.position.z += (tz - oz) * Math.min(1, dt * 2);
     const mv = Math.min(1, (Math.hypot(Bs.B.position.x - ox, Bs.B.position.z - oz) / Math.max(dt, 1e-3)) / 3 + Math.abs(angDiff(prevRot, Bs.B.rotation.y)) / Math.max(dt, 1e-3));
