@@ -8305,7 +8305,7 @@
     // every so often a deep grumble rolls up out of him (not while he's roaring, rising or swallowing)
     if (ELD.grumbleT === undefined) ELD.grumbleT = 8 + Math.random() * 10;
     ELD.grumbleT -= dt;
-    if (ELD.grumbleT <= 0) { ELD.grumbleT = 14 + Math.random() * 22; if (ELD.emerge >= 1 && !ELD.leaving && !ELD.devour && !ELD.call && !(ELD.idle && ELD.idle.k === 'roar')) SFX.beastGrumble({ x: ELD.x, z: ELD.z, range: ELD.K.elder ? 2500 : 900 }, ELD.K.elder ? 1 : 0.45); }
+    if (ELD.grumbleT <= 0) { ELD.grumbleT = 14 + Math.random() * 22; if (ELD.emerge >= 1 && !ELD.leaving && !ELD.devour && !ELD.call && !(ELD.idle && ELD.idle.k === 'roar')) SFX.beastGrumble({ x: ELD.x, z: ELD.z, range: ELD.K.elder ? 12000 : 2500 }, ELD.K.elder ? 1 : 0.45); }
     if (ELD.devour) { elderDevourTick(dt); fighting = true; }
     else if (ELD.grab) { elderGrabTick(dt); fighting = true; }
     else if (RIDE.on) {
@@ -8477,7 +8477,7 @@
       if (Math.hypot(el[0] - E.x, el[1] - E.z) > 60 * K.scale) { E.x = el[0]; E.z = el[1]; elderResetTrail(E.m, E.x, E.z, el[2]); }
       E.x += (el[0] - E.x) * k; E.z += (el[1] - E.z) * k; E.h += angDiff(E.h, el[2]) * k;
       E.gT = (E.gT ?? 8 + Math.random() * 14) - dt;   // others' serpents grumble too
-      if (E.gT <= 0) { E.gT = 14 + Math.random() * 22; if ((el[4] ?? 1) >= 1 && el[11] !== 1 && !el[14] && !(el[13] >= 0)) SFX.beastGrumble({ x: E.x, z: E.z, range: K.elder ? 2500 : 900 }, K.elder ? 1 : 0.45); }
+      if (E.gT <= 0) { E.gT = 14 + Math.random() * 22; if ((el[4] ?? 1) >= 1 && el[11] !== 1 && !el[14] && !(el[13] >= 0)) SFX.beastGrumble({ x: E.x, z: E.z, range: K.elder ? 12000 : 2500 }, K.elder ? 1 : 0.45); }
       // their strike runs on locally between updates, so it plays smoothly
       const sk = typeof el[8] === 'number' && el[8] >= 0 ? el[8] : -1;
       if (sk >= 0) { E.sk = E.skFrom === el[8] ? (E.sk ?? sk) + dt : sk; E.skFrom = el[8]; } else { E.sk = -1; E.skFrom = null; }
