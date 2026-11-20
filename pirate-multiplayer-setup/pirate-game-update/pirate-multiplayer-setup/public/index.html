@@ -946,6 +946,17 @@ window.__pgBoot = () => {
       for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(1.4 + Math.random(), 7, 5), lam(0x5f6f4a)); const a = i * 0.7; m.position.set(Math.cos(a) * 8, 6.5 + Math.sin(i) * 1.5, Math.sin(a) * 8 - 2); m.scale.y = 0.4; skull.add(m); }
     }
     ISLANDS[4].group.add(skull);
+    if (K > 1) {   // the skull sits on a mound of black rock; a dark doorway under its jaw is the way down to the Blackwater Vaults
+      const gy = heightAt(p.x, p.y), mound = new THREE.Mesh(new THREE.CylinderGeometry(44, 53, 12, 20), lam(0x3a3632)); mound.position.set(p.x, gy + 4, p.y); ISLANDS[4].group.add(mound);
+      const dg = new THREE.Group(), dd = p.clone().addScaledVector(toHome, 52.6); dg.position.set(dd.x, gy, dd.y); dg.rotation.y = Math.atan2(toHome.x, toHome.y); ISLANDS[4].group.add(dg);
+      const voidM = new THREE.MeshBasicMaterial({ color: 0x050403 }), rk = lam(0x4a4540);
+      const hole = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 5), voidM); hole.position.set(0, 2.5, 0.05); dg.add(hole);
+      const archTop = new THREE.Mesh(new THREE.CircleGeometry(2.1, 12, 0, Math.PI), voidM); archTop.position.set(0, 5, 0.05); dg.add(archTop);
+      [-2.6, 2.6].forEach(x => { const jamb = new THREE.Mesh(new THREE.BoxGeometry(1, 7, 1.2), rk); jamb.position.set(x, 3.5, 0.3); dg.add(jamb); });
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1, 1.4), rk); lintel.position.set(0, 7.3, 0.3); dg.add(lintel);
+      for (let k = 0; k < 3; k++) { const st = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.3, 1), rk); st.position.set(0, 0.15 + k * 0.05, 1 + k * 0.9); dg.add(st); }
+      const sk2 = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), bone); sk2.position.set(0, 7.9, 0.6); dg.add(sk2);
+    }
     colliders.push({ x: p.x, z: p.y, r: 10.5 * K });
     SPOTS.push({ x: p.x, z: p.y, r: 18 * K });
     { const f = p.clone().addScaledVector(toHome, K > 1 ? 10.5 * K + 9 : 0); SKULL_SPOT = { x: f.x, z: f.y }; }   // ye search at its feet, under the jaw
@@ -2244,6 +2255,7 @@ window.__pgBoot = () => {
   let talk = null;
   function nearestNpc() {
     let best = null, bd = 3.6;
+    if (DUN.on) return null;
     if (inInterior) {
       for (const c of interior.crew) { const d = Math.hypot(c.lp.x - IP.x, c.lp.z - IP.z); if (d < bd) { bd = d; best = c; } }
       return best;
@@ -4664,7 +4676,7 @@ window.__pgBoot = () => {
   const spotPos = st => { const a = st.at(); return a ? { x: a.x, z: a.z !== undefined ? a.z : a.y } : null; };
   function nearQSpot() {
     QUEST_ITEMS.forEach((it, i) => { it.visible = Object.keys(QUESTS).some(id => { const st = curStage(id); return st && st.type === 'spot' && st.item === i; }); });
-    if (onShip || sailing || inInterior) return null;
+    if (onShip || sailing || inInterior || DUN.on) return null;
     for (const id in QUESTS) {
       const st = curStage(id); if (!st || st.type !== 'spot') continue;
       const a = spotPos(st); if (!a || Math.hypot(P.pos.x - a.x, P.pos.z - a.z) >= st.r) continue;
@@ -5127,6 +5139,7 @@ window.__pgBoot = () => {
   function interact() {
     if (uiOpen) return;
     if (MERM.held) return;
+    if (DUN.on) { dunInteract(); return; }
     if (STOM.on) { if (nearChest()) lootChest(); return; }
     if (talk) {
       if (talk.options) return;
@@ -5149,6 +5162,7 @@ window.__pgBoot = () => {
     if (nearHorn()) { takeHorn(); return; }
     if (nearEmptyPedestal()) { toast(`The pedestal is empty. Ye already carry a horn; Captain ${HORN.owner} holds the true one.`); return; }
     const qs = nearQSpot(); if (qs) { qs.act(); return; }
+    if (nearDunDoor()) { dunEnter(); return; }
     const nd = nearNode(); if (nd) { gather(nd); return; }
     const cc = nearCampChest(); if (cc) { lootCampChest(cc); return; }
     if (nearSwordStone()) { summonMermaid(); return; }
@@ -6029,7 +6043,7 @@ window.__pgBoot = () => {
       else wSplash(B.x1, 1, B.z1, true);
     }
   }
-  const playerTargetable = () => !RIDE.on && !onShip && !GUEST.on && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held;
+  const playerTargetable = () => !RIDE.on && !onShip && !GUEST.on && !sailing && !inInterior && !STOM.on && !STOM.done && !MERM.held && !DUN.on;
   function updateBandits(dt) {
     let can = playerTargetable();
     for (const b of bandits) {
@@ -7615,6 +7629,223 @@ window.__pgBoot = () => {
       STOM.done = false; wakeAtGull('Everything went dark inside the mermaid... somehow ye wash up on Gull Island.');
     }, 650);
   }
+  // ---------- The Blackwater Vaults: a secret dungeon under Skull Isle ----------
+  // Hidden beneath the giant skull at the heart of Fort Blackwater. A doorway in the rock under the skull's jaw leads
+  // down a stair into torchlit halls cut from the bedrock: an entry chamber, a long passage lined with bones, the
+  // treasure vault (heaps of gold, gems, crowns, a dozen chests), and at the bottom a vast dark cavern where the
+  // Blackwater Beast paces in an enormous iron cage, its red eyes burning in the dark. Its own scene, far from the map.
+  const DUN = { on: false, scene: null, O: new THREE.Vector3(20000, 0, 20000), rects: [], cols: [], chests: [], beast: null, savedDist: 13, found: false, lungeT: 0, cage: { x: 0, z: -150, r: 18 } };
+  const dunDoor = () => { const S = SITES.find(q => q.kind === 'fort' && q.i === 4), I = ISLANDS[4]; if (!S) return null; const th = ISLAND.clone().sub(I.c).normalize(); return { x: S.x + th.x * 55, z: S.z + th.y * 55, f: Math.atan2(th.x, th.y) }; };
+  function nearDunDoor() { if (DUN.on || onShip || sailing || inInterior || STOM.on || RIDE.on) return false; const d = dunDoor(); return d && Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 6; }
+  function dunBuild() {
+    const S3 = new THREE.Scene(), O = DUN.O, root = new THREE.Group(); root.position.copy(O); S3.add(root); DUN.scene = S3; DUN.root = root;
+    S3.background = new THREE.Color(0x050403); S3.fog = new THREE.Fog(0x050403, 14, 75);
+    S3.add(new THREE.AmbientLight(0x6a6080, 0.32)); const hemi = new THREE.HemisphereLight(0x50465a, 0x1a1410, 0.25); S3.add(hemi);
+    const rock = lam(0x3d3833), rockD = lam(0x2a2622), rockL = lam(0x57504a), floorM = lam(0x34302b), iron = lam(0x26262a), wood = lam(0x4a3220), boneM = lam(0xd9d2bf);
+    const gold = new THREE.MeshPhongMaterial({ color: 0xe8b830, specular: 0xfff0a0, shininess: 90, emissive: 0x3a2400 });
+    const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
+    // rooms: [x0, x1, z0, z1, ceiling]; openings are where they meet (all along the middle line, x -3..3)
+    const R = DUN.rects = [[-7, 7, -12, 2, 7], [-3, 3, -52, -12, 5], [-18, 18, -82, -52, 9], [-3, 3, -110, -82, 5], [-40, 40, -192, -110, 32]];
+    const openAt = (z, x) => R.some(r => Math.abs(r[2] - z) < 0.01 || Math.abs(r[3] - z) < 0.01) && Math.abs(x) < 3;
+    for (const [x0, x1, z0, z1, H] of R) {
+      const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      add(new THREE.Mesh(new THREE.BoxGeometry(w, 0.4, d), floorM), cx, -0.2, cz);
+      add(new THREE.Mesh(new THREE.BoxGeometry(w + 1, 1, d + 1), rockD), cx, H + 0.5, cz);
+      [x0 - 0.5, x1 + 0.5].forEach(x => add(new THREE.Mesh(new THREE.BoxGeometry(1, H, d), rock), x, H / 2, cz));
+      for (const z of [z0, z1]) {   // end walls, with a doorway where the next room carries on
+        const isOpen = R.some(r => r !== R.find(q => q[2] === z0 && q[3] === z1) && (Math.abs(r[2] - z) < 0.01 || Math.abs(r[3] - z) < 0.01));
+        const zz = z === z0 ? z0 - 0.5 : z1 + 0.5;
+        if (!isOpen) { add(new THREE.Mesh(new THREE.BoxGeometry(w + 2, H, 1), rock), cx, H / 2, zz); continue; }
+        if (w > 6.5) { const sw = (w - 6) / 2; add(new THREE.Mesh(new THREE.BoxGeometry(sw + 1, H, 1), rock), x0 + sw / 2 - 0.5, H / 2, zz); add(new THREE.Mesh(new THREE.BoxGeometry(sw + 1, H, 1), rock), x1 - sw / 2 + 0.5, H / 2, zz); }
+        if (H > 4.6) add(new THREE.Mesh(new THREE.BoxGeometry(6, H - 4.6, 1), rock), cx, 4.6 + (H - 4.6) / 2, zz);
+        add(new THREE.Mesh(new THREE.BoxGeometry(7, 0.8, 1.4), rockL), 0, 4.8, zz);   // a stone lintel over the door
+      }
+    }
+    // the stair back up to the world, in the entry chamber
+    { const st = new THREE.Group(); for (let k = 0; k < 9; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.35, 0.9), rockL); b.position.set(0, 0.2 + k * 0.7, -k * 0.9); st.add(b); } st.position.set(0, 0, 1.4); st.rotation.y = Math.PI; root.add(st);
+      const glowUp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xcfe0ff, transparent: true, depthWrite: false, opacity: 0.5 })); glowUp.scale.set(5, 4, 1); add(glowUp, 0, 6.2, 2); }
+    // torches in iron brackets: flickering fire and a warm light (a few cast real light; the rest just glow)
+    DUN.flames = []; let lights = 0;
+    const torch = (x, z, y = 3, lit = true) => { const br = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.6, 0.15), iron); add(br, x, y, z);
+      const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff8a30, transparent: true, depthWrite: false })); f.scale.set(1, 1.4, 1); add(f, x, y + 0.6, z); DUN.flames.push(f);
+      if (lit && lights < 9) { const L = new THREE.PointLight(0xff9a4a, 1.1, 22, 1.6); add(L, x * 0.9, y + 1, z); f.userData.L = L; lights++; } };
+    torch(-6.4, -4); torch(6.4, -4); torch(-2.4, -22, 3, true); torch(2.4, -40, 3, true);
+    torch(-17.4, -58); torch(17.4, -58); torch(-17.4, -76); torch(17.4, -76);
+    torch(-2.4, -96, 3, false); torch(-6, -112, 4); torch(6, -112, 4);
+    // bones, skulls and cobwebs along the way
+    for (let k = 0; k < 40; k++) { const x = (Math.random() - 0.5) * 5, z = -13 - Math.random() * 38; const b = new THREE.Mesh(k % 4 ? new THREE.CylinderGeometry(0.06, 0.08, 0.7, 5) : new THREE.SphereGeometry(0.2, 6, 5), boneM); b.rotation.set(Math.PI / 2, Math.random() * 6, 0); add(b, Math.sign(x) * (2.2 + Math.random() * 0.6), 0.08, z); }
+    const webM = new THREE.MeshBasicMaterial({ color: 0xcfcfcf, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false });
+    for (const [x, y, z, r] of [[-2.6, 4.4, -20, 0.6], [2.6, 4.4, -33, -0.6], [-17, 8, -53, 0.7], [17, 8, -81, -0.7], [-6.5, 6.4, -11.5, 0.6]]) { const wb = new THREE.Mesh(new THREE.CircleGeometry(1.6, 8, 0, Math.PI / 2), webM); wb.rotation.set(0, Math.PI / 2 * Math.sign(x), r); add(wb, x, y, z); }
+    // ---- the treasure vault ----
+    { const cz = -67;
+      // great heaps of gold, glittering with coins and gems
+      const heap = (x, z, r, h) => { const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 14), gold); m.scale.y = 1; add(m, x, h / 2 - 0.1, z); DUN.cols.push({ x, z, r: r * 0.8 }); };
+      heap(0, cz, 5.5, 3.2); heap(-11, cz - 9, 3, 1.8); heap(11, cz + 8, 3.5, 2); heap(-12, cz + 9, 2.5, 1.4); heap(12, cz - 10, 2.6, 1.5);
+      const coins = []; for (let k = 0; k < 520; k++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 12, x = Math.cos(a) * r, z = cz + Math.sin(a) * r * 0.75; if (Math.abs(x) > 17 || Math.abs(z - cz) > 13) continue; coins.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 0.03 + Math.random() * 0.05, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 0.4, Math.random() * 6, Math.random() * 0.4)), new THREE.Vector3(1, 1, 1))); }
+      instanced(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 8), gold, coins, root);
+      const gemCols = [0xff3050, 0x30a0ff, 0x40ff80, 0xb050ff, 0xffffff];
+      for (let k = 0; k < 60; k++) { const a = Math.random() * 6.28, r = Math.random() * 5.2; const gm = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshPhongMaterial({ color: gemCols[k % 5], emissive: gemCols[k % 5], emissiveIntensity: 0.35, shininess: 120 })); add(gm, Math.cos(a) * r, 0.3 + (1 - r / 5.5) * 3, cz + Math.sin(a) * r); }
+      // crowns and goblets on stone pedestals
+      for (const [x, z, kind] of [[-8, cz - 2, 'crown'], [8, cz + 2, 'crown'], [-8, cz + 6, 'cup'], [8, cz - 6, 'cup']]) { add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 1.2), rockL), x, 0.7, z); DUN.cols.push({ x, z, r: 0.9 });
+        if (kind === 'crown') { const cr = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 0.4, 10, 1, true), gold); cr.material.side = THREE.DoubleSide; add(cr, x, 1.65, z); for (let k = 0; k < 6; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 4), gold); const a = k / 6 * 6.28; add(sp, x + Math.cos(a) * 0.42, 1.95, z + Math.sin(a) * 0.42); } }
+        else { add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.12, 0.45, 10), gold), x, 1.85, z); add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 6), gold), x, 1.52, z); add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 10), gold), x, 1.42, z); } }
+      // the chests: a dozen of them round the walls, every one worth opening
+      const chestAt = (x, z, rot) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; root.add(g);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 1), lam(0x5a3418)); box.position.y = 0.45; g.add(box);
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.6, 10, 1, false, 0, Math.PI), lam(0x5a3418)); lid.rotation.z = Math.PI / 2; lid.position.y = 0.9; g.add(lid);
+        [-0.55, 0.55].forEach(o => { const bd = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.42, 1.04), gold); bd.position.set(o, 0.71, 0); g.add(bd); });
+        const spill = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.35, 10), gold); spill.position.set(0, 1.15, 0); g.add(spill);
+        DUN.chests.push({ x, z, cd: 0, g, spill }); DUN.cols.push({ x, z, r: 0.9 }); };
+      for (let k = 0; k < 6; k++) { chestAt(-16.4, cz - 12 + k * 4.8, Math.PI / 2); chestAt(16.4, cz - 12 + k * 4.8, -Math.PI / 2); }
+      // two stone guardians and weapon racks
+      for (const x of [-13, 13]) { const st = new THREE.Group(); st.position.set(x, 0, -53.6); root.add(st);
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.4, 1), rockL); body.position.y = 2.4; st.add(body); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), rockL); hd.position.y = 4.6; st.add(hd);
+        const sw = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.4, 0.4), lam(0x8a8f96)); sw.position.set(0, 1.9, 0.7); st.add(sw); const ped = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7, 1.6), rockD); ped.position.y = 0.35; st.add(ped); DUN.cols.push({ x, z: -53.6, r: 1.4 }); }
+      // pillars holding up the vault roof
+      for (const x of [-9, 9]) for (const z of [cz - 9, cz + 9]) { add(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 9, 10), rockL), x, 4.5, z); DUN.cols.push({ x, z, r: 1.2 }); }
+      const vL = new THREE.PointLight(0xffd070, 1.1, 30, 1.5); add(vL, 0, 7, cz);   // the gold seems to glow by its own light
+    }
+    // ---- the beast's cavern ----
+    { const { x: kx, z: kz, r: kr } = DUN.cage;
+      // stalactites hanging from the high roof, rubble on the floor
+      const stal = []; for (let k = 0; k < 90; k++) { const x = -38 + Math.random() * 76, z = -190 + Math.random() * 78; if (Math.hypot(x - kx, z - kz) < kr + 2) continue; const l = 3 + Math.random() * 9; stal.push(new THREE.Matrix4().compose(new THREE.Vector3(x, 32 - l / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(0.6 + Math.random(), l, 0.6 + Math.random()))); }
+      instanced(new THREE.ConeGeometry(1, 1, 6), rock, stal, root);
+      for (let k = 0; k < 40; k++) { const x = -38 + Math.random() * 76, z = -190 + Math.random() * 78; if (Math.hypot(x - kx, z - kz) < kr + 4 || Math.abs(x) < 4) continue; const s0 = 0.4 + Math.random() * 1.6; const rb = new THREE.Mesh(new THREE.DodecahedronGeometry(s0, 0), rockD); add(rb, x, s0 * 0.4, z); if (s0 > 1) DUN.cols.push({ x, z, r: s0 * 0.9 }); }
+      // the cage: a stone plinth, iron bars five storeys high, banded rings, a domed crown of bars, a padlocked door
+      add(new THREE.Mesh(new THREE.CylinderGeometry(kr + 1.4, kr + 2, 1.2, 40), rockL), kx, 0.6, kz);
+      const bars = [], BH = 26; for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2; bars.push(new THREE.Matrix4().compose(new THREE.Vector3(kx + Math.cos(a) * kr, 1.2 + BH / 2, kz + Math.sin(a) * kr), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))); }
+      DUN.barMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.22, BH, 6), iron, bars.length); bars.forEach((m, i) => DUN.barMesh.setMatrixAt(i, m)); root.add(DUN.barMesh); DUN.barMats = bars;
+      for (const y of [2, 10, 18, 27]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(kr, 0.35, 6, 48), iron); ring.rotation.x = Math.PI / 2; add(ring, kx, y, kz); }
+      for (let k = 0; k < 12; k++) { const arc = new THREE.Mesh(new THREE.TorusGeometry(kr, 0.25, 5, 24, Math.PI), iron); arc.rotation.set(0, k / 12 * Math.PI, 0); arc.scale.y = 0.35; add(arc, kx, 27, kz); }
+      { const lock = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.6), lam(0x5a4a2a)); lock.add(body); const sh = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.15, 6, 12, Math.PI), iron); sh.position.y = 0.9; lock.add(sh); lock.position.set(kx, 4, kz + kr + 0.5); root.add(lock); }
+      DUN.cols.push({ x: kx, z: kz, r: kr + 1.6, cage: true });
+      // chains from the cage to rings in the floor
+      for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.3, x0 = kx + Math.cos(a) * kr, z0 = kz + Math.sin(a) * kr, x1 = kx + Math.cos(a) * (kr + 9), z1 = kz + Math.sin(a) * (kr + 9);
+        const links = []; for (let i = 0; i <= 14; i++) { const u = i / 14; links.push(new THREE.Matrix4().compose(new THREE.Vector3(x0 + (x1 - x0) * u, 6 * (1 - u) * (1 - u) + 0.3, z0 + (z1 - z0) * u), new THREE.Quaternion().setFromEuler(new THREE.Euler(i % 2 ? Math.PI / 2 : 0, a, 0)), new THREE.Vector3(1, 1, 1))); }
+        instanced(new THREE.TorusGeometry(0.35, 0.09, 4, 8), iron, links, root); }
+      // ---- the Blackwater Beast ----
+      // A hulking thing the size of a house, black-hided and scarred, horned and spined, with jaws full of broken teeth,
+      // an iron collar on its neck and chains on its legs. Its eyes burn red in the dark; it breathes, watches ye,
+      // grumbles, and when ye come close it hurls itself at the bars.
+      const hide = lam(0x2a2422), hideD = lam(0x151212), scar = lam(0x3a1a18), tooth = lam(0xd8cfb8), horn = lam(0x2a2420);
+      const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
+      const B = new THREE.Group(); B.position.set(kx, 1.2, kz - 2); root.add(B);
+      const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), hide); body.scale.set(5.5, 4.6, 8.5); body.position.set(0, 6.4, 0); B.add(body);
+      const hump = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), hide); hump.scale.set(4.6, 3.6, 4.5); hump.position.set(0, 9.2, 2.5); B.add(hump);
+      for (let k = 0; k < 11; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.6 - Math.abs(k - 4) * 0.2, 5), horn); sp.position.set(0, 11.4 - Math.abs(k - 3) * 0.35, 5.5 - k * 1.25); sp.rotation.x = -0.4; B.add(sp); }
+      for (let k = 0; k < 5; k++) { const sc = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 3), scar); sc.position.set(k % 2 ? 4.9 : -4.9, 6 + k * 0.6, -2 + k); sc.rotation.set(0.3, 0, k % 2 ? 0.6 : -0.6); B.add(sc); }
+      const legs = [];
+      for (const [x, z] of [[-3.6, 4.5], [3.6, 4.5], [-3.6, -4.5], [3.6, -4.5]]) { const lg = new THREE.Group(); lg.position.set(x, 4.5, z); B.add(lg);
+        const up = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 4.5, 8), hide); up.position.y = -1.5; lg.add(up); const lo = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 3, 8), hideD); lo.position.set(0, -4, 0.4); lg.add(lo);
+        for (let c = -1; c <= 1; c++) { const cl = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 4), tooth); cl.rotation.x = Math.PI / 2; cl.position.set(c * 0.55, -5.3, 1.6); lg.add(cl); }
+        const cuff = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.22, 6, 12), iron); cuff.rotation.x = Math.PI / 2; cuff.position.y = -4.2; lg.add(cuff); legs.push(lg); }
+      // tail
+      const tail = []; for (let k = 0; k < 9; k++) { const t = new THREE.Mesh(new THREE.SphereGeometry(1.6 - k * 0.15, 8, 6), hide); t.position.set(0, 5.5 - k * 0.3, -8.5 - k * 1.7); B.add(t); tail.push(t); }
+      // neck and head
+      const neck = new THREE.Group(); neck.position.set(0, 8.5, 7.5); B.add(neck);
+      const nk = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 3.2, 5, 10), hide); nk.rotation.x = Math.PI / 2 - 0.5; nk.position.set(0, 0.6, 1.5); neck.add(nk);
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.4, 6, 16), iron); collar.position.set(0, 0.4, 1); collar.rotation.x = 0.5; neck.add(collar);
+      for (let k = 0; k < 8; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.7, 4), iron); const a = k / 8 * 6.28; sp.position.set(Math.cos(a) * 3.1, 0.4 + Math.sin(a) * 3.1 * Math.cos(0.5), 1 + Math.sin(a) * 3.1 * Math.sin(0.5)); sp.lookAt(neck.position.clone().add(new THREE.Vector3(Math.cos(a) * 10, Math.sin(a) * 10, 0))); neck.add(sp); }
+      const head = new THREE.Group(); head.position.set(0, 1.6, 4.6); neck.add(head);
+      const skullB = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), hide); skullB.scale.set(2.6, 2.1, 3); head.add(skullB);
+      const snout = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 3.6), hide); snout.position.set(0, -0.3, 3.2); head.add(snout);
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.7, 1.2), hideD); brow.position.set(0, 1.1, 1.6); brow.rotation.x = 0.3; head.add(brow);
+      const jaw = new THREE.Group(); jaw.position.set(0, -1.1, 1.2); head.add(jaw);
+      const jawM = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 4.4), hideD); jawM.position.set(0, -0.3, 2.1); jaw.add(jawM);
+      for (let k = 0; k < 7; k++) { const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.75 + (k % 3) * 0.25, 4), tooth); t1.position.set(-1.2 + k * 0.4, -1, 4.6 - Math.abs(k - 3) * 0.5); t1.rotation.x = Math.PI; head.add(t1);
+        const t2 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6 + (k % 2) * 0.3, 4), tooth); t2.position.set(-1.1 + k * 0.37, 0.35, 3.8 - Math.abs(k - 3) * 0.4); jaw.add(t2); }
+      [-1, 1].forEach(sd => { const hn = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.35, 6, 10, Math.PI * 0.9), horn); hn.position.set(sd * 1.8, 1.6, 0); hn.rotation.set(0, Math.PI / 2, sd > 0 ? -0.6 : Math.PI + 0.6); head.add(hn);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.33, 1.4, 6), horn); tip.position.set(sd * 2.9, 3.3, -0.8); tip.rotation.z = -sd * 0.4; head.add(tip); });
+      const eyes = []; [-1, 1].forEach(sd => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), eyeM); e.position.set(sd * 1.15, 0.65, 2.3); head.add(e);
+        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff2a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.set(2.4, 2.4, 1); gl.position.copy(e.position); head.add(gl); eyes.push(gl); });
+      const eyeLight = new THREE.PointLight(0xff3010, 0.9, 16, 1.8); eyeLight.position.set(0, 0.5, 3.6); head.add(eyeLight);
+      DUN.beast = { B, body, hump, neck, head, jaw, legs, tail, eyes, eyeLight, t: 0, pace: 0, lunge: -1, growlT: 6 };
+      // a dim glow from the cavern floor round the cage so its outline shows in the gloom
+      const cg = new THREE.PointLight(0x8070a0, 0.5, 60, 1.4); add(cg, kx, 26, kz + 26);
+      const shaft = new THREE.SpotLight(0x7080b0, 0.9, 45, 0.5, 0.7, 1.2); shaft.position.set(kx + 4, 31, kz + 6); shaft.target.position.set(kx, 0, kz); add(shaft, kx + 4, 31, kz + 6); root.add(shaft.target);   // a thin grey light from a crack far above, just enough to show its shape
+    }
+    DUN.found = true;
+  }
+  const dunIn = (x, z, pad = 0.45) => DUN.rects.some(([x0, x1, z0, z1]) => x > x0 + pad && x < x1 - pad && z > z0 + pad && z < z1 - pad) || (Math.abs(x) < 3 - pad && DUN.rects.some(r => Math.abs(z - r[2]) < 1 || Math.abs(z - r[3]) < 1));
+  function dunEnter() {
+    if (!DUN.scene) dunBuild();
+    if (!STATE.dunFound) { STATE.dunFound = true; save(); toast("A stone gives way under yer hand... a hidden stair leads down into the dark beneath the skull!"); }
+    DUN.on = true; DUN.lungeT = 0;
+    if (player.root.parent) player.root.parent.remove(player.root); DUN.root.add(player.root); player.root.scale.setScalar(1);
+    P.pos.set(DUN.O.x, 0, DUN.O.z - 2); P.vy = 0; P.grounded = true; P.speed = 0; P.facing = Math.PI; yaw = 0; pitch = 0.3;
+    DUN.savedDist = dist; dist = 6; snapCam = true; camera.near = 0.1; camera.updateProjectionMatrix();
+    hudHint.innerHTML = 'WASD to walk &middot; Shift to run &middot; E to open chests &middot; E on the stair to climb back up';
+    SFX.door(); setTimeout(() => toast('The Blackwater Vaults. Somewhere far below, something enormous breathes in the dark...'), 900);
+  }
+  function dunLeave() {
+    if (!DUN.on) return;
+    DUN.on = false; DUN.root.remove(player.root); scene.add(player.root);
+    const d = dunDoor(); P.pos.set(d.x + Math.sin(d.f) * 4, heightAt(d.x, d.z) + 0.5, d.z + Math.cos(d.f) * 4); P.facing = d.f; P.grounded = false; P.vy = 0;
+    dist = DUN.savedDist || 13; camera.near = 1.0; camera.updateProjectionMatrix(); snapCam = true;
+    hudHint.innerHTML = walkHint; SFX.door();
+  }
+  const dunLocal = () => ({ x: P.pos.x - DUN.O.x, z: P.pos.z - DUN.O.z });
+  const dunNearStair = () => { const l = dunLocal(); return Math.abs(l.x) < 3 && l.z > -1.5; };
+  const dunNearChest = () => { const l = dunLocal(); return DUN.chests.find(c => Math.hypot(c.x - l.x, c.z - l.z) < 2.4) || null; };
+  const dunNearHoard = () => { const l = dunLocal(); return Math.hypot(l.x, l.z + 67) < 7.5; };
+  function dunInteract() {
+    if (dunNearStair()) { dunLeave(); return; }
+    const c = dunNearChest();
+    if (c) { if (c.cd > 0) { toast('Empty. Ye cleaned this one out.'); return; } c.cd = 1200; c.spill.visible = false; SFX.coin && SFX.coin(); addGold(500 + Math.floor(crand() * 600), 'Blackwater Vault chest'); if (crand() < 0.5) addMat(pick(['pearl', 'gem', 'steel']), 1 + (crand() < 0.3 ? 1 : 0)); return; }
+    if (dunNearHoard()) { if ((DUN.hoardCd || 0) > 0) { toast("Ye've stuffed yer pockets already. Even a pirate can only carry so much."); return; } DUN.hoardCd = 1800; SFX.coin && SFX.coin(); addGold(2500 + Math.floor(crand() * 2500), "The Blackwater hoard"); addMat('gem', 2); addMat('pearl', 3); return; }
+  }
+  function dunPrompt() {
+    if (dunNearStair()) return '<b>E</b> Climb back up';
+    const c = dunNearChest(); if (c) return c.cd > 0 ? 'An empty chest' : '<b>E</b> Open the chest';
+    if (dunNearHoard()) return (DUN.hoardCd || 0) > 0 ? 'The hoard (yer pockets are full)' : '<b>E</b> Fill yer pockets from the hoard';
+    const l = dunLocal(); if (Math.hypot(l.x - DUN.cage.x, l.z - DUN.cage.z) < DUN.cage.r + 10) return 'The Blackwater Beast';
+    return null;
+  }
+  function dunWalk(dt, t) {
+    let fwd = 0, side = 0;
+    if (!talk && !uiOpen) { fwd = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0); side = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0); }
+    let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side; const ml = Math.hypot(mx, mz);
+    P.speed += ((ml > 0 ? (keys['shift'] ? 9 : 5) : 0) - P.speed) * Math.min(1, dt * 10);
+    if (ml > 0) P.facing = angLerp(P.facing, Math.atan2(mx / ml, mz / ml), Math.min(1, dt * 12));
+    const l = dunLocal(), dx = Math.sin(P.facing) * P.speed * dt, dz = Math.cos(P.facing) * P.speed * dt;
+    if (dunIn(l.x + dx, l.z + dz)) { l.x += dx; l.z += dz; } else if (dunIn(l.x + dx, l.z)) l.x += dx; else if (dunIn(l.x, l.z + dz)) l.z += dz;
+    resolveList(l, 0.45, DUN.cols);
+    P.pos.x = DUN.O.x + l.x; P.pos.z = DUN.O.z + l.z;
+    if (P.grounded && keys[' '] && !talk && !uiOpen) { P.vy = 7; P.grounded = false; }
+    if (!P.grounded) { P.vy -= 22 * dt; P.pos.y += P.vy * dt; if (P.pos.y <= 0) { P.pos.y = 0; P.grounded = true; P.vy = 0; } }
+    player.root.position.set(l.x, P.pos.y, l.z); player.root.rotation.set(0, P.facing, 0);
+    player.slashP = 1 - Math.max(0, PLAYER.slashT) / (PLAYER.slashDur || 0.35);
+    player.update(dt, P.speed, !P.grounded, false, PLAYER.slashT > 0 ? 'slash' : null);
+    if (P.grounded) stepSound(false, false);
+    for (const c of DUN.chests) if (c.cd > 0) { c.cd -= dt; if (c.cd <= 0) c.spill.visible = true; }
+    if (DUN.hoardCd > 0) DUN.hoardCd -= dt;
+    // torches flicker
+    for (const f of DUN.flames) { const k = 0.85 + 0.15 * Math.sin(t * 13 + f.position.x * 3) * Math.sin(t * 7.3 + f.position.z); f.scale.set(1 * k, 1.4 * k, 1); if (f.userData.L) f.userData.L.intensity = 1.0 * k; }
+    // the beast: breathing, pacing, watching ye, growling; and if ye come close, it throws itself at the bars
+    const Bs = DUN.beast; if (!Bs) return;
+    Bs.t += dt; const br = Math.sin(Bs.t * 1.1);
+    Bs.body.scale.y = 4.6 + br * 0.18; Bs.hump.scale.y = 3.6 + br * 0.15;
+    const cg = DUN.cage, px = l.x - cg.x, pz = l.z - cg.z, pd = Math.hypot(px, pz), near = pd < cg.r + 22;
+    // it prowls round inside the cage, turning to keep ye in sight
+    Bs.pace += dt * (near ? 0.25 : 0.1); const ang = near ? Math.atan2(px, pz) : Bs.pace;
+    const want = Math.atan2(Math.sin(ang), Math.cos(ang)); Bs.B.rotation.y += angDiff(Bs.B.rotation.y, want) * Math.min(1, dt * (near ? 1.4 : 0.4));
+    let reach = near ? cg.r - 12 : 3 + Math.sin(Bs.pace * 1.7) * 2;   // how far from the middle it stands
+    const LG = DUN.lungeT; if (LG > 0) { DUN.lungeT -= dt; const u = 1 - DUN.lungeT / 2.2; reach += Math.sin(Math.min(1, u * 1.6) * Math.PI) * 6; }
+    Bs.B.position.x += (cg.x + Math.sin(Bs.B.rotation.y) * reach - Bs.B.position.x) * Math.min(1, dt * 2);
+    Bs.B.position.z += (cg.z + Math.cos(Bs.B.rotation.y) * reach - 2 - Bs.B.position.z) * Math.min(1, dt * 2);
+    Bs.legs.forEach((lg, i) => { lg.rotation.x = Math.sin(Bs.t * 2.2 + i * 1.6) * (near ? 0.15 : 0.08); });
+    Bs.tail.forEach((tp, i) => { tp.position.x = Math.sin(Bs.t * 1.3 - i * 0.5) * i * 0.35; });
+    const growl = LG > 0 || (Bs.growlT < 1.5);
+    Bs.jaw.rotation.x = growl ? 0.45 + Math.sin(Bs.t * 18) * 0.06 : 0.08 + br * 0.04;
+    Bs.neck.rotation.x = near ? -0.15 + (LG > 0 ? 0.3 : 0) : 0.1;
+    Bs.head.rotation.y = Math.sin(Bs.t * 0.7) * 0.15;
+    const glow = 0.8 + 0.2 * Math.sin(Bs.t * 2.4); Bs.eyes.forEach(e => e.material.opacity = glow * (near ? 1 : 0.7)); Bs.eyeLight.intensity = 0.6 + 0.5 * glow * (near ? 1.4 : 0.8);
+    Bs.growlT -= dt; if (Bs.growlT <= 0) { Bs.growlT = 8 + Math.random() * 10; const wp = new THREE.Vector3(); Bs.head.getWorldPosition(wp); SFX.beastGrumble({ x: wp.x, z: wp.z, range: 400 }, 1.2); }
+    // lunge at the bars: a roar, the bars ring and shake
+    if (pd < cg.r + 10 && LG <= 0 && (DUN.lungeCd || 0) <= 0) { DUN.lungeT = 2.2; DUN.lungeCd = 7; const wp = new THREE.Vector3(); Bs.head.getWorldPosition(wp); SFX.beastRoar({ x: wp.x, z: wp.z, range: 400 }, 1.4, 1); setTimeout(() => SFX.crash({ x: wp.x, z: wp.z }), 500); if (!DUN.toldBeast) { DUN.toldBeast = true; toast('The Blackwater Beast hurls itself at the bars! The whole cage shudders... it holds. For now.'); } }
+    DUN.lungeCd = Math.max(0, (DUN.lungeCd || 0) - dt);
+    if (DUN.barMesh) { const sh = LG > 0 ? Math.sin(t * 40) * 0.12 * Math.min(1, LG) : 0; DUN.barMats.forEach((m, i) => { const e = m.elements; const tmpm = m.clone(); tmpm.elements[12] = e[12] + sh * Math.sin(i); DUN.barMesh.setMatrixAt(i, tmpm); }); DUN.barMesh.instanceMatrix.needsUpdate = true; }
+  }
   function nearChest() { if (!STOM.on || STOM.looted) return false; const c = STOM.chest.position; return Math.hypot(P.pos.x - c.x * STOM.SF, P.pos.z - c.z * STOM.SF) < 2.6; }
   function lootChest() { STOM.looted = true; STOM.coins.visible = false; addGold(40 + Math.floor(Math.random() * 40), 'Treasure from the mermaid\'s belly'); if (Math.random() < 0.6) addMat('pearl', 1); }
   // walking around in there, everything scaled to the chamber
@@ -8035,7 +8266,7 @@ window.__pgBoot = () => {
     return T.ent.state !== 'sinking' && T.ent.state !== 'gone';
   }
   function krSwimming() {
-    if (onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held) return false;
+    if (onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held || DUN.on) return false;
     return !onDock(P.pos.x, P.pos.z) && krDeep(P.pos.x, P.pos.z) && P.pos.y < 1.5;
   }
   function krFindTarget() {
@@ -9793,7 +10024,7 @@ window.__pgBoot = () => {
   addEventListener('keydown', e => { if (uiOpen !== 'elpick' || e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 9) { e.preventDefault(); elChoose(n - 1); } });
   // ---- riding him ----
   const elderSaddle = () => { const m = ELD.mesh; m.head.updateMatrixWorld(); return m.head.localToWorld(new THREE.Vector3(0, 0.82, 0.9)); };
-  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && (ELD.waiting || ELD.speed < ELD.K.max * 0.3) && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach;
+  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && !DUN.on && (ELD.waiting || ELD.speed < ELD.K.max * 0.3) && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach;
   function elderMount() {
     if (sailing) leaveWheel();
     if (onShip) detach();
@@ -10322,6 +10553,7 @@ window.__pgBoot = () => {
       if (!HORN.known && window.__mpHornClaim && hornOnline() && (MP.hornAskT = (MP.hornAskT || 0) - 0.12) <= 0) { MP.hornAskT = 2; window.__mpHornClaim(!!STATE.hornOnline); }   // ask the server who holds the horn
       try {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
+        if (DUN.on) { const d = dunDoor(); _mpV.set(d.x, heightAt(d.x, d.z) - 30, d.z); }   // down in the vaults: out of sight under the skull
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null,
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
@@ -10420,7 +10652,7 @@ window.__pgBoot = () => {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
     if ((menuOpen || uiOpen === 'acct') && menuFrames++ > 3) {     // paused: the world freezes behind the menu
-      renderer.render(inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
+      renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
       requestAnimationFrame(tick); return;
     }
 
@@ -10430,7 +10662,9 @@ window.__pgBoot = () => {
     updateTide(dt, t); updateGhost(dt, t); updateFortGuns(dt);
     updateElder(dt, t); updateBrood(dt, t); if (MP.room) { updateRemoteElders(dt, t); updateRemoteBroods(dt, t); }
     mpUpdate(dt, t);
-    if (STOM.on) {
+    if (DUN.on) {
+      dunWalk(dt, t);
+    } else if (STOM.on) {
       stomachWalk(dt, t);
     } else if (STOM.done) {
       player.update(dt, 0, false, false);
@@ -10563,6 +10797,7 @@ window.__pgBoot = () => {
 
     let promptHtml = null;
     if (talk || uiOpen) promptHtml = null;
+    else if (DUN.on) promptHtml = dunPrompt();
     else if (STOM.on) promptHtml = nearChest() ? '<b>E</b> Grab the treasure' : null;
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
@@ -10575,7 +10810,7 @@ window.__pgBoot = () => {
     else if (nearWheel()) promptHtml = '<b>E</b> Take the wheel';
     else if (nearHorn()) promptHtml = '<b>E</b> Take the Serpent Horn';
     else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
-    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
+    else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearDunDoor()) promptHtml = STATE.dunFound ? '<b>E</b> Descend into the Blackwater Vaults' : '<b>E</b> Search the rock beneath the skull\'s jaw'; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
     if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
@@ -10596,7 +10831,12 @@ window.__pgBoot = () => {
       camTarget.y + Math.sin(pitch) * dist,
       camTarget.z + Math.cos(yaw) * Math.cos(pitch) * dist
     );
-    if (inInterior) {
+    if (DUN.on) {   // stay inside whichever hall ye're in
+      const lx = P.pos.x - DUN.O.x, lz = P.pos.z - DUN.O.z, r = DUN.rects.find(([x0, x1, z0, z1]) => lx >= x0 - 0.5 && lx <= x1 + 0.5 && lz >= z0 - 0.5 && lz <= z1 + 0.5) || DUN.rects[0];
+      camera.position.x = DUN.O.x + Math.max(r[0] + 0.4, Math.min(r[1] - 0.4, camera.position.x - DUN.O.x));
+      camera.position.z = DUN.O.z + Math.max(r[2] + 0.4, Math.min(r[3] - 0.4, camera.position.z - DUN.O.z));
+      camera.position.y = Math.max(0.6, Math.min(r[4] - 0.4, camera.position.y));
+    } else if (inInterior) {
       const C = interior.C;
       camera.position.x = Math.max(-C.W + 0.4, Math.min(C.W - 0.4, camera.position.x));
       camera.position.z = Math.max(-C.Lr + 0.4, Math.min(C.Lr - 0.4, camera.position.z));
@@ -10657,7 +10897,7 @@ window.__pgBoot = () => {
 
     if (STOM.scene) updatePuffIn(dt);
     if (inInterior && interior.stern) renderSternView();
-    renderer.render(inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
+    renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
     requestAnimationFrame(tick);
   }
   if (STATE.shipKey && SHIP_TYPES[STATE.shipKey]) spawnShip(STATE.shipKey);
