@@ -5591,37 +5591,38 @@
       // and a mouth-shaped set of formant filters, with a long cavernous echo. size 1 is the Elder Serpent; smaller is higher.
       beastRoar(pos, size = 1, durMul = 1) {
         if (!ctx || muted) return; const o = out(pos, 0.55 + 0.25 * size); if (!o) return;
-        const t = ctx.currentTime, dur = (1.5 + 1.9 * size) * durMul, k = 1 / Math.max(0.3, size), f0 = 46 * Math.pow(k, 0.8);
-        const pitch = (p, a) => { p.setValueAtTime(a * 0.8, t); p.exponentialRampToValueAtTime(a * 1.28, t + 0.35); p.exponentialRampToValueAtTime(a * 1.05, t + dur * 0.55); p.exponentialRampToValueAtTime(a * 0.62, t + dur); };
+        const t = ctx.currentTime, dur = (2.0 + 2.6 * size) * durMul, k = 1 / Math.max(0.3, size), f0 = 31 * Math.pow(k, 0.55);   // deep: ~31 Hz for the Elder Serpent
+        const pitch = (p, a) => { p.setValueAtTime(a * 0.7, t); p.exponentialRampToValueAtTime(a * 1.15, t + 0.6); p.exponentialRampToValueAtTime(a, t + dur * 0.6); p.exponentialRampToValueAtTime(a * 0.55, t + dur); };   // a slow, heavy surge and sag
         const voice = ctx.createGain(); voice.gain.value = 0.5;
         // the growl: three detuned saws, with a fast irregular tremor for the rattle in the throat
-        const trem = ctx.createGain(); trem.gain.value = 0.55; trem.connect(voice);
-        const lfo = ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.setValueAtTime(17, t); lfo.frequency.linearRampToValueAtTime(23, t + dur * 0.5); lfo.frequency.linearRampToValueAtTime(11, t + dur);
-        const lfoG = ctx.createGain(); lfoG.gain.value = 0.45; lfo.connect(lfoG); lfoG.connect(trem.gain);
-        const vib = ctx.createOscillator(); vib.frequency.value = 5.5; const vibG = ctx.createGain(); vibG.gain.value = f0 * 0.04; vib.connect(vibG);
+        const trem = ctx.createGain(); trem.gain.value = 0.5; trem.connect(voice);
+        const lfo = ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.setValueAtTime(11, t); lfo.frequency.linearRampToValueAtTime(16, t + dur * 0.45); lfo.frequency.linearRampToValueAtTime(7, t + dur);   // a slower, rougher rattle in the throat
+        const lfoG = ctx.createGain(); lfoG.gain.value = 0.6; lfo.connect(lfoG); lfoG.connect(trem.gain);
+        const vib = ctx.createOscillator(); vib.frequency.value = 3.2; const vibG = ctx.createGain(); vibG.gain.value = f0 * 0.05; vib.connect(vibG);
         const oscs = [lfo, vib];
-        [-9, 0, 11].forEach(dt2 => { const os = ctx.createOscillator(); os.type = 'sawtooth'; os.detune.value = dt2; pitch(os.frequency, f0); vibG.connect(os.frequency); os.connect(trem); oscs.push(os); });
-        const sub = ctx.createOscillator(); sub.type = 'sine'; pitch(sub.frequency, f0 / 2); const subG = ctx.createGain(); subG.gain.value = 0.9; sub.connect(subG); oscs.push(sub);   // chest rumble
+        // three detuned voices, and one a tritone up for a sour, menacing edge
+        [-14, 0, 9, 600].forEach(dt2 => { const os = ctx.createOscillator(); os.type = 'sawtooth'; os.detune.value = dt2; pitch(os.frequency, f0); vibG.connect(os.frequency); os.connect(trem); oscs.push(os); });
+        const sub = ctx.createOscillator(); sub.type = 'triangle'; pitch(sub.frequency, f0 * 0.75); const subG = ctx.createGain(); subG.gain.value = 1.4; sub.connect(subG); oscs.push(sub);   // chest rumble
         // breath: noise roaring through the throat
         const br = ctx.createBufferSource(); br.buffer = noiseBuf; br.loop = true; br.playbackRate.value = 0.6;
-        const brF = ctx.createBiquadFilter(); brF.type = 'bandpass'; brF.Q.value = 0.8; brF.frequency.setValueAtTime(500 * Math.sqrt(k), t); brF.frequency.exponentialRampToValueAtTime(1400 * Math.sqrt(k), t + 0.4); brF.frequency.exponentialRampToValueAtTime(380 * Math.sqrt(k), t + dur);
-        const brG = ctx.createGain(); brG.gain.value = 0.55; br.connect(brF); brF.connect(brG); brG.connect(voice);
+        const brF = ctx.createBiquadFilter(); brF.type = 'bandpass'; brF.Q.value = 0.8; brF.frequency.setValueAtTime(260 * Math.sqrt(k), t); brF.frequency.exponentialRampToValueAtTime(700 * Math.sqrt(k), t + 0.6); brF.frequency.exponentialRampToValueAtTime(180 * Math.sqrt(k), t + dur);
+        const brG = ctx.createGain(); brG.gain.value = 0.7; br.connect(brF); brF.connect(brG); brG.connect(voice);
         // distortion, for the raw edge of a huge voice
-        const ws = ctx.createWaveShaper(), curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 3.2); } ws.curve = curve; voice.connect(ws);
+        const ws = ctx.createWaveShaper(), curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 4.5); } ws.curve = curve; voice.connect(ws);
         // the mouth: formant filters shaping it from an open "aaah" toward a closing "ohh"
         const mix = ctx.createGain(); mix.gain.value = 0.9;
-        [[650, 330, 4, 1], [1080, 640, 5, 0.6], [2500, 1900, 6, 0.25]].forEach(([fa, fb, q, gn]) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q; f.frequency.setValueAtTime(fa * Math.pow(k, 0.5) * 0.7, t); f.frequency.exponentialRampToValueAtTime(fa * Math.pow(k, 0.5), t + 0.4); f.frequency.exponentialRampToValueAtTime(fb * Math.pow(k, 0.5), t + dur); const g2 = ctx.createGain(); g2.gain.value = gn * 2.2; ws.connect(f); f.connect(g2); g2.connect(mix); });
-        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; ws.connect(lp); const lpG = ctx.createGain(); lpG.gain.value = 0.35; lp.connect(lpG); lpG.connect(mix);
+        [[420, 230, 3.5, 1.2], [760, 450, 4.5, 0.55], [1700, 1300, 5, 0.18]].forEach(([fa, fb, q, gn]) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q; f.frequency.setValueAtTime(fa * Math.pow(k, 0.5) * 0.7, t); f.frequency.exponentialRampToValueAtTime(fa * Math.pow(k, 0.5), t + 0.4); f.frequency.exponentialRampToValueAtTime(fb * Math.pow(k, 0.5), t + dur); const g2 = ctx.createGain(); g2.gain.value = gn * 2.2; ws.connect(f); f.connect(g2); g2.connect(mix); });
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; ws.connect(lp); const lpG = ctx.createGain(); lpG.gain.value = 0.6; lp.connect(lpG); lpG.connect(mix);
         subG.connect(mix);
         // the envelope: swells in, holds, and dies away
-        const envG = ctx.createGain(); envG.gain.setValueAtTime(0.0001, t); envG.gain.exponentialRampToValueAtTime(1, t + 0.22); envG.gain.setValueAtTime(1, t + dur * 0.55); envG.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        const envG = ctx.createGain(); envG.gain.setValueAtTime(0.0001, t); envG.gain.exponentialRampToValueAtTime(1, t + 0.4); envG.gain.setValueAtTime(1, t + dur * 0.55); envG.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         mix.connect(envG);
         // a long cavernous echo, from a freshly made impulse of decaying noise
-        if (!SFX._verb) { const L = Math.floor(ctx.sampleRate * 2.8), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 2.6); } SFX._verb = ir; }
-        const verb = ctx.createConvolver(); verb.buffer = SFX._verb; const wet = ctx.createGain(); wet.gain.value = 0.45; const dry = ctx.createGain(); dry.gain.value = 0.85;
-        envG.connect(dry); dry.connect(o); envG.connect(verb); verb.connect(wet); wet.connect(o);
+        if (!SFX._verb) { const L = Math.floor(ctx.sampleRate * 3.6), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 2.6); } SFX._verb = ir; }
+        const verb = ctx.createConvolver(); verb.buffer = SFX._verb; const wet = ctx.createGain(); wet.gain.value = 0.5; const dark = ctx.createBiquadFilter(); dark.type = 'lowpass'; dark.frequency.value = 700; const dry = ctx.createGain(); dry.gain.value = 0.85;
+        envG.connect(dry); dry.connect(o); envG.connect(verb); verb.connect(dark); dark.connect(wet); wet.connect(o);   // the echo comes back dark, from deep water
         oscs.forEach(os => { os.start(t); os.stop(t + dur + 0.1); }); br.start(t, Math.random()); br.stop(t + dur + 0.1);
-        setTimeout(() => { try { [envG, mix, verb, wet, dry].forEach(n => n.disconnect()); } catch (e) {} }, (dur + 3.2) * 1000);
+        setTimeout(() => { try { [envG, mix, verb, wet, dry, dark].forEach(n => n.disconnect()); } catch (e) {} }, (dur + 4) * 1000);
       },
       horn() { tone({ type: 'sawtooth', f0: 98, f1: 104, dur: 2.6, vol: 0.22, attack: 0.5 }); tone({ type: 'triangle', f0: 147, f1: 156, dur: 2.6, vol: 0.18, attack: 0.5 }); tone({ type: 'sawtooth', f0: 196, f1: 185, dur: 1.4, vol: 0.08, attack: 0.3, delay: 1.2 }); },
       roar() { tone({ type: 'sawtooth', f0: 90, f1: 38, dur: 2.2, vol: 0.3, attack: 0.1 }); tone({ type: 'square', f0: 62, f1: 30, dur: 2.4, vol: 0.18, attack: 0.2 }); noise({ dur: 2, type: 'lowpass', f0: 500, vol: 0.3 }); },
