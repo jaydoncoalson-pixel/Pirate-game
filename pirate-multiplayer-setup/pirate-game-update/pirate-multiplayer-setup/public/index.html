@@ -8334,9 +8334,22 @@
         if (ELD.sk > 1.9) ELD.st = 'swim';
       } else ELD.st = 'swim';
     } else if (ELD.mode === 'mount') {
-      // come alongside, a good way off the beam, and lie still
-      const sx = Math.sin(H.h), sz = Math.cos(H.h), off = ELD.K.mountOff * ELD.side, tx = H.x + sz * off, tz = H.z - sx * off, ds = Math.hypot(tx - ELD.x, tz - ELD.z);
-      ELD.waiting = ds < ELD.K.mountR;
+      // come right to where ye stand: aboard, he pulls up off the rail on yer side of the ship, level with ye;
+      // in the water or on a dock, he swims straight up to ye. He follows if ye move, and waits once he's there.
+      let tx, tz;
+      const onDeck = H.ship && (onShip || sailing || Math.hypot(P.pos.x - H.x, P.pos.z - H.z) < ELD.K.mountOff * 1.5);
+      if (onDeck) {
+        const sx = Math.sin(H.h), sz = Math.cos(H.h), rx = P.pos.x - H.x, rz = P.pos.z - H.z;
+        const lat = rx * sz - rz * sx, along = Math.max(-40, Math.min(40, rx * sx + rz * sz));
+        if (Math.abs(lat) > 2) ELD.side = lat > 0 ? 1 : -1;   // the side of the ship ye're standing on
+        const off = ELD.K.mountOff * ELD.side; tx = H.x + sz * off + sx * along; tz = H.z - sx * off + sz * along;
+      } else {
+        const dP = Math.hypot(ELD.x - P.pos.x, ELD.z - P.pos.z) || 1, off = ELD.K.mountOff * 0.7;
+        tx = P.pos.x + (ELD.x - P.pos.x) / dP * off; tz = P.pos.z + (ELD.z - P.pos.z) / dP * off;
+      }
+      const ds = Math.hypot(tx - ELD.x, tz - ELD.z);
+      ELD.waiting = ELD.waiting ? ds < ELD.K.mountR * 1.8 : ds < ELD.K.mountR;   // a little slack, so he doesn't fidget as ye walk about
+      if (!ELD.waiting && ELD.stuckT > 3 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach * 1.5) ELD.waiting = true;   // as close as the shallows let him
       if (ELD.waiting) { ELD.speed *= Math.max(0, 1 - dt * 1.5); ELD.h += angDiff(ELD.h, H.h) * Math.min(1, dt * 0.8); elderMove(dt); }
       else elderSteer(tx, tz, Math.min(ELD.K.max, H.sp + ds * 0.4), dt, 1.4);
       ELD.st = 'swim';
@@ -8421,7 +8434,7 @@
     const H = elderHome(), dd = e => Math.round(Math.hypot(e.x - H.x, e.z - H.z));
     elOpts = [
       { label: 'Guard my ship', sub: 'follows close and attacks anything that attacks ye', on: ELD.mode === 'guard', act: () => { ELD.mode = 'guard'; ELD.pick = null; ELD.tg = null; ELD.st = 'swim'; etoast('The Elder Serpent takes up his guard beside yer ship.'); } },
-      { label: 'Let me ride him', sub: 'he stops beside yer ship so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; etoast('The Elder Serpent swims alongside and lowers his head. Walk up to him and press E to climb on.'); } },
+      { label: 'Let me ride him', sub: 'he swims right up to ye so ye can climb on', on: ELD.mode === 'mount', act: () => { ELD.mode = 'mount'; ELD.st = 'swim'; etoast('The Elder Serpent comes to ye and lowers his head. Press E to climb on.'); } },
     ];
     elOpts.push({ label: 'Send him back to the deep', act: dismissElder });   // kept up top so a long target list can't push it off the menu
     const tg = [];
@@ -8451,7 +8464,7 @@
   addEventListener('keydown', e => { if (uiOpen !== 'elpick' || e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 9) { e.preventDefault(); elChoose(n - 1); } });
   // ---- riding him ----
   const elderSaddle = () => { const m = ELD.mesh; m.head.updateMatrixWorld(); return m.head.localToWorld(new THREE.Vector3(0, 0.82, 0.9)); };
-  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && ELD.waiting && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach;
+  const canMount = () => ELD.on && !ELD.leaving && ELD.mode === 'mount' && !RIDE.on && (ELD.waiting || ELD.speed < ELD.K.max * 0.3) && !inInterior && !STOM.on && !MERM.held && ELD.emerge > 0.9 && Math.hypot(P.pos.x - ELD.x, P.pos.z - ELD.z) < ELD.K.mountReach;
   function elderMount() {
     if (sailing) leaveWheel();
     if (onShip) detach();
