@@ -2093,8 +2093,18 @@ window.__pgBoot = () => {
   // ---------- Player ----------
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
   const MARINE_LOOK = { coat: 0x2f6b4f, shirt: 0xcfe6d6, pants: 0x1f3a3a, hat: 'tricorn', hatColor: 0x1f4a3a, feather: 0x3f8a3a, eyepatch: false };
+  // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
+  // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
+  function ghostify(ch, tint = 0.55) {
+    const pale = new THREE.Color(0xbfeee0);
+    ch.root.traverse(o => { if (!o.material || o.isSprite) return; const one = !Array.isArray(o.material), ms = one ? [o.material] : o.material;
+      const out = ms.map(m => { const c = m.clone(); c.transparent = true; c.opacity = 0.45; c.depthWrite = false; if (c.color) c.color.lerp(pale, tint); if (c.emissive) c.emissive.setHex(0x2a6a58); return c; });
+      o.material = one ? out[0] : out; });
+    const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.35 })); aura.scale.set(3.2, 4.4, 1); aura.position.y = 1.4; ch.root.add(aura);
+    ch.ghost = true; return ch;
+  }
   const playerLook = () => { if (STATE.sword !== 'seasword') return lookToChar(STATE.look); const c = lookToChar(Object.assign({}, STATE.look, MARINE_LOOK)); c.marine = true; return c; };
-  let player = makeCharacter(playerLook());
+  let player = makeCharacter(playerLook()); if (STATE.sword === 'ghost') ghostify(player, 0.45);
   scene.add(player.root);
   const startP = dockWorld(0, DOCK_LEN - 6);
   const P = { pos: new THREE.Vector3(startP.x, DOCK_TOP, startP.y), vy: 0, facing: Math.atan2(-DOCK_DIR.x, -DOCK_DIR.y), grounded: true, speed: 0 };
@@ -2151,12 +2161,7 @@ window.__pgBoot = () => {
   const npcs = NPC_DEFS.map(def => {
     const ch = makeCharacter(def.look);
     (def.props || []).forEach(k => addProp(ch, k));
-    if (def.ghost) {   // a ghost: pale, see-through and glowing faintly, with a cold light about him
-      const seen = new Set();
-      ch.root.traverse(o => { if (!o.material || seen.has(o.material)) return; const ms = Array.isArray(o.material) ? o.material : [o.material];
-        o.material = ms.map(m => { const c = m.clone(); c.transparent = true; c.opacity = 0.42; c.depthWrite = false; if (c.emissive) c.emissive.setHex(0x2a6a58); return c; }); if (o.material.length === 1) o.material = o.material[0]; seen.add(o.material); });
-      const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.35 })); aura.scale.set(3.2, 4.4, 1); aura.position.y = 1.4; ch.root.add(aura);
-    }
+    if (def.ghost) ghostify(ch);
     scene.add(ch.root);
     const start = def.at || (def.patrol ? def.patrol[0] : (def.area ? def.area() : streetPoint()));
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = def.name; tagLayer.appendChild(tag);
@@ -2729,6 +2734,29 @@ window.__pgBoot = () => {
   // coral growing from her hull. She sails twice as fast as any galleon.
   const WRECK_STYLE = { sail: 0x8a9a7a, hull: 0x3a5a40, trim: 0x5a7a5a, flag: 'jolly' };
   const isWreck = () => STATE.sword === 'seasword';
+  // ---- the ghost ship (Hollowell's Ghost Blade): yer own ship, turned spectral. A dark rotted hull ye can half see
+  // through, tattered grey-green sails glowing faintly, green ghost-lanterns at bow, stern and mastheads, and a
+  // cold mist that clings to her waterline and trails in her wake. She sails a fifth faster than a living ship.
+  const GHOST_STYLE = { sail: 0xa8d8c8, hull: 0x26403a, trim: 0x7fffc8, flag: 'jolly' };
+  const isGhostShip = () => STATE.sword === 'ghost';
+  const GHOST_SHIPS = new Set();
+  function decorateGhost(m) {
+    const glowCol = new THREE.Color(0x3affb0);
+    m.group.traverse(o => { if (!o.material || o.isSprite) return; const one = !Array.isArray(o.material), ms = one ? [o.material] : o.material;
+      const out = ms.map(mt => { const c = mt.clone(); c.transparent = true; const sail = mt.side === THREE.DoubleSide; c.opacity = sail ? 0.5 : 0.72; c.depthWrite = !sail; if (c.emissive) c.emissive.copy(glowCol).multiplyScalar(sail ? 0.35 : 0.12); return c; });
+      o.material = one ? out[0] : out; });
+    const L = m.walk.L, lights = [], mist = [];
+    const lamp = (x, y, z, s) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.8, blending: THREE.AdditiveBlending })); sp.scale.set(s, s, 1); sp.position.set(x, y, z); m.group.add(sp); lights.push(sp); };
+    lamp(0, m.helm.y + 2, -L * 0.42, 3); lamp(0, m.helm.y + 1, L * 0.45, 2.6);
+    (m.walk.masts || []).forEach(mt => lamp(0, (typeof mt.pTop === 'number' ? mt.pTop : m.helm.y + 14) + 0.8, mt.z, 2.2));
+    for (let i = 0; i < 16; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xcff8ea, transparent: true, depthWrite: false, opacity: 0.35 })); m.group.add(sp); mist.push({ sp, ph: i / 16, side: i % 2 ? 1 : -1 }); }
+    m.group.userData.ghostTick = t => {
+      lights.forEach((l, i) => { l.material.opacity = 0.55 + 0.35 * Math.sin(t * 3.1 + i * 1.7) * Math.sin(t * 1.3 + i); });
+      mist.forEach(q => { const u = (t * 0.08 + q.ph) % 1; q.sp.position.set(q.side * (m.walk.B * 0.55 + u * 3), 0.6 + Math.sin(t + q.ph * 9) * 0.3, L * 0.5 - u * L * 1.4); q.sp.scale.setScalar(4 + u * 7); q.sp.material.opacity = 0.32 * Math.sin(u * Math.PI); });
+    };
+    m.ghost = true; GHOST_SHIPS.add(m.group);
+    return m;
+  }
   // The lower hull has been torn open by rocks and age; keep the deck edge,
   // upper strakes and all railings completely intact.
   function wreckHull(m) {
@@ -2961,8 +2989,9 @@ window.__pgBoot = () => {
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
-    const wr = isWreck(), k = wr ? 'galleon' : key, m = makeShip(k, wr ? WRECK_STYLE : undefined);
+    const wr = isWreck(), gh = !wr && isGhostShip(), k = wr ? 'galleon' : key, m = makeShip(k, wr ? WRECK_STYLE : gh ? GHOST_STYLE : undefined);
     if (wr) { decorateWreck(m); m.T.speed = SHIP_TYPES.galleon.speed * 3.2 * 2; m.T.turn *= 1.3; }
+    if (gh) { decorateGhost(m); m.T.speed *= 1.2; }
     m.T.speed *= speedMul(key); m.T.turn *= turnMul(key);   // racing sails
     return m;
   }
@@ -2984,9 +3013,13 @@ window.__pgBoot = () => {
     SFX.splash({ x: ship.x, z: ship.z }, true);
   }
   // equipping or removing the Sword of the Sea changes outfit and ship
-  let wasSea = STATE.sword === 'seasword';
+  let wasSea = STATE.sword === 'seasword', wasGhost = STATE.sword === 'ghost';
   function onSwordChanged() {
-    const sea = STATE.sword === 'seasword';
+    const sea = STATE.sword === 'seasword', gh = STATE.sword === 'ghost';
+    if (gh !== wasGhost) {   // Hollowell's Ghost Blade: ye and yer ship pass over to the other side (and back)
+      wasGhost = gh; if (!sea) { wasSea = sea; rebuildPlayer(); swapPlayerShip(); SFX.wail && SFX.wail();
+        toast(gh ? (ship ? 'A cold mist rolls in... ye fade to a ghost, and yer ship rots into a spectral wreck lit by green ghost-lanterns!' : 'A cold mist rolls in, and ye fade to a ghost. Yer next ship will sail from the other side.') : 'The chill leaves yer bones. Ye and yer ship return to the land of the living.'); return; }
+    }
     if (sea === wasSea) return;
     wasSea = sea;
     rebuildPlayer(); swapPlayerShip();
@@ -4093,6 +4126,7 @@ window.__pgBoot = () => {
         q.at = [bottom.x, bottom.z]; q.y = bottom.y;
       }
       const member = makeCrewMember(q, used, ship.group, 1 / ship.K);
+      if (ship.ghost && member.ch) ghostify(member.ch, 0.5);   // a ghost ship's crew are long dead too
       ship.crew.push(member);
     });
   }
@@ -5005,7 +5039,7 @@ window.__pgBoot = () => {
   // ---------- Rebuilding after customization ----------
   function rebuildPlayer() {
     const old = player.root, parent = old.parent;
-    const np = makeCharacter(playerLook());
+    const np = makeCharacter(playerLook()); if (STATE.sword === 'ghost') ghostify(np, 0.45);
     np.root.position.copy(old.position); np.root.rotation.copy(old.rotation); np.root.scale.copy(old.scale);
     if (parent) { parent.remove(old); parent.add(np.root); }
     player = np; equipWeapons(np); enableShadows(np.root);
@@ -9732,6 +9766,7 @@ window.__pgBoot = () => {
   addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; if (e.key.toLowerCase() === 'r' && STATE.sword === 'ghost') ghostWail(); });
   function updateGhost(dt, t) {
     GHOST.cd = Math.max(0, GHOST.cd - dt);
+    for (const g of GHOST_SHIPS) { if (!g.parent) { GHOST_SHIPS.delete(g); continue; } g.userData.ghostTick(t); }
     for (let i = GHOST.rings.length - 1; i >= 0; i--) { const R = GHOST.rings[i]; R.t += dt; const u = Math.max(0, R.t) / 0.7; R.m.scale.setScalar(1 + u * 17); R.m.material.opacity = Math.max(0, 0.7 * (1 - u)); if (u >= 1) { scene.remove(R.m); GHOST.rings.splice(i, 1); } }
     // will-o'-wisps over the old graves and the ghost-light on the Lament's mast: only by night
     const night = isNight();
@@ -9762,7 +9797,7 @@ window.__pgBoot = () => {
   // Build a remote pirate's look exactly the way playerLook() builds yours (Sword of the Sea wearers get the marine outfit).
   const remoteLook = d => { const L = Object.assign({}, DEFAULT_LOOK, d.look || {}); if (d.sw !== 'seasword') return lookToChar(L); const c = lookToChar(Object.assign(L, MARINE_LOOK)); c.marine = true; return c; };
   function mpAdd(peer, by, d) {
-    const ch = makeCharacter(remoteLook(d));
+    const ch = makeCharacter(remoteLook(d)); if (d.sw === 'ghost') ghostify(ch, 0.45);
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = 'Pirate ' + peer.slice(0, 3); tagLayer.appendChild(tag);
     const p = { peer, ch, tag, name: 'Pirate ' + peer.slice(0, 3), pos: new THREE.Vector3(d.x, d.y, d.z), f: d.f || 0, sp: 0, ship: null, shipKey: null, tgt: d, lookKey: JSON.stringify(d.look || {}) };
     ch.root.position.copy(p.pos); scene.add(ch.root);
@@ -9987,7 +10022,7 @@ window.__pgBoot = () => {
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
         else if (GUEST.on && GUEST.p) st.ob = { o: GUEST.p.peer, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };   // ob: aboard a ship (whose, and where on deck)
-        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
+        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, g: ship.ghost ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0, gm: r(gunMul()) };   // a: crewed, so raiders will hunt it; gm: heavy cannons
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
       } catch (e) {}
@@ -9998,7 +10033,7 @@ window.__pgBoot = () => {
       const lk = JSON.stringify(d.look || {}), swordId = d.sw || 'rusty';
       if (lk !== p.lookKey || swordId !== p.swordKey) {   // rebuild when outfit or equipped sword changes
         p.lookKey = lk; p.swordKey = swordId; if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root);
-        p.ch = makeCharacter(remoteLook(d));
+        p.ch = makeCharacter(remoteLook(d)); if (swordId === 'ghost') ghostify(p.ch, 0.45);
         // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
         p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
@@ -10032,12 +10067,12 @@ window.__pgBoot = () => {
       // their ship
       const sh = d.sh;
       // Rebuild remote ships when either their hull type or Sword-of-the-Sea wreck form changes.
-      const remoteShipKey = sh ? sh.k + (sh.w ? ':wreck' : '') : null;
+      const remoteShipKey = sh ? sh.k + (sh.w ? ':wreck' : sh.g ? ':ghost' : '') : null;
       if (sh && (!p.ship || p.shipKey !== remoteShipKey)) {
         if (p.ship) scene.remove(p.ship.group);
         try {
-          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : undefined);
-          if (sh.w) decorateWreck(p.ship);
+          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : sh.g ? GHOST_STYLE : undefined);
+          if (sh.w) decorateWreck(p.ship); else if (sh.g) decorateGhost(p.ship);
           p.shipKey = remoteShipKey; scene.add(p.ship.group);
         } catch (e) { p.ship = null; p.shipKey = null; }
       } else if (!sh && p.ship) { scene.remove(p.ship.group); p.ship = null; p.shipKey = null; }
