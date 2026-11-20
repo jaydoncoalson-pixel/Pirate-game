@@ -7173,7 +7173,7 @@
           gx = me.x; gz = me.z; sp = d > 120 ? Math.min(110, 24 + d * 0.3) : d > 60 ? 20 : 0;
         }
         KR.scanT = (KR.scanT || 0) - dt;
-        if (KR.cd <= 0 && KR.scanT <= 0) {
+        if (KR.cd <= 0 && KR.scanT <= 0 && !(KR.clashHold > 0)) {
           KR.scanT = 1; const T = krFindTarget();
           if (T) {
             KR.tgt = T; KR.st = 'hunt'; KR.toldHunt = false;
@@ -7196,7 +7196,7 @@
           const d = Math.hypot(gx - KR.x, gz - KR.z);
           if (T.kind !== 'remoteShip' && !KR.toldHunt && (T.kind !== 'raider') && d < 380) { KR.toldHunt = true; toast('Something enormous is movin\' beneath the waves... and it\'s comin\' for ye!'); SFX.roar(); }
           if (d > 1000 && T.kind !== 'remoteShip' && !(KR.pick && KR.pick.ent === T.ent)) { KR.tgt = null; KR.st = 'roam'; KR.cd = 8; }
-          else if (d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);
+          else if (KR.clashHold <= 0 && d < (T.kind === 'swim' ? 18 : T.ent.T.L * 0.5 + 18) && krDeep(gx, gz)) krEngage(T);   // (not while it's fighting a serpent)
         }
       }
       if (KR.st === 'roam' || KR.st === 'hunt') {
@@ -8309,13 +8309,14 @@
   const CLASH_DRAW = [];                                                 // serpents (ours or others') locked with the Kraken this frame
   function startClash() {
     ELD.clash = { t: 0, a: Math.atan2(ELD.x - KR.x, ELD.z - KR.z), bit: false, roar2: false };
+    KR.clashHold = 0.5; if (krNet()) window.__mpKrSend('kclash', {});   // hold it to the fight (online the server does)
     ELD.st = 'swim'; ELD.speed = 0; elderRoar(0.9);
     etoast('The Kraken erupts from the deep to meet the serpent!');
   }
   function clashTick(dt) {
     const C = ELD.clash, K = ELD.K; C.t += dt;
     const krOK = KR.st === 'roam' || KR.st === 'hunt' || KR.st === 'dying' || KR.st === 'dead';
-    if (!krOK || C.t > CLASH_T) { ELD.clash = null; ELD.clashCd = 12; ELD.st = 'swim'; return; }
+    if (!krOK || C.t > CLASH_T) { ELD.clash = null; ELD.clashCd = 12; ELD.st = 'swim'; if (!krNet() && KR.st === 'hunt') { KR.st = 'roam'; KR.tgt = null; } KR.cd = Math.max(KR.cd || 0, 6); return; }
     KR.clashHold = 0.3;   // the Kraken stands and fights
     // he holds his ground facing it, dragged in a little while its tentacles squeeze
     const pull = C.t > 1.6 && C.t < 5.2 ? 0.86 + 0.06 * Math.sin(C.t * 3.3) : 1, D = clashD(K) * pull;

@@ -60,6 +60,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     }
     K.t += dt;
     if (K.st !== 'engaged') releaseRaider();
+    // locked in a fight with a serpent: it stands its ground and grabs no one until the clash is over
+    if (K.clash > 0) { K.clash -= dt; if (K.st === 'roam' || K.st === 'hunt') { if (K.st === 'hunt') { K.st = 'roam'; K.tg = null; } K.cd = Math.max(K.cd, 6); return; } }
     switch (K.st) {
       case 'dead': K.rs -= dt; if (K.rs <= 0) { const q = deepNear(-1300, 2700, 0, 1500) || { x: -1300, z: 2700 }; Object.assign(K, { st: 'roam', hp: K.max, cd: 30, x: q.x, z: q.z, tg: null }); } return;
       case 'dying': if (K.t > 4) { K.st = 'dead'; K.rs = 600; K.tg = null; } return;
@@ -128,6 +130,9 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
       if (K.ally && K.ally.owner === from) return;   // its caller can't hurt it
       K.hp -= Math.max(0, Math.min(100, +d.dmg || 0));
       if (K.hp <= 0) { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); }
+    } else if (topic === 'kclash') {   // a serpent has met it: hold it in place for the fight
+      const el = Array.isArray(q.p.el) ? q.p.el : null;
+      if (el && Math.hypot(el[0] - K.x, el[1] - K.z) < 900 && (K.st === 'roam' || K.st === 'hunt') && !(K.clash > 0)) K.clash = 9.5;
     } else if (topic === 'kcall') {
       if (q.p.sw !== 'seasword') return;
       const pick = d.pick && (d.pick.kind === 'player' || d.pick.kind === 'raider') ? { kind: d.pick.kind, peer: d.pick.peer, i: Number.isInteger(d.pick.i) ? d.pick.i : undefined } : { kind: 'raider' };
@@ -257,7 +262,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     },
     handle(from, topic, d, players) {
       if (!d || typeof d !== 'object') d = {};
-      if (topic === 'kdmg' || topic === 'kcall' || topic === 'kpick' || topic === 'kquest' || topic === 'kadmin') { krakenHandle(from, topic, d, players); return true; }
+      if (topic === 'kdmg' || topic === 'kclash' || topic === 'kcall' || topic === 'kpick' || topic === 'kquest' || topic === 'kadmin') { krakenHandle(from, topic, d, players); return true; }
       if (topic === 'sdmg') { serpentHandle(from, d, players); return true; }
       return false;
     },
