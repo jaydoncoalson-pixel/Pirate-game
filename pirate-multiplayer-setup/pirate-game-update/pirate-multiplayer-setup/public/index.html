@@ -5185,6 +5185,7 @@
       const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
       if (r.state === 'gone') { if (!net) { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r); } continue; }
       if (r.state === 'sinking') {
+        if (r.devoured) { r.group.visible = false; r.tag.style.display = 'none'; r.sinkT += dt; if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = 200; r.devoured = false; r.group.visible = true; } continue; }   // swallowed whole
         r.sinkT += dt; r.group.position.y -= dt * 1.5; r.roll += dt * 0.06; r.group.rotation.set(r.pitch, r.heading, r.roll);
         r.tag.style.display = 'none';
         if (r.sinkT > 8) { scene.remove(r.group); r.state = 'gone'; r.respawnT = 200; }
@@ -8026,6 +8027,7 @@
     if (opts.leaving) { const u = 1 - emerge; if (u < 0.3) { const b2 = Math.sin(u / 0.3 * Math.PI); lift = 0.5 * b2; xPitch = -0.4 * b2; xJaw = b2; } else { const d2 = ease((u - 0.3) / 0.7); lift = -0.9 * d2; xPitch = 1.0 * d2; } }
     // holding a ship in his jaws: up, shaken, then dragged under
     if (opts.call >= 0) { const u = Math.min(1, opts.call / 3.2), b2 = Math.sin(Math.PI * u); lift = Math.max(lift, 1.0 * b2); xPitch = -0.75 * b2; xJaw = Math.min(1, b2 * 1.4); }   // Call the Brood: rearing to the sky, roaring
+    if (opts.devour) { lift = 0.22; xPitch = 0.1; xJaw = opts.devour === 2 ? 0.15 : 1.15; }   // devouring: head level with the sea, jaws wide (snapped shut after)
     const G = opts.grab >= 0 ? opts.grab : -1;
     if (G >= 0) { if (G < 2.2) { const up = ease(G / 0.5); lift = 0.55 * up; xPitch = -0.15 * up; xJaw = 0.32; } else { const d2 = ease((G - 2.2) / 1.0); lift = opts.ride ? 0.55 * (1 - d2) : 0.55 - 1.3 * d2; xPitch = opts.ride ? -0.15 + 0.5 * d2 : -0.15 + 1.0 * d2; xJaw = 0.32; } }   // with a rider aboard he crushes her rather than diving
     let sink = (opts.leaving ? Math.pow(1 - emerge, 1.6) : 1 - emerge) * K.sink, still = opts.still ? 0.35 : 1;
@@ -8195,6 +8197,42 @@
     r.group.position.set(j.x, u > 2.2 ? Math.min(y, j.y - r.T.H * 0.4) : y, j.z);
     r.group.rotation.set(0.25 * Math.sin(u * 9) * (u > 0.5 && u < 2.2 ? 1 : 0.3), r.heading, 0.35 * Math.sin(u * 12) * (u > 0.5 && u < 2.2 ? 1 : 0.3) + (u > 2.2 ? 0.4 : 0));
   }
+  // ---- Devour: jaws flung wide, he surges straight through a ship and swallows her whole ----
+  // He opens it on any ship he goes after from a distance (raider, galleon or another captain's), and a rider can
+  // unleash it with V: a charge ahead with jaws wide that swallows every ship it reaches.
+  const isShipT = T => T && (T.kind === 'raider' || T.kind === 'player' || T.kind === 'nearestRaider');
+  function elderSwallow(T, e) {
+    const near = Math.hypot(e.x - camera.position.x, e.z - camera.position.z) < 2500;
+    if (near) { for (let i = 0; i < 6; i++) wSplash(e.x + (Math.random() - 0.5) * 40, 3, e.z + (Math.random() - 0.5) * 40, true); SFX.crash({ x: e.x, z: e.z }); }
+    if (T.kind === 'raider') { e.devoured = true; e.group.visible = false; e.eHold = false; if (!window.__mpRaiderKill || !window.__mpRaiderKill(e)) damageShip(e, e.hp + 1); }
+    else if (T.kind === 'player' && window.__mpElderDevour) window.__mpElderDevour(T.peer);
+    etoast(`The Elder Serpent swallows ${elderName(T)} whole!`);
+    if (ELD.mode === 'attack' && ELD.pick && (ELD.pick === T || ELD.pick.ent === e || (T.peer && ELD.pick.peer === T.peer))) { ELD.mode = 'guard'; ELD.pick = null; }
+    if (ELD.tg && (ELD.tg.ent === e || (T.peer && ELD.tg.peer === T.peer))) ELD.tg = null;
+  }
+  function startDevour(T, e, ride) {
+    ELD.devour = { t: 0, T, e, ride: !!ride, eaten: new Set() }; ELD.st = 'devour'; ELD.devourCd = ride ? 8 : 5; elderRoar(0.6);
+    if (ride) etoast('The Elder Serpent flings his jaws wide and surges forward!');
+  }
+  function elderDevourTick(dt) {
+    const D = ELD.devour, K = ELD.K; D.t += dt;
+    if (D.snap) { D.snap -= dt; ELD.speed *= Math.max(0, 1 - dt * 1.5); elderMove(dt); if (D.snap <= 0) { ELD.devour = null; ELD.st = 'swim'; } return; }   // jaws snapping shut after the swallow
+    const jaw = elderJaw(ELD.mesh), reach = K.scale * 7.5;
+    if (D.ride) {
+      // the rider steers; he charges at full tilt and swallows every ship his jaws reach
+      if (!talk && !uiOpen) { const s2 = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0); ELD.h -= s2 * dt * 0.8; }
+      ELD.speed += (K.max * 1.25 - ELD.speed) * Math.min(1, dt * 2); elderMove(dt);
+      for (const r of raiders) if ((r.state === 'patrol' || r.state === 'attack') && !D.eaten.has(r) && Math.hypot(r.x - jaw.x, r.z - jaw.z) < reach) { D.eaten.add(r); elderSwallow({ kind: 'raider', ent: r }, r); }
+      for (const q of (window.__mpKrakenPlayers ? window.__mpKrakenPlayers() : [])) if (q.ship && !q.ship.sinking && !D.eaten.has(q.peer) && Math.hypot(q.ship.x - jaw.x, q.ship.z - jaw.z) < reach) { D.eaten.add(q.peer); elderSwallow({ kind: 'player', peer: q.peer }, q.ship); }
+      if (D.t > 3) { D.snap = 0.6; elderRoar(0.4); }
+      return;
+    }
+    const e = elderTgPos(D.T);
+    if (!e || D.t > 7) { ELD.devour = null; ELD.st = 'swim'; return; }
+    elderSteer(e.x, e.z, K.max * 1.25, dt, 2.4);   // straight at her, faster than he's ever swum
+    if (Math.hypot(e.x - jaw.x, e.z - jaw.z) < reach || Math.hypot(e.x - ELD.x, e.z - ELD.z) < reach * 0.6) { elderSwallow(D.T.kind === 'nearestRaider' ? { kind: 'raider', ent: e } : D.T, e); D.snap = 0.7; }
+  }
+  addEventListener('keydown', e => { if (e.repeat || !RIDE.on || uiOpen || talk || e.key.toLowerCase() !== 'v') return; if (!ELD.K.elder || ELD.devour || ELD.grab || ELD.call) return; if ((ELD.devourCd || 0) > 0) { toast(`He's still swallowing the last one... (${Math.ceil(ELD.devourCd)}s)`); return; } startDevour(null, null, true); });
   // close in at full speed, circle, rear up and strike
   function elderFight(T, e, dt) {
     const d = Math.hypot(e.x - ELD.x, e.z - ELD.z);
@@ -8206,6 +8244,7 @@
       return;
     }
     const K = ELD.K;
+    if (K.elder && isShipT(T) && d > K.approachR * 1.3 && !((ELD.devourCd || 0) > 0)) { startDevour(T, e, false); return; }   // a ship: jaws wide, straight through her
     if (d > K.approachR) { elderSteer(e.x, e.z, Math.min(K.max, K.max * 0.3 + d * 0.5), dt, 1.6); return; }
     ELD.ang = (ELD.ang ?? Math.atan2(ELD.x - e.x, ELD.z - e.z)) + dt * 0.5 * ELD.side;
     elderSteer(e.x + Math.sin(ELD.ang) * K.circle, e.z + Math.cos(ELD.ang) * K.circle, K.max * 0.45, dt, 2.2);
@@ -8217,7 +8256,9 @@
     else ELD.emerge = Math.min(1, ELD.emerge + dt / 3);
     const H = elderHome();
     let fighting = false;
-    if (ELD.grab) { elderGrabTick(dt); fighting = true; }
+    ELD.devourCd = Math.max(0, (ELD.devourCd || 0) - dt);
+    if (ELD.devour) { elderDevourTick(dt); fighting = true; }
+    else if (ELD.grab) { elderGrabTick(dt); fighting = true; }
     else if (RIDE.on) {
       // ye hold the reins: W/S for pace, A/D to turn
       if (!talk && !uiOpen) {
@@ -8257,7 +8298,7 @@
     const lift = ELD.st === 'strike' ? elderLift(ELD.sk) : 0;
     ELD.lift = ELD.st === 'strike' && ELD.sk >= 1.15 ? -lift : lift; ELD.fighting = fighting;
     // idle: lying still (holding station by a stopped ship, or waiting to be ridden), he finds things to do
-    const idleOK = !ELD.call && !ELD.grab && !RIDE.on && !ELD.leaving && ELD.st !== 'strike' && !fighting && ELD.speed < ELD.K.max * 0.1 && ELD.emerge > 0.95;
+    const idleOK = !ELD.devour && !ELD.call && !ELD.grab && !RIDE.on && !ELD.leaving && ELD.st !== 'strike' && !fighting && ELD.speed < ELD.K.max * 0.1 && ELD.emerge > 0.95;
     if (!idleOK) { ELD.idle = null; ELD.idleWait = Math.max(ELD.idleWait || 0, 2); }
     else if (ELD.idle) {
       const I = ELD.idle; I.t += dt; I.u = Math.min(1, I.t / ELD_IDLE_T[I.k]);
@@ -8274,7 +8315,7 @@
     // rising and sinking stir up the sea round him
     if ((ELD.emerge < 1 || ELD.leaving) && ELD.emerge > 0.05 && Math.random() < dt * 14) { const a = Math.random() * 6.28, rr = ELD.K.scale * (4 + Math.random() * 10); wSplash(ELD.x + Math.cos(a) * rr, 2, ELD.z + Math.sin(a) * rr, Math.random() < 0.4); }
     if (!ELD.leaving && ELD.emerge > 0.4 && !ELD.roared) { ELD.roared = true; elderRoar(1.1); }
-    poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.st === 'strike' ? ELD.sk : -1, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting, idle: ELD.idle, leaving: ELD.leaving, grab: ELD.grab ? ELD.grab.t : -1, ride: RIDE.on, call: ELD.call ? ELD.call.t : -1 });
+    poseElder(ELD.mesh, ELD.x, ELD.z, ELD.h, lift, ELD.emerge, dt, t, { sk: ELD.st === 'strike' ? ELD.sk : -1, angry: fighting, still: ELD.mode === 'mount' && !RIDE.on && ELD.waiting, idle: ELD.idle, leaving: ELD.leaving, grab: ELD.grab ? ELD.grab.t : -1, ride: RIDE.on, call: ELD.call ? ELD.call.t : -1, devour: ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0 });
   }
   // what's in reach of his jaws while ye ride him: the nearest ship, the Kraken or a serpent just ahead of his head
   function elderRideTarget() {
@@ -8405,7 +8446,7 @@
       const cl = typeof el[13] === 'number' && el[13] >= 0 ? el[13] : -1;
       if (cl >= 0) { E.cl = E.clFrom === el[13] ? (E.cl ?? cl) + dt : cl; E.clFrom = el[13]; if (!(E.lastCl >= 0)) elderRoar(1.3, E.x, E.z, K); } else { E.cl = -1; E.clFrom = null; }
       E.lastCl = cl;
-      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl });
+      poseElder(E.m, E.x, E.z, E.h, 0, el[4] ?? 1, dt, t, { sk: E.sk, angry: el[6] === 1, still: el[5] === 2, idle, leaving: el[11] === 1, grab: E.gr, call: E.cl, devour: el[14] | 0 });
     }
   }
 
@@ -8675,9 +8716,11 @@
           return;
         }
         if (!ship || ship.sinking) return;
+        if (d.kill && d.devour) { toast(`${who}'s Elder Serpent swallows yer ship whole!`); ELD.threats.set(m.peer, clock.elapsedTime); for (let i = 0; i < 6; i++) wSplash(ship.x + (Math.random() - 0.5) * 40, 3, ship.z + (Math.random() - 0.5) * 40, true); damageShip(ship, ship.hp + 1, true); ship.group.visible = false; return; }
         if (d.kill && d.grab) { ship.eGrab = { peer: m.peer, t: 0 }; toast(`${who}'s Elder Serpent seizes yer ship in its jaws!`); ELD.threats.set(m.peer, clock.elapsedTime); return; }   // held, shaken and dragged under (in updateShip)
         try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(40, d.dmg), !!d.kill); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(d.kill ? `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!` : `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s sea serpent strikes yer hull!`); } catch (e) {} });
       window.__mpElderBite = (peer, big, grab) => { MP.room.emit('ebite', big ? { to: peer, kill: 1, dmg: 1, grab: grab ? 1 : 0 } : { to: peer, dmg: 22 }).catch(() => {}); };
+      window.__mpElderDevour = peer => { MP.room.emit('ebite', { to: peer, kill: 1, dmg: 1, devour: 1 }).catch(() => {}); };
       window.__mpRaiderHoldEl = (i, on) => { if (!online() || i < 0) return; MP.room.emit('rhold', { i, on: on ? 1 : 0 }).catch(() => {}); };
       window.__mpRaiderKill = r => { if (!online()) return false; const i = raiders.indexOf(r); if (i < 0) return false; MP.room.emit('rdmg', { i, dmg: 40, el: 1 }).catch(() => {}); return true; };
       window.__mpHornClaim = re => { MP.room.emit('hclaim', { re: re ? 1 : 0 }).catch(() => {}); };
@@ -8846,7 +8889,7 @@
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           swm: krSwimming() ? 1 : 0,   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
-          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1] : 0,
+          el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0] : 0,
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0, gm: r(gunMul()) };   // a: crewed, so raiders will hunt it; gm: heavy cannons
@@ -9066,7 +9109,7 @@
     else if (STOM.on) promptHtml = nearChest() ? '<b>E</b> Grab the treasure' : null;
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
-    else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>F</b> Bite${ELD.K.elder ? ` · <b>H</b> Call the brood${BROOD.cd > 0 ? ' (' + Math.ceil(BROOD.cd) + 's)' : ''}` : ''} · <b>E</b> Climb down`;
+    else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>F</b> Bite${ELD.K.elder ? ` · <b>V</b> Devour${(ELD.devourCd || 0) > 0 ? ' (' + Math.ceil(ELD.devourCd) + 's)' : ''}` : ''}${ELD.K.elder ? ` · <b>H</b> Call the brood${BROOD.cd > 0 ? ' (' + Math.ceil(BROOD.cd) + 's)' : ''}` : ''} · <b>E</b> Climb down`;
     else if (canMount()) promptHtml = '<b>E</b> Climb onto the Elder Serpent';
     else if (sailing) promptHtml = ship && ship.submerged ? '<b>C</b> Rise · <b>V</b> Dive · <b>E</b> Leave wheel' : '<b>E</b> Step away from the wheel';
     else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : nearWardrobe() ? '<b>E</b> Change yer outfit at the looking-glass' : nearTrophies() ? '<b>E</b> Look at yer trophies' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
