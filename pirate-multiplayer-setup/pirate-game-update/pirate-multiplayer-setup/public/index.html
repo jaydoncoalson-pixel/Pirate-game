@@ -9863,17 +9863,12 @@ window.__pgBoot = () => {
     } else if (L.back === 'bones') {   // a ribcage worn over him: thin ribs curving from his spine down round his flanks, and a row of vertebrae along the top
       // ribs sit a little proud of his scales (clear of his back plates and of the next segment when he bends) and halfway between segments, so they miss his spine spikes
       const rib = (s0, sd, a0, a1, R, th, zo) => { const g = add(s0, new THREE.Mesh(new THREE.TorusGeometry(R, th, 5, 16, a1 - a0), M.boneA), 0, 0, zo); g.rotation.z = a0; if (sd < 0) g.scale.x = -1; return g; };
-      const end = Math.floor(m.N * 0.5), zo = m.SPACING * 0.5 / 1.75;   // segments are stretched 1.75x along the body
-      for (let k = 1; k < end; k++) { const s0 = seg(k), r = segR(k), f = 1 - k / end * 0.35;
+      const end = m.N - 1, zo0 = m.SPACING * 0.5 / 1.75;   // segments are stretched 1.75x along the body
+      for (let k = 1; k < end; k++) { const s0 = seg(k), r = segR(k), f = 1, zo = Math.min(zo0, r * 0.35);   // near the thin tail, keep the rib on its own segment
         [-1, 1].forEach(sd => rib(s0, sd, -0.55, Math.PI / 2 - 0.1, r * 1.13, r * 0.05 * f, zo));
         const vb = add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.14 * f, 8, 6), M.boneA), 0, r * 1.15, zo); vb.scale.set(1.2, 0.75, 1.5);   // vertebra
         if (k % 2 === 0) add(s0, new THREE.Mesh(new THREE.CylinderGeometry(r * 0.025, r * 0.07, r * 0.35 * f, 5), M.boneA), 0, r * 1.3, zo);   // short spinous process
       }
-      const s1 = seg(1), r1 = segR(1);   // a horned skull at the shoulders, where a rider would sit
-      const sk = add(s1, new THREE.Mesh(new THREE.SphereGeometry(r1 * 0.3, 12, 9), M.boneA), 0, r1 * 1.36, zo); sk.scale.set(1, 0.8, 1.2);
-      const jaw = add(s1, new THREE.Mesh(new THREE.BoxGeometry(r1 * 0.32, r1 * 0.12, r1 * 0.3), M.boneA), 0, r1 * 1.22, zo + r1 * 0.22);
-      [-1, 1].forEach(sd => { const e = add(s1, new THREE.Mesh(new THREE.SphereGeometry(r1 * 0.075, 6, 5), M.dark), sd * r1 * 0.12, r1 * 1.41, zo + r1 * 0.3); e.scale.z = 0.5;
-        const hn = add(s1, new THREE.Mesh(new THREE.ConeGeometry(r1 * 0.06, r1 * 0.5, 6), M.boneA), sd * r1 * 0.3, r1 * 1.56, zo - r1 * 0.05); hn.rotation.z = -sd * 1.0; });
     }
     m.aura = L.aura && L.aura !== 'none' ? L.aura : null;
   }
