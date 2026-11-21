@@ -8461,7 +8461,7 @@ window.__pgBoot = () => {
   }
   // running across open water with the Sword of the Sea: not swimming, but the Blackwater fleet and its Beast can still see ye out there
   function seaRunning() {
-    if (STATE.sword !== 'seasword' || onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held || DUN.on) return false;
+    if (STATE.sword !== 'seasword' || onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held || DUN.on || RIDE.on) return false;   // (riding the Elder Serpent isn't running on the water)
     return !onDock(P.pos.x, P.pos.z) && krDeep(P.pos.x, P.pos.z);
   }
   function krSwimming() {
