@@ -309,6 +309,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     }
     const ships = [];
     for (const [id, q] of players) if (q.p && q.p.sh && q.p.sh.a === 1 && typeof q.p.sh.x === 'number') ships.push({ id, x: q.p.sh.x, z: q.p.sh.z });
+      else if (q.p && q.p.swm === 1 && typeof q.p.x === 'number') ships.push({ id, x: q.p.x, z: q.p.z, swim: true });   // and anyone swimming
     let prey = BW.tg ? ships.find(p => p.id === BW.tg) : null;
     if (BW.st === 'hunt') {
       if (!prey) { let bd = 1e9; for (const p of ships) { const d = Math.hypot(p.x - BW.x, p.z - BW.z); if (d < bd && bwSea(p.x, p.z)) { bd = d; prey = p; } } BW.tg = prey ? prey.id : null; }
@@ -337,7 +338,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
       { const dx = gx - BW.x, dz = gz - BW.z, dd = Math.hypot(dx, dz), st = Math.min(dd, 70 * dt); if (dd > 0.01) { const nx = BW.x + dx / dd * st, nz = BW.z + dz / dd * st; if (bwSea(nx, nz)) { BW.x = nx; BW.z = nz; } } BW.sp = st / Math.max(dt, 1e-3); }   // it scuttles sideways to keep its grip
       BW.h += angDiff(BW.h, Math.atan2(prey.x - BW.x, prey.z - BW.z)) * Math.min(1, dt * 3);
       BW.atkT -= dt;
-      if (BW.atkT <= 0 && d < 140) { BW.atkT = 2.6 + Math.random() * 0.6; BW.pk = 0; BW.grip++; sendTo(prey.id, 'bwhit', { to: prey.id, dmg: 18 + Math.floor(Math.random() * 7) }); }
+      if (BW.atkT <= 0 && d < 140) { BW.atkT = 2.6 + Math.random() * 0.6; BW.pk = 0; BW.grip++; sendTo(prey.id, 'bwhit', { to: prey.id, dmg: 18 + Math.floor(Math.random() * 7), sw: prey.swim ? 1 : 0 }); }
       if (BW.grip >= 3 && BW.atkT > 1.5) { BW.st = 'hunt'; BW.cd = 12; BW.orb = Math.atan2(BW.x - prey.x, BW.z - prey.z); }   // three crushing blows, then it lets go and circles: a chance to fight back or flee
     }
   }

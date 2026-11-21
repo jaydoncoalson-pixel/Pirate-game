@@ -6227,6 +6227,7 @@ window.__pgBoot = () => {
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
       if (b.enemy && SEACTL.wallT > 0 && ship && Math.hypot(x - ship.x, z - ship.z) < SEACTL.wallR && y < 22) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
+      if (!hit && b.enemy && krSwimming() && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
       const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
         const dx = x - tg.x, dz = z - tg.z, hh = tg.heading;
@@ -6345,7 +6346,7 @@ window.__pgBoot = () => {
     if (Math.hypot(r.x - camera.position.x, r.z - camera.position.z) < 1500) for (const f of r.flags) f.wave(t);
   }
   function updateRaiders(dt, t) {
-    const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
+    const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : krSwimming() && !DUN.on ? P.pos : null;   // in the water, ye're the target
     for (const r of raiders) {
       // Online, the server sails the raiders; this only follows its snapshots.
       const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
@@ -9408,7 +9409,8 @@ window.__pgBoot = () => {
     return true;
   }
   // its claws close on yer ship
-  function bwHitMe(dmg) {
+  function bwHitMe(dmg, swim) {
+    if (swim || (krSwimming() && !(sailing || onShip || inInterior))) { hurtPlayer(Math.round(dmg * 1.5)); wSplash(P.pos.x, 1, P.pos.z, true); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast snaps its claws shut on ye in the water!' : 'The Blackwater Beast drags ye down into the dark...'); return; }   // caught swimming
     if (!ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
     SFX.crash({ x: ship.x, z: ship.z }); SFX.clawClack({ x: ship.x, z: ship.z });
@@ -11319,7 +11321,7 @@ window.__pgBoot = () => {
         if (d.on) { BWS.told = false; try { SFX.horn(); } catch (e) {} toast('☠ A BLACKWATER RAID! The Blackwater fleet puts to sea and the Beast has broken loose. No ship is safe!'); }
         else toast('The Blackwater raid is over. The fleet turns for home, and the Beast returns to its pen.'); });
       MP.room.on('raidwave', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.w > 1)) return; toast(`More Blackwater sails on the horizon! Wave ${d.w}: ${d.n} more ships.`); });
-      MP.room.on('bwhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { bwHitMe(Math.min(40, +d.dmg || 0)); } catch (e) {} });
+      MP.room.on('bwhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { bwHitMe(Math.min(40, +d.dmg || 0), d.sw === 1); } catch (e) {} });
       MP.room.on('bwdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
         if (d.by === MP.me) { addGold(5000, 'Ye slew the Blackwater Beast!'); addMat('gem', 3); addMat('pearl', 5); try { SFX.fanfare(); } catch (e) {} }
         else toast(`${(MP.peers.get(d.by)?.name || 'A captain')} has slain the Blackwater Beast!`); });
