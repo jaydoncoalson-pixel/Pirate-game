@@ -5206,7 +5206,7 @@ window.__pgBoot = () => {
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
@@ -8461,6 +8461,7 @@ window.__pgBoot = () => {
   }
   function krSwimming() {
     if (onShip || GUEST.on || sailing || inInterior || STOM.on || STOM.done || MERM.held || DUN.on) return false;
+    if (STATE.sword === 'seasword') return false;   // walking on the water, not in it
     return !onDock(P.pos.x, P.pos.z) && krDeep(P.pos.x, P.pos.z) && P.pos.y < 1.5;
   }
   function krFindTarget() {
@@ -11020,6 +11021,22 @@ window.__pgBoot = () => {
       for (const T2 of tideTargets()) { if (!T2.ship || S2.hit.has(T2.e)) continue; if (Math.hypot(T2.e.x - gx, T2.e.z - gz) < R + (T2.e.T ? T2.e.T.L * 0.4 : 12)) { S2.hit.add(T2.e); T2.hit(25); seaImpact(gx, 3, gz); } }
       if (u >= 1) { scene.remove(S2.g); S2.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); SLASHES.splice(i, 1); } }
   }
+  // running on the sea: a splash of white water at every footfall, a spreading ring, and spray kicked up behind
+  const RIPPLES = []; let seaStepT = 0;
+  const rippleM = new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, depthWrite: false });
+  function seaWalkFx(dt, t) {
+    seaStepT -= dt * (0.6 + P.speed * 0.18);
+    if (seaStepT <= 0 && P.speed > 0.5) { seaStepT = 0.32;
+      const fx = Math.sin(P.facing), fz = Math.cos(P.facing), x = P.pos.x + fx * 0.3, z = P.pos.z + fz * 0.3, y = waveHeight(x, z, t);
+      const rg = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.82, 32), rippleM.clone()); rg.rotation.x = -Math.PI / 2; rg.position.set(x, y + 0.06, z); scene.add(rg); RIPPLES.push({ m: rg, t: 0 });
+      for (let k = 0; k < 4; k++) puff(x, y + 0.2, z, { color: 0xffffff, size: 0.5 + Math.random() * 0.4, life: 0.5, grow: 2, vx: -fx * P.speed * 0.25 + (Math.random() - 0.5) * 2, vz: -fz * P.speed * 0.25 + (Math.random() - 0.5) * 2, vy: 1.5 + Math.random() * 2, op: 0.8 });
+    }
+    if (P.speed > 9 && Math.random() < dt * 20) puff(P.pos.x, P.pos.y + 0.3, P.pos.z, { color: 0xcff6ff, size: 0.9, life: 0.7, grow: 2, vx: -Math.sin(P.facing) * 5, vz: -Math.cos(P.facing) * 5, vy: 2, op: 0.55 });   // a wake of spray at a sprint
+  }
+  function updateRipples(dt, t) {
+    for (let i = RIPPLES.length - 1; i >= 0; i--) { const R = RIPPLES[i]; R.t += dt; const u = R.t / 1.3; R.m.scale.setScalar(1 + u * 5); R.m.material.opacity = 0.5 * (1 - u); R.m.position.y = waveHeight(R.m.position.x, R.m.position.z, t) + 0.06;
+      if (u >= 1) { scene.remove(R.m); R.m.geometry.dispose(); R.m.material.dispose(); RIPPLES.splice(i, 1); } }
+  }
   // a blow struck with it: a burst of water and light, a ring racing out, and the world jolts
   function seaImpact(x, y, z) {
     for (let k = 0; k < 12; k++) { const a = Math.random() * 6.28, e = Math.random() * 1.2; puff(x, y, z, { color: k % 3 ? 0x9ff6ff : 0xffffff, size: 0.8 + Math.random(), life: 0.6, grow: 2, vx: Math.cos(a) * Math.cos(e) * 9, vz: Math.sin(a) * Math.cos(e) * 9, vy: Math.sin(e) * 9, op: 0.9 }); }
@@ -11027,7 +11044,7 @@ window.__pgBoot = () => {
     SEACTL.shake = Math.max(SEACTL.shake, 0.45); SFX.splash({ x, z }, true);
   }
   function updateSeaControl(dt, t) {
-    window.__seaSky = SEACTL.sky || 0; seaBladeFx(dt, t); updateSeaCast(dt); updateSlashes(dt); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
+    window.__seaSky = SEACTL.sky || 0; seaBladeFx(dt, t); updateSeaCast(dt); updateSlashes(dt); updateRipples(dt, t); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
     for (const k of ['fCd', 'gCd', 'tCd', 'vCd']) SEACTL[k] = Math.max(0, SEACTL[k] - dt);
     const cd = v => v > 0 ? `(${Math.ceil(v)}s)` : '&middot; ready';
     const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}` : '';
@@ -11502,8 +11519,10 @@ window.__pgBoot = () => {
     const ml = Math.hypot(mx, mz);
     const g = groundAt(P.pos.x, P.pos.z);
     const swimY = waveHeight(P.pos.x, P.pos.z, t) - 0.45;
-    const swimming = !onDock(P.pos.x, P.pos.z) && g < swimY - 0.85;
-    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : STATE.sword === 'seasword' ? 1.9 : 1) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace
+    // the Sword of the Sea: the sea holds up whoever carries it; they run across the waves as if on solid ground
+    const waterWalk = STATE.sword === 'seasword' && PLAYER.hp > 0, onWaves = waterWalk && !onDock(P.pos.x, P.pos.z) && g < swimY + 0.3;
+    const swimming = !waterWalk && !onDock(P.pos.x, P.pos.z) && g < swimY - 0.85;
+    const want = ml > 0 ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : 1) : onWaves ? (keys['shift'] ? 16 : 8) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace; the Sword of the Sea: running on the waves, faster than on land
     P.speed += (want - P.speed) * Math.min(1, dt * 10);
     if (ml > 0) { mx /= ml; mz /= ml; P.facing = angLerp(P.facing, Math.atan2(mx, mz), Math.min(1, dt * 12)); }
     const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
@@ -11513,8 +11532,10 @@ window.__pgBoot = () => {
     else resolve(P.pos, 0.45, npcColliders);
     spireClamp(P.pos);
     const g2 = Math.max(groundAt(P.pos.x, P.pos.z), spireFloor(P.pos.x, P.pos.z, P.pos.y));
-    const swimNow = !onDock(P.pos.x, P.pos.z) && g2 < swimY - 0.85;
-    const floor = swimNow ? swimY : g2;
+    const surf = waveHeight(P.pos.x, P.pos.z, t) + 0.05, walkOnSea = waterWalk && !onDock(P.pos.x, P.pos.z) && g2 < surf;
+    const swimNow = !waterWalk && !onDock(P.pos.x, P.pos.z) && g2 < swimY - 0.85;
+    const floor = swimNow ? swimY : walkOnSea ? surf : g2;
+    if (walkOnSea && P.grounded) seaWalkFx(dt, t);
     if (P.grounded && keys[' '] && !talk && !uiOpen && !swimNow) { P.vy = 8; P.grounded = false; SFX.jump(); }
     if (!P.grounded) {
       P.vy -= 22 * dt; P.pos.y += P.vy * dt;
@@ -11528,7 +11549,7 @@ window.__pgBoot = () => {
     player.slashP = 1 - Math.max(0, PLAYER.slashT) / (PLAYER.slashDur || 0.35);
     player.update(dt, P.speed, !P.grounded, swimNow && P.grounded, swimNow ? null : PLAYER.slashT > 0 ? 'slash' : PLAYER.aimT > 0 ? 'aim' : null);
     if (!swimNow) { player.props.blade.visible = PLAYER.weapon === 'cutlass'; player.props.pistol.visible = PLAYER.weapon === 'pistol'; }
-    if (P.grounded) stepSound(swimNow, onDock(P.pos.x, P.pos.z));
+    if (P.grounded) stepSound(swimNow || walkOnSea, onDock(P.pos.x, P.pos.z));
     }
 
     // which island are we near?
