@@ -172,7 +172,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
       // nearest player ship that is crewed (someone sailing, on deck or below deck)
       let tg = null, td = 1e9;
       for (const [id, q] of ships) { const dd = Math.hypot(q.p.sh.x - r.x, q.p.sh.z - r.z); if (dd < td) { td = dd; tg = { id, x: q.p.sh.x, z: q.p.sh.z }; } }
-      for (const [id, q] of players) if (q.p && q.p.swm === 1 && !(q.p.sh && q.p.sh.a === 1) && typeof q.p.x === 'number') { const dd = Math.hypot(q.p.x - r.x, q.p.z - r.z); if (dd < td) { td = dd; tg = { id, x: q.p.x, z: q.p.z, swim: true }; } }   // a captain in the water is fair game too
+      for (const [id, q] of players) if (q.p && (q.p.swm === 1 || q.p.wwk === 1) && !(q.p.sh && q.p.sh.a === 1) && typeof q.p.x === 'number') { const dd = Math.hypot(q.p.x - r.x, q.p.z - r.z); if (dd < td) { td = dd; tg = { id, x: q.p.x, z: q.p.z, swim: true }; } }   // a captain in the water is fair game too
       let desired = r.heading, want = 14;
       // in a raid every Blackwater ship is out for blood: they spot ye from much further, sail harder and reload faster.
       // The raid fleet itself hunts down any ship at sea, wherever she is.

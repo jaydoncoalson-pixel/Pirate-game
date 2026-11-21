@@ -309,7 +309,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     }
     const ships = [];
     for (const [id, q] of players) if (q.p && q.p.sh && q.p.sh.a === 1 && typeof q.p.sh.x === 'number') ships.push({ id, x: q.p.sh.x, z: q.p.sh.z });
-      else if (q.p && q.p.swm === 1 && typeof q.p.x === 'number') ships.push({ id, x: q.p.x, z: q.p.z, swim: true });   // and anyone swimming
+      else if (q.p && (q.p.swm === 1 || q.p.wwk === 1) && typeof q.p.x === 'number') ships.push({ id, x: q.p.x, z: q.p.z, swim: true });   // and anyone swimming, or running on the water
     let prey = BW.tg ? ships.find(p => p.id === BW.tg) : null;
     if (BW.st === 'hunt') {
       if (!prey) { let bd = 1e9; for (const p of ships) { const d = Math.hypot(p.x - BW.x, p.z - BW.z); if (d < bd && bwSea(p.x, p.z)) { bd = d; prey = p; } } BW.tg = prey ? prey.id : null; }
