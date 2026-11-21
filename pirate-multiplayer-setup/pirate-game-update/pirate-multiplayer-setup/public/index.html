@@ -9806,13 +9806,13 @@ window.__pgBoot = () => {
     gold: new THREE.MeshPhongMaterial({ color: 0xe9bf4a, specular: 0xfff1b0, shininess: 90, emissive: 0x3a2604 }),
     iron: new THREE.MeshPhongMaterial({ color: 0x5a5e66, specular: 0xaab0bb, shininess: 60, flatShading: true }),
     leather: new THREE.MeshLambertMaterial({ color: 0x5a3418 }), cloth: new THREE.MeshLambertMaterial({ color: 0x141414, side: THREE.DoubleSide }),
-    red: new THREE.MeshLambertMaterial({ color: 0x8a1010, side: THREE.DoubleSide }), bone: new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }),
+    red: new THREE.MeshLambertMaterial({ color: 0x8a1010, side: THREE.DoubleSide }), bone: new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }), boneA: new THREE.MeshLambertMaterial({ color: 0xd8cba8, flatShading: true }),
     gemR: new THREE.MeshPhongMaterial({ color: 0xff2040, emissive: 0x600010, shininess: 120 }), gemB: new THREE.MeshPhongMaterial({ color: 0x30a0ff, emissive: 0x002060, shininess: 120 }),
     feather: new THREE.MeshLambertMaterial({ color: 0xf2f2f2, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x050505 }),
     halo: new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
   const SERP_HATS = [['none', 'None'], ['crown', 'Golden crown'], ['pirate', 'Pirate hat'], ['helm', 'War helm'], ['skull', 'Skull mask'], ['halo', 'Halo']];
-  const SERP_BACKS = [['none', 'None'], ['saddle', 'Saddle'], ['banners', 'War banners'], ['chains', 'Gold chains'], ['armor', 'Iron armour']];
+  const SERP_BACKS = [['none', 'None'], ['saddle', 'Saddle'], ['banners', 'War banners'], ['chains', 'Gold chains'], ['armor', 'Iron armour'], ['bones', 'Bone armour']];
   const SERP_AURAS = [['none', 'None'], ['embers', 'Embers'], ['mist', 'Sea mist'], ['sparkle', 'Gold sparkle'], ['storm', 'Storm sparks']];
   function addSerpentCosmetics(m, look) {
     const L = look || {}, K = m.K, H = m.head, M = COS_M;
@@ -9860,6 +9860,17 @@ window.__pgBoot = () => {
       for (let k = 1; k < m.N * 0.55; k += 2) { const s0 = seg(k), r = segR(k);
         const pl = add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 1.0, 10, 5, 0, Math.PI * 2, 0, Math.PI / 3), M.iron), 0, r * 0.2, 0); pl.scale.set(1.05, 0.9, 0.8);
         [-1, 1].forEach(sd => add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.06, 5, 4), M.gold), sd * r * 0.6, r * 0.82, 0)); }
+    } else if (L.back === 'bones') {   // a ribcage strapped over him: ribs arching across his back, vertebrae down the spine, the odd jagged bone spike
+      for (let k = 1; k < m.N * 0.6; k += 2) { const s0 = seg(k), r = segR(k);
+        const rib = add(s0, new THREE.Mesh(new THREE.TorusGeometry(r * 1.05, r * 0.1, 5, 14, Math.PI), M.boneA), 0, 0, 0); rib.scale.y = 0.95;
+        [-1, 1].forEach(sd => { const tip = add(s0, new THREE.Mesh(new THREE.ConeGeometry(r * 0.1, r * 0.45, 5), M.boneA), sd * r * 1.02, -r * 0.18, 0); tip.rotation.z = Math.PI + sd * 0.25; });   // rib ends curling under
+        const vb = add(s0, new THREE.Mesh(new THREE.BoxGeometry(r * 0.32, r * 0.22, r * 0.4), M.boneA), 0, r * 1.12, 0); vb.rotation.y = Math.PI / 4;
+        if (k % 4 === 1) { const sp = add(s0, new THREE.Mesh(new THREE.ConeGeometry(r * 0.13, r * 0.9, 4), M.boneA), 0, r * 1.6, 0); sp.rotation.x = 0.35; }
+      }
+      const s1 = seg(1), r1 = segR(1);   // a horned skull at the shoulders
+      const sk = add(s1, new THREE.Mesh(new THREE.SphereGeometry(r1 * 0.38, 10, 8), M.boneA), 0, r1 * 1.25, 0); sk.scale.set(1, 0.85, 1.15);
+      [-1, 1].forEach(sd => { add(s1, new THREE.Mesh(new THREE.SphereGeometry(r1 * 0.09, 6, 5), M.dark), sd * r1 * 0.14, r1 * 1.3, r1 * 0.38);
+        const hn = add(s1, new THREE.Mesh(new THREE.ConeGeometry(r1 * 0.08, r1 * 0.6, 5), M.boneA), sd * r1 * 0.38, r1 * 1.5, 0); hn.rotation.z = -sd * 0.9; });
     }
     m.aura = L.aura && L.aura !== 'none' ? L.aura : null;
   }
