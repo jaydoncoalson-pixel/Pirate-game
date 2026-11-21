@@ -9834,10 +9834,26 @@ window.__pgBoot = () => {
       add(hat, new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 1.6), M.iron), 0, A.top - 0.05, A.z + 1.4);   // nose guard
       for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + (i / 7) * Math.PI; add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), M.gold), Math.sin(a) * A.w * 0.55, A.top - 0.1, A.z + Math.cos(a) * 1.5); }
       [-1, 1].forEach(sd => { const sp = add(hat, new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 5), M.iron), sd * 0.5, A.top + 0.4, A.z - 0.4); sp.rotation.z = -sd * 0.5; });
-    } else if (L.hat === 'skull') {
-      const face = add(hat, new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), M.bone), 0, A.noseY + 0.15, A.nose - 1.3); face.rotation.x = Math.PI / 2; face.scale.set(A.w * 0.42, 1.4, 0.55);
-      [-1, 1].forEach(sd => { const sock = add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), M.dark), sd * 0.38, A.noseY + 0.42, A.nose - 1.6); sock.scale.set(1, 0.8, 0.5); });
-      for (let i = 0; i < 5; i++) add(hat, new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.06), M.bone), -0.24 + i * 0.12, A.noseY - 0.2, A.nose - 0.45);
+    } else if (L.hat === 'skull') {   // the bleached skull of some older, greater serpent, worn over his own head: a long bone cranium, sockets his eyes burn through, a snout plate with nostril pits, horns sweeping back
+      const S = K.elder ? { top: 0.85, cw: 2.5, cz0: -0.75, cz1: 2.15, cH: 0.46, eye: [1.02, 0.35, 1.45], eR: 0.38, sx: 1.2, sy: 0.08, sn: [[1.25, 0.72, 2.25], [4.9, 0.0, 1.3]] }
+                         : { top: 0.8, cw: 2.8, cz0: -0.85, cz1: 2.9, cH: 0.32, eye: [1.25, 0.38, 1.9], eR: 0.33, sx: 1.32, sy: 0.02, sn: [[2.4, 0.3, 1.95], [4.55, 0.26, 1.75]] };
+      const tb = (w0, h0, w1, h1, len) => { const geo = new THREE.BoxGeometry(1, 1, len), pa = geo.attributes.position;   // a box narrowing from back (w0 x h0) to front (w1 x h1), flat bottom
+        for (let i = 0; i < pa.count; i++) { const f = pa.getZ(i) > 0; pa.setX(i, pa.getX(i) * (f ? w1 : w0)); pa.setY(i, (pa.getY(i) + 0.5) * (f ? h1 : h0)); } geo.computeVertexNormals(); return new THREE.Mesh(geo, M.boneA); };
+      H.children.forEach(c => { if (c.isMesh && c.geometry.type === 'ConeGeometry' && c.position.z > 3 && c.position.y > -0.3 && Math.abs(c.position.x) < 0.5) c.visible = false; if (c.isMesh && c.geometry.type === 'BoxGeometry' && c.position.y > 0.6 && c.position.z > 1 && c.position.z < 2) c.visible = false; });   // his little snout horns and brow ridges would poke through the bone
+      const cl = S.cz1 - S.cz0, cz = (S.cz0 + S.cz1) / 2;
+      const cr = add(hat, new THREE.Mesh(new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.boneA), 0, S.top - 0.12, cz); cr.scale.set(S.cw / 2, S.cH * 1.5, cl / 2 * 1.05);   // the domed cranium over his crown and brows
+      const rim = add(hat, new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.14, 18, 1, true), M.boneA), 0, S.top - 0.12, cz); rim.scale.set(S.cw / 2, 1, cl / 2 * 1.05); rim.material = M.boneA;   // its lower lip
+      const rg = add(hat, new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), M.boneA), 0, S.top - 0.12 + S.cH * 1.45, cz - cl * 0.08); rg.scale.set(0.12, 0.12, cl * 0.38);   // ridge down the middle
+      const [a, b] = S.sn, dz = b[0] - a[0], dy = a[1] - b[1], sl = Math.hypot(dz, dy);   // snout plate, laid along the slope of his snout
+      const sp = add(hat, tb(a[2], 0.2, b[2], 0.13, sl), 0, (a[1] + b[1]) / 2 - 0.01, (a[0] + b[0]) / 2); sp.rotation.x = Math.atan2(dy, dz);
+      const onSn = (t, x) => { const z = a[0] + dz * t, y = a[1] - dy * t + 0.2 - 0.07 * t; return [x, y, z]; };
+      [-1, 1].forEach(sd => {
+        const ring = add(hat, new THREE.Mesh(new THREE.TorusGeometry(S.eR, S.eR * 0.22, 6, 16), M.boneA), sd * (S.eye[0] + 0.1), S.eye[1], S.eye[2]); ring.rotation.y = Math.PI / 2; ring.scale.set(1, 0.75, 1.35);   // eye socket rim
+        const pit = add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), M.dark), ...onSn(0.3, sd * a[2] * 0.26)); pit.scale.set(0.8, 0.25, 1.9);   // the hollows behind the snout
+        const nos = add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), M.dark), ...onSn(0.9, sd * b[2] * 0.2)); nos.scale.set(1, 0.4, 1.6);   // nostril pits
+        for (let i = 0; i < 2; i++) { const hn = add(hat, new THREE.Mesh(new THREE.ConeGeometry(0.15 - i * 0.04, 1.3 - i * 0.35, 6), M.boneA), sd * (0.55 + i * 0.4), S.top + S.cH * 0.6 - i * 0.15, S.cz0 + 0.15); hn.rotation.set(-1.25 - i * 0.1, 0, -sd * (0.35 + i * 0.3)); hn.translateY(0.45 - i * 0.12); }   // horns off the back, sweeping behind him
+        const fg = add(hat, new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.75, 5), M.boneA), sd * (b[2] * 0.5 + 0.08), b[1] - 0.3, b[0] - 0.4); fg.rotation.x = Math.PI + 0.15;   // bone fangs at the front of the snout plate
+      });
     } else if (L.hat === 'halo') {
       const h = add(hat, new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.07, 8, 32), M.halo), 0, A.top + 1.6, A.z); h.rotation.x = Math.PI / 2; m.halo = h;
     }
@@ -9865,7 +9881,7 @@ window.__pgBoot = () => {
       const rib = (s0, sd, a0, a1, R, th, zo) => { const g = add(s0, new THREE.Mesh(new THREE.TorusGeometry(R, th, 5, 16, a1 - a0), M.boneA), 0, 0, zo); g.rotation.z = a0; if (sd < 0) g.scale.x = -1; return g; };
       const end = m.N - 1, zo0 = m.SPACING * 0.5 / 1.75;   // segments are stretched 1.75x along the body
       for (let k = 1; k < end; k++) { const s0 = seg(k), r = segR(k), f = 1, zo = Math.min(zo0, r * 0.35);   // near the thin tail, keep the rib on its own segment
-        [-1, 1].forEach(sd => rib(s0, sd, -0.55, Math.PI / 2 - 0.1, r * 1.13, r * 0.05 * f, zo));
+        [-1, 1].forEach(sd => rib(s0, sd, -1.15, Math.PI / 2 - 0.1, r * 1.13, r * 0.05 * f, zo));
         const vb = add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.14 * f, 8, 6), M.boneA), 0, r * 1.15, zo); vb.scale.set(1.2, 0.75, 1.5);   // vertebra
         if (k % 2 === 0) add(s0, new THREE.Mesh(new THREE.CylinderGeometry(r * 0.025, r * 0.07, r * 0.35 * f, 5), M.boneA), 0, r * 1.3, zo);   // short spinous process
       }
