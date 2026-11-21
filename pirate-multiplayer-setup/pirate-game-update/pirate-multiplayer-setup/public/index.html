@@ -5206,7 +5206,7 @@ window.__pgBoot = () => {
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 240, cool: 0.26, reach: 5.0, arc: -0.5, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
@@ -5221,6 +5221,7 @@ window.__pgBoot = () => {
   const SEA_BLADES = new Set();
   function buildSeaBlade(lk) {
     const g = new THREE.Group(), len = Math.max(lk.len, 1.6);
+    g.userData.big = 1.6;
     const P = (o, x, y, z) => { o.position.set(x, y, z); g.add(o); return o; };
     const gold = new THREE.MeshPhongMaterial({ color: 0xe9bf4a, specular: 0xfff1b0, shininess: 90, emissive: 0x3a2604 });
     const goldD = new THREE.MeshPhongMaterial({ color: 0xb8892a, specular: 0xffe08a, shininess: 70, emissive: 0x241604 });
@@ -5291,6 +5292,7 @@ window.__pgBoot = () => {
       kelp.forEach((k, i) => { k.rotation.z = Math.sin(t * 1.7 + i * 0.8) * 0.35; if (i) k.rotation.x = Math.sin(t * 1.3 + i) * 0.25; });
     };
     SEA_BLADES.add(g);
+    g.scale.setScalar(g.userData.big || 1);   // a great blade: everything scales out from the grip in yer hand
     return g;
   }
   function tickSeaBlades(t) { for (const g of SEA_BLADES) { if (!g.parent) { if ((g.userData.orphan = (g.userData.orphan || 0) + 1) > 300) SEA_BLADES.delete(g); continue; } g.userData.orphan = 0; if (g.visible) g.userData.seaTick(t); } }
@@ -6410,7 +6412,7 @@ window.__pgBoot = () => {
         }
         krSwordHit(curSword());
         serpentSwordHit(curSword());
-        if (STATE.sword === 'seasword') { const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const rx = wp.x + fx * 2.2, rz = wp.z + fz * 2.2; for (let k = 0; k < 8; k++) { const a = P.facing + (k - 3.5) * 0.28; puff(rx, wp.y + 1.1, rz, { color: 0xbff8ff, size: 0.7, life: 0.5, grow: 2.2, vx: Math.sin(a) * 10, vz: Math.cos(a) * 10, vy: 1.5, op: 0.75 }); } }   // the swing throws a fan of spray
+        if (STATE.sword === 'seasword') { seaSlash(); const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const rx = wp.x + fx * 2.2, rz = wp.z + fz * 2.2; for (let k = 0; k < 8; k++) { const a = P.facing + (k - 3.5) * 0.28; puff(rx, wp.y + 1.1, rz, { color: 0xbff8ff, size: 0.7, life: 0.5, grow: 2.2, vx: Math.sin(a) * 10, vz: Math.cos(a) * 10, vy: 1.5, op: 0.75 }); } }   // the swing throws a fan of spray
       }
     }
     PLAYER.hurtT += dt;
@@ -10971,7 +10973,7 @@ window.__pgBoot = () => {
     if (on && (!SEABLADE.g || SEABLADE.g.parent !== B)) {
       if (SEABLADE.g && SEABLADE.g.parent) SEABLADE.g.parent.remove(SEABLADE.g);
       const g = SEABLADE.g = new THREE.Group(); B.add(g); SEABLADE.motes = [];
-      { const L = new THREE.PointLight(0x3ad0ff, 1.6, 10, 2); L.position.set(0, 0, 0.9); g.add(L); }
+      { const L = new THREE.PointLight(0x3ad0ff, 2.0, 14, 2); L.position.set(0, 0, 0.9); g.add(L); }
       for (let k = 0; k < 6; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x3ad0ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false })); sp.position.set(0, 0, 0.25 + k * 0.28); sp.scale.setScalar(0.42 - k * 0.025); g.add(sp); }
       for (let k = 0; k < 14; k++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), new THREE.MeshBasicMaterial({ color: k % 3 ? 0x9ff6ff : 0xffffff, transparent: true, opacity: 0.9 })); m.userData = { a: Math.random() * 6.28, z: Math.random() * 1.7, sp: 2 + Math.random() * 3, r: 0.07 + Math.random() * 0.08 }; g.add(m); SEABLADE.motes.push(m); }
     }
@@ -10988,6 +10990,27 @@ window.__pgBoot = () => {
         pa.setXYZ(i * 2, p.a.x, p.a.y, p.a.z); pa.setXYZ(i * 2 + 1, p.b.x, p.b.y, p.b.z); ca.setXYZ(i * 2, 0.02 * f, 0.22 * f, 0.38 * f); ca.setXYZ(i * 2 + 1, 0.3 * f, 0.75 * f, 0.9 * f); }
       pa.needsUpdate = true; ca.needsUpdate = true; }
   }
+  // every swing hurls a crescent of sea water: it flies out ahead, cutting through bandits and slamming into ships
+  const SLASHES = [];
+  const slashM = new THREE.MeshBasicMaterial({ color: 0x6fe6ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  function seaSlash() {
+    const wp = new THREE.Vector3(), q = new THREE.Quaternion(); player.root.getWorldPosition(wp); player.root.getWorldQuaternion(q);
+    const fw = new THREE.Vector3(0, 0, 1).applyQuaternion(q); fw.y = 0; fw.normalize();
+    const g = new THREE.Group(); g.position.set(wp.x + fw.x * 1.5, wp.y + 1.2, wp.z + fw.z * 1.5); g.rotation.y = Math.atan2(fw.x, fw.z); scene.add(g);
+    const core = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.34, 6, 32, Math.PI), slashM.clone()); core.material.color.setHex(0xd8fcff); core.scale.y = 0.35; core.rotation.set(Math.PI / 2, 0, Math.PI); g.add(core);
+    const glow = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.9, 6, 32, Math.PI), slashM.clone()); glow.material.opacity = 0.5; glow.scale.y = 0.45; glow.rotation.copy(core.rotation); g.add(glow);
+    SLASHES.push({ g, core, glow, fw, t: 0, hit: new Set() });
+  }
+  function updateSlashes(dt) {
+    for (let i = SLASHES.length - 1; i >= 0; i--) { const S2 = SLASHES[i]; S2.t += dt; const u = S2.t / 0.8;
+      S2.g.position.addScaledVector(S2.fw, 48 * dt); S2.g.scale.setScalar(1 + u * 1.4);
+      S2.core.material.opacity = Math.max(0, 1 - u); S2.glow.material.opacity = 0.5 * Math.max(0, 1 - u);
+      const gx = S2.g.position.x, gz = S2.g.position.z, R = 2.8 * (1 + u * 1.4);
+      if (Math.random() < 0.7) puff(gx + (Math.random() - 0.5) * R * 2 * S2.fw.z, S2.g.position.y - 0.6, gz - (Math.random() - 0.5) * R * 2 * S2.fw.x, { color: 0xdffbff, size: 1 + Math.random(), life: 0.5, grow: 2, vy: 1.5, op: 0.7 });
+      for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone' || S2.hit.has(b)) continue; if (Math.hypot(b.pos.x - gx, b.pos.z - gz) < R + 0.8 && Math.abs(b.pos.y - S2.g.position.y) < 4) { S2.hit.add(b); hitBandit(b, Math.round(curSword().dmg * 0.6)); seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); } }
+      for (const T2 of tideTargets()) { if (!T2.ship || S2.hit.has(T2.e)) continue; if (Math.hypot(T2.e.x - gx, T2.e.z - gz) < R + (T2.e.T ? T2.e.T.L * 0.4 : 12)) { S2.hit.add(T2.e); T2.hit(25); seaImpact(gx, 3, gz); } }
+      if (u >= 1) { scene.remove(S2.g); S2.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); SLASHES.splice(i, 1); } }
+  }
   // a blow struck with it: a burst of water and light, a ring racing out, and the world jolts
   function seaImpact(x, y, z) {
     for (let k = 0; k < 12; k++) { const a = Math.random() * 6.28, e = Math.random() * 1.2; puff(x, y, z, { color: k % 3 ? 0x9ff6ff : 0xffffff, size: 0.8 + Math.random(), life: 0.6, grow: 2, vx: Math.cos(a) * Math.cos(e) * 9, vz: Math.sin(a) * Math.cos(e) * 9, vy: Math.sin(e) * 9, op: 0.9 }); }
@@ -10995,7 +11018,7 @@ window.__pgBoot = () => {
     SEACTL.shake = Math.max(SEACTL.shake, 0.45); SFX.splash({ x, z }, true);
   }
   function updateSeaControl(dt, t) {
-    window.__seaSky = SEACTL.sky || 0; seaBladeFx(dt, t); updateSeaCast(dt); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
+    window.__seaSky = SEACTL.sky || 0; seaBladeFx(dt, t); updateSeaCast(dt); updateSlashes(dt); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
     for (const k of ['fCd', 'gCd', 'tCd', 'vCd']) SEACTL[k] = Math.max(0, SEACTL[k] - dt);
     const cd = v => v > 0 ? `(${Math.ceil(v)}s)` : '&middot; ready';
     const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}` : '';
