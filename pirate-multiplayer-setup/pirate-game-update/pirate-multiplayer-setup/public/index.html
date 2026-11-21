@@ -6226,7 +6226,7 @@ window.__pgBoot = () => {
       b.vy -= 20 * dt; m.position.x += b.vx * dt; m.position.y += b.vy * dt; m.position.z += b.vz * dt;
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
-      if (b.enemy && SEACTL.wallT > 0 && ship && Math.hypot(x - ship.x, z - ship.z) < SEACTL.wallR && y < 22) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
+      if (b.enemy && SEACTL.wallT > 0 && Math.hypot(x - seaWallC().x, z - seaWallC().z) < SEACTL.wallR && y < (SEACTL.wallH || 22) + 2) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
       if (!hit && b.enemy && (krSwimming() || seaRunning()) && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
       const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
@@ -9416,6 +9416,7 @@ window.__pgBoot = () => {
   }
   // its claws close on yer ship
   function bwHitMe(dmg, swim) {
+    if (SEACTL.wallT > 0 && SEACTL.wallMode === 'me' && !(sailing || onShip || inInterior)) { const c = seaWallC(); wSplash(c.x + (Math.random() - 0.5) * 30, 6, c.z + (Math.random() - 0.5) * 30, true); SFX.clawClack({ x: c.x, z: c.z }); SFX.splash({ x: c.x, z: c.z }, true); toast('The Beast\'s claws slam against yer Sea Wall... and can\'t get through!'); return; }   // the Sea Wall holds it off
     if (swim || ((krSwimming() || seaRunning()) && !(sailing || onShip || inInterior))) { hurtPlayer(Math.round(dmg * 1.5)); wSplash(P.pos.x, 1, P.pos.z, true); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast snaps its claws shut on ye in the water!' : 'The Blackwater Beast drags ye down into the dark...'); return; }   // caught swimming
     if (!ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
@@ -10961,11 +10962,15 @@ window.__pgBoot = () => {
     const c = sailing && ship ? ship : P.pos; strikeAt(c.x + 300, c.z + 200); setTimeout(() => strikeAt(c.x - 250, c.z - 300), 350);
     seaCastFx(0xbfd8ff, 1.4); toast('Ye raise the Sword of the Sea to the sky... and the TEMPEST answers!');
   }
+  const _swc = new THREE.Vector3();
+  function seaWallC() { if (SEACTL.wallMode === 'me') { player.root.getWorldPosition(_swc); return _swc; } return ship ? _swc.set(ship.x, 0, ship.z) : _swc.set(P.pos.x, 0, P.pos.z); }   // where the wall stands
   function seaWall() {
     if (!seaOn() || seaBusy()) return;
-    if (!ship || ship.sinking || !(sailing || onShip)) { toast('Ye need to be aboard yer ship to raise the Sea Wall.'); return; }
+    const aboard = ship && !ship.sinking && (sailing || onShip), running = seaRunning();
+    if (!aboard && !running) { toast('Raise the Sea Wall aboard yer ship, or out on the open water.'); return; }
     if (SEACTL.vCd > 0) { toast(`The sea won't rise again just yet... (${Math.ceil(SEACTL.vCd)}s)`); return; }
-    SEACTL.wallT = 10; SEACTL.vCd = 30; SEACTL.wallR = ship.T.L * 0.5 + 35;
+    // round the ship when ye're aboard her; round yerself, close and following every step, when ye're out running the waves
+    SEACTL.wallMode = aboard ? 'ship' : 'me'; SEACTL.wallT = 10; SEACTL.vCd = 30; SEACTL.wallR = aboard ? ship.T.L * 0.5 + 35 : 17; SEACTL.wallH = aboard ? 22 : 10;   // (wide enough that the camera stays inside it)
     if (!SEACTL.wall) {
       // water streaming upward: a streaky texture scrolled up the wall, foamier toward the top
       const tex = canvasTex(128, 256, (g, w, h) => { const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, 'rgba(12,90,120,0.85)'); gr.addColorStop(0.6, 'rgba(40,170,205,0.7)'); gr.addColorStop(0.9, 'rgba(200,245,255,0.85)'); gr.addColorStop(1, 'rgba(255,255,255,0.95)'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -10976,7 +10981,7 @@ window.__pgBoot = () => {
       SEACTL.wall2 = new THREE.Mesh(new THREE.CylinderGeometry(0.96, 1.0, 1, 64, 1, true), new THREE.MeshBasicMaterial({ map: tex2, color: 0xbff4ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); scene.add(SEACTL.wall2);
       SEACTL.crest = new THREE.Mesh(new THREE.TorusGeometry(1, 0.022, 8, 96), new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0x8fdfff, emissiveIntensity: 0.3, transparent: true, opacity: 0.95, depthWrite: false })); SEACTL.crest.rotation.x = Math.PI / 2; scene.add(SEACTL.crest);
     }
-    SFX.splash({ x: ship.x, z: ship.z }, true); seaCastFx(0x7ff0ff, 1); toast('The sea rises in a wall around yer ship!');
+    const c0 = seaWallC(); SFX.splash({ x: c0.x, z: c0.z }, true); seaCastFx(0x7ff0ff, 1); toast(aboard ? 'The sea rises in a wall around yer ship!' : 'The sea rises in a wall around ye, and runs with ye!');
   }
   const seaHud = document.createElement('div');
   seaHud.style.cssText = 'position:absolute;right:16px;bottom:96px;color:#cff4ff;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.8);pointer-events:none;text-align:right;line-height:1.55';
@@ -11076,15 +11081,16 @@ window.__pgBoot = () => {
     // the Sea Wall: rises, follows the ship, ripples, and falls away
     if (SEACTL.wall) {
       const W = SEACTL.wall;
-      if (SEACTL.wallT > 0 && ship && !ship.sinking) {
-        SEACTL.wallT -= dt; const u = Math.min(1, (10 - SEACTL.wallT) / 0.8), dn = Math.min(1, SEACTL.wallT / 0.8), hgt = 22 * Math.min(u, dn);
-        W.visible = true; W.scale.set(SEACTL.wallR, Math.max(0.1, hgt), SEACTL.wallR); W.position.set(ship.x, hgt / 2 - 2 + Math.sin(t * 3) * 0.6, ship.z); W.rotation.y += dt * 0.6;
+      if (SEACTL.wallT > 0 && (SEACTL.wallMode === 'me' ? PLAYER.hp > 0 : ship && !ship.sinking)) {
+        const WC = seaWallC(), cx = WC.x, cz = WC.z, base = SEACTL.wallMode === 'me' ? waveHeight(cx, cz, t) : 0;
+        SEACTL.wallT -= dt; const u = Math.min(1, (10 - SEACTL.wallT) / 0.8), dn = Math.min(1, SEACTL.wallT / 0.8), hgt = (SEACTL.wallH || 22) * Math.min(u, dn);
+        W.visible = true; W.scale.set(SEACTL.wallR, Math.max(0.1, hgt), SEACTL.wallR); W.position.set(cx, base + hgt / 2 - 2 + Math.sin(t * 3) * 0.6, cz); W.rotation.y += dt * 0.6;
         const vis = Math.min(u, dn); W.material.opacity = 0.75 * vis;
-        const W2 = SEACTL.wall2; W2.visible = true; W2.scale.set(SEACTL.wallR, Math.max(0.1, hgt * 0.92), SEACTL.wallR); W2.position.set(ship.x, hgt * 0.46 - 2, ship.z); W2.rotation.y -= dt * 0.9; W2.material.opacity = 0.45 * vis;
+        const W2 = SEACTL.wall2; W2.visible = true; W2.scale.set(SEACTL.wallR, Math.max(0.1, hgt * 0.92), SEACTL.wallR); W2.position.set(cx, base + hgt * 0.46 - 2, cz); W2.rotation.y -= dt * 0.9; W2.material.opacity = 0.45 * vis;
         SEACTL.wallTex.offset.y -= dt * 0.9; SEACTL.wallTex2.offset.y -= dt * 1.3; SEACTL.wallTex2.offset.x += dt * 0.05;   // rushing upward
-        SEACTL.crest.visible = true; SEACTL.crest.scale.setScalar(SEACTL.wallR); SEACTL.crest.position.set(ship.x, hgt - 2 + Math.sin(t * 3) * 0.6, ship.z); SEACTL.crest.material.opacity = 0.95 * vis;
-        for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28; puff(ship.x + Math.sin(a) * SEACTL.wallR, hgt - 1, ship.z + Math.cos(a) * SEACTL.wallR, { color: 0xffffff, size: 4 + Math.random() * 5, life: 1.0, grow: 1.6, vy: 3 + Math.random() * 4, vx: Math.sin(a) * 4, vz: Math.cos(a) * 4, op: 0.7 * vis }); }   // spray off the top
-        if (Math.random() < dt * 10) { const a = Math.random() * 6.28; puff(ship.x + Math.sin(a) * SEACTL.wallR * 1.05, 1.5, ship.z + Math.cos(a) * SEACTL.wallR * 1.05, { color: 0xf0fcff, size: 10, life: 1.4, grow: 1.6, vy: 1, op: 0.5 * vis }); }   // white water at its foot
+        SEACTL.crest.visible = true; SEACTL.crest.scale.setScalar(SEACTL.wallR); SEACTL.crest.position.set(cx, base + hgt - 2 + Math.sin(t * 3) * 0.6, cz); SEACTL.crest.material.opacity = 0.95 * vis;
+        for (let k = 0; k < 3; k++) { const a = Math.random() * 6.28; puff(cx + Math.sin(a) * SEACTL.wallR, hgt - 1, cz + Math.cos(a) * SEACTL.wallR, { color: 0xffffff, size: 4 + Math.random() * 5, life: 1.0, grow: 1.6, vy: 3 + Math.random() * 4, vx: Math.sin(a) * 4, vz: Math.cos(a) * 4, op: 0.7 * vis }); }   // spray off the top
+        if (Math.random() < dt * 10) { const a = Math.random() * 6.28; puff(cx + Math.sin(a) * SEACTL.wallR * 1.05, 1.5, cz + Math.cos(a) * SEACTL.wallR * 1.05, { color: 0xf0fcff, size: 10, life: 1.4, grow: 1.6, vy: 1, op: 0.5 * vis }); }   // white water at its foot
       } else { W.visible = false; if (SEACTL.wall2) SEACTL.wall2.visible = false; SEACTL.crest.visible = false; SEACTL.wallT = 0; }
     }
   }
