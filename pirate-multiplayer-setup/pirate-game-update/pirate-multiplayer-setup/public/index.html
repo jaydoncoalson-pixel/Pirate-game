@@ -9494,7 +9494,7 @@ window.__pgBoot = () => {
   // for the cannons' auto-aim
   const serpTargets = () => SERP.filter(s => serpAlive(s) && s.st !== 'roam').map(s => ({ x: s.x, z: s.z, heading: s.heading, speed: s.speed, T: { L: 16 }, group: { position: { y: 1.5 } } }));
   function updateSerpents(dt, t) {
-    const prey = serpPrey(), calm = STATE.sword === 'seasword';
+    const prey = serpPrey(), calm = STATE.sword === 'seasword' || (RIDE.on && ELD.K.elder);   // they bow to the Sword of the Sea, and to the Elder Serpent
     const cam = camera.position;
     const online = serpNet(), me = window.__mpMe ? window.__mpMe() : null;
     for (const s of SERP) {
@@ -9511,7 +9511,7 @@ window.__pgBoot = () => {
           s.st = N.st;
           if (N.tg === me && (N.st === 'hunt' || N.st === 'circle') && !s.told) { s.told = true; SFX.roar(); toast('Something long and scaled is cutting through the water toward the ship!'); }
           if (N.tg === me && N.st === 'escort' && !s.toldCalm && ship && Math.hypot(s.x - ship.x, s.z - ship.z) < 70) { s.toldCalm = true; serpSay('A sea serpent glides up alongside the ship...', 15); }
-          if (N.tg === me && N.st === 'bow' && was !== 'bow') serpSay('The sea serpent rises from the sea... and bows its head to the Sword of the Sea.', 3);
+          if (N.tg === me && N.st === 'bow' && was !== 'bow') serpSay((RIDE.on && ELD.K.elder ? 'The sea serpent rises from the sea... and bows its head before the Elder Serpent.' : 'The sea serpent rises from the sea... and bows its head to the Sword of the Sea.'), 3);
           if (N.st === 'roam') { if (s.told && (was === 'hunt' || was === 'circle' || was === 'strike') && Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 900) toast('The serpent turns back into the mist.'); s.told = false; s.toldCalm = false; }
         }
         s.hp = N.hp;
@@ -9534,7 +9534,7 @@ window.__pgBoot = () => {
             const tx = prey.x + sz * off + sx * ahead, tz = prey.z - sx * off + sz * ahead, ds = Math.hypot(tx - s.x, tz - s.z);
             serpSteer(s, tx, tz, Math.max(6, Math.min(120, Math.abs(prey.speed || 0) + ds * (bowing ? 0.4 : 0.08))), dt, 2.4);
             if (!s.told && d < 70) { s.told = true; serpSay('A sea serpent glides up alongside the ship...', 15); }
-            if (s.st === 'escort') { s.wait = (s.wait || 0) + dt; if (!s.bowed && ds < 16 && (Math.abs(angDiff(s.heading, prey.heading)) < 0.7 || s.wait > 12)) { s.st = 'bow'; s.sk = 0; serpSay('The sea serpent rises from the sea... and bows its head to the Sword of the Sea.', 3); } }
+            if (s.st === 'escort') { s.wait = (s.wait || 0) + dt; if (!s.bowed && ds < 16 && (Math.abs(angDiff(s.heading, prey.heading)) < 0.7 || s.wait > 12)) { s.st = 'bow'; s.sk = 0; serpSay((RIDE.on && ELD.K.elder ? 'The sea serpent rises from the sea... and bows its head before the Elder Serpent.' : 'The sea serpent rises from the sea... and bows its head to the Sword of the Sea.'), 3); } }
             else { s.sk += dt; if (s.sk > BOW_T) { s.st = 'escort'; s.bowed = true; s.sk = 0; } }
           }
         } else if (s.st === 'roam') {
@@ -10358,7 +10358,7 @@ window.__pgBoot = () => {
     if (!ELD.on) return;
     if (ELD.leaving) { ELD.emerge = Math.max(0, ELD.emerge - dt / 2.5); if (ELD.emerge <= 0) { ELD.on = false; ELD.leaving = false; if (ELD.mesh) ELD.mesh.g.visible = false; ELD.stk = null; } }
     else if (ELD.mode !== 'stalk') ELD.emerge = Math.min(1, ELD.emerge + dt / 3);
-    if (ELD.hp < ELD_HP && ELD.hp > 0) ELD.hp = Math.min(ELD_HP, ELD.hp + 200 * dt);   // he heals, slowly   // stalking, he decides when he shows himself
+    if (ELD.hp < eldMaxHp() && ELD.hp > 0) ELD.hp = Math.min(eldMaxHp(), ELD.hp + (ELD.K.elder ? 200 : 4) * dt);   // he heals, slowly   // stalking, he decides when he shows himself
     if (ELD.mode !== 'stalk' && ELD.stk) { ELD.stk = null; ELD.stkDive = false; ELD.roared = false; }   // called off: he comes up again, roaring
     const H = elderHome();
     let fighting = false;
@@ -10474,25 +10474,28 @@ window.__pgBoot = () => {
   // the Elder Serpent's health: a million (never shown). Enemy shot that strikes his body, the Blackwater Beast's claws and
   // the mist serpents' fangs all wear it down; it slowly heals. If it ever runs out he is slain and sinks, and the horn
   // can't raise him again for ten minutes.
-  const ELD_HP = 1000000; ELD.hp = ELD_HP; ELD.deadUntil = 0;
+  // (the common serpent the lesser horn calls has 1,500, heals slowly too, and can be called again 3 minutes after it falls)
+  const ELD_HP = 1000000, COMMON_HP = 1500; ELD.hp = ELD_HP; ELD.deadUntil = 0; ELD.deadUntilC = 0;
+  const eldMaxHp = () => ELD.K.elder ? ELD_HP : COMMON_HP;
   function elderHurt(n) {
-    if (!ELD.on || ELD.leaving || !ELD.K.elder || !(n > 0)) return;
+    if (!ELD.on || ELD.leaving || !(n > 0)) return;
     ELD.hp -= n;
     if (ELD.hp <= 0) {
       ELD.hp = 0; if (RIDE.on) elderDismount(); if (ELD.grab && ELD.grab.e) ELD.grab.e.eHold = false; ELD.grab = null; ELD.stk = null;
-      elderRoar(2); ELD.leaving = true; ELD.deadUntil = clock.elapsedTime + 600;
-      toast('The Elder Serpent gives a last, dreadful roar... and sinks into the deep, slain. The horn will not raise him again for a while.');
+      elderRoar(2); ELD.leaving = true; if (ELD.K.elder) ELD.deadUntil = clock.elapsedTime + 600; else ELD.deadUntilC = clock.elapsedTime + 180;
+      toast(ELD.K.elder ? 'The Elder Serpent gives a last, dreadful roar... and sinks into the deep, slain. The horn will not raise him again for a while.' : 'Yer sea serpent gives a last shriek... and sinks into the deep, slain. Give the horn a few minutes before ye call another.');
     }
   }
   function elderBallHit(x, y, z, dmg) {   // does a shot strike his body?
-    if (!ELD.on || !ELD.mesh || !ELD.K.elder || ELD.emerge < 0.3 || y > 60) return false;
+    if (!ELD.on || !ELD.mesh || ELD.emerge < 0.3 || y > (ELD.K.elder ? 60 : 12)) return false;
     const m = ELD.mesh, R = 3.2 * ELD.K.scale;
     for (let k = 0; k < m.N; k += 3) { const p = m.segs[k].position; if (Math.abs(p.x - x) < R && Math.abs(p.z - z) < R && Math.hypot(p.x - x, p.z - z) < R * (1 - 0.5 * k / m.N)) { elderHurt(dmg); wSplash(x, 2, z, false); return true; } }
     return false;
   }
   function summonElder() {
     if (hornIsTrue() && clock.elapsedTime < ELD.deadUntil) { toast(`The horn's call rolls out over the sea... but the Elder Serpent does not answer. He was slain, and the deep has not yet given him back. (${Math.ceil((ELD.deadUntil - clock.elapsedTime) / 60)} min)`); return; }
-    if (hornIsTrue() && ELD.deadUntil && clock.elapsedTime >= ELD.deadUntil) { ELD.hp = ELD_HP; ELD.deadUntil = 0; }
+    if (!hornIsTrue() && clock.elapsedTime < ELD.deadUntilC) { toast(`The horn's call rolls out... but no serpent answers yet. (${Math.ceil(ELD.deadUntilC - clock.elapsedTime)}s)`); return; }
+    { const kNew = hornIsTrue() ? 'elder' : 'common'; if (ELD.hpKind !== kNew || ELD.hp <= 0 || (kNew === 'elder' && ELD.deadUntil && clock.elapsedTime >= ELD.deadUntil)) { ELD.hp = kNew === 'elder' ? ELD_HP : COMMON_HP; ELD.hpKind = kNew; ELD.deadUntil = 0; } }   // a fresh serpent, at full health
     const K = hornIsTrue() ? ELD_KINDS.elder : ELD_KINDS.common, H = elderHome(), q = deepSpotNear(H.x, H.z, K.spawn[0], K.spawn[1], K.probe * 0.8);
     if (!q) { toast("The horn's call rolls out... but there's no deep water near enough for him to rise. Try it at sea."); return; }
     if (ELD.mesh && ELD.mesh.K !== K) { scene.remove(ELD.mesh.g); ELD.mesh = null; }
@@ -11411,7 +11414,7 @@ window.__pgBoot = () => {
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null,   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
-          swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? 1 : 0,   // rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
+          swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
           el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [-1, -1] : (ELD.stk.win || [-1, -1])), ELD.stk.hush ? 1 : 0, r(ELD.stk.tension), r(ELD.stk.jaw || 0), ...(ELD.stk.arch ? [r(ELD.stk.arch.x0), r(ELD.stk.arch.z0), r(ELD.stk.arch.h), ELD.stk.arch.L, ELD.stk.arch.H] : [])] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
