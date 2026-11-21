@@ -116,7 +116,7 @@
 <div id="toast"></div>
 <div id="weapons"><div data-w="cutlass">1 &middot; Cutlass</div><div data-w="pistol">2 &middot; Pistol</div><div id="hornSlot" style="display:none">3 &middot; Serpent Horn</div></div>
 <div id="hurt"></div><div id="fade"></div>
-<div id="panel" class="ovl"><div class="box"><div class="tabs"><button data-t="pirate">Your pirate</button><button data-t="ship">Your ship</button></div><div id="panelBody"></div><div class="foot"><button class="close">Done</button></div></div></div>
+<div id="panel" class="ovl"><div class="box"><div class="tabs"><button data-t="pirate">Your pirate</button><button data-t="ship">Your ship</button><button data-t="serpent">Your serpent</button></div><div id="panelBody"></div><div class="foot"><button class="close">Done</button></div></div></div>
 <div id="qlog" class="ovl"><div class="box"><h2>Quest log</h2><div id="qlist"></div><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="forge" class="ovl"><div class="box"><h2>Swords and the forge</h2><div id="mats"></div><div id="swordList"></div><div class="foot"><button class="close">Close</button></div></div></div>
 <div id="acct" class="ovl"><div class="box"><h2>Captain's accounts</h2><div id="acctList"></div>
@@ -4962,10 +4962,46 @@ window.__pgBoot = () => {
     { key: 'trim', label: 'Trim', type: 'swatch', set: 'trim' },
     { key: 'flag', label: 'Flag', type: 'choice', choices: [['jolly', 'Jolly Roger'], ['red', 'Red banner'], ['black', 'Plain black'], ['green', 'Green'], ['blue', 'Blue']] },
   ];
+  const SERP_SW = {
+    scale: [0x0c1412, 0x1f6e5e, 0x0e3a2a, 0x123c6e, 0x0a2440, 0x5a0a0e, 0x2a0a3a, 0x3a3a3a, 0xd8d2c0, 0x8a6a10, 0x101010, 0x2a5a1a],
+    belly: [0x2e2420, 0x9cc79a, 0xd8cfb4, 0xc8a060, 0x6a7a8a, 0x8a2a2a, 0x3a2a4a, 0xe8e4d8, 0x1a1a1a, 0xa8d8e8],
+    fin: [0x6a0608, 0x8e2a2a, 0xc83010, 0xe8a020, 0x1a6ac8, 0x30c8a0, 0x6a20a8, 0xe8e8e8, 0x101010, 0xd040a0],
+    horn: [0x1a1512, 0xd9cfb4, 0xf2ecd8, 0x6a5a40, 0xe9bf4a, 0x8a1a10, 0x303848, 0x101010, 0x7fd8ff],
+    eye: [0xff2a0a, 0xffd23a, 0x40ff60, 0x40c8ff, 0xb040ff, 0xffffff, 0xff40a0, 0xff8a10],
+    mark: [0xff3a10, 0x40e0ff, 0x60ff40, 0xffd040, 0xc040ff, 0xffffff, 0xff2060],
+  };
+  const SERP_OPTS = [['scale', 'Scales'], ['belly', 'Belly'], ['fin', 'Fins & blades'], ['horn', 'Horns & spines'], ['eye', 'Eyes'], ['mark', 'Glowing markings']];
+  function rebuildSerpent() {   // repaint him on the spot if he's out
+    if (!ELD.mesh) return;
+    const old = ELD.mesh; scene.remove(old.g);
+    ELD.mesh = makeElderMesh(ELD.K, STATE.serpLook); ELD.mesh.look = Object.assign({}, STATE.serpLook || {}); elderResetTrail(ELD.mesh, ELD.x, ELD.z, ELD.h);
+    ELD.mesh.g.visible = ELD.on;
+  }
+  function renderSerpentCustom() {
+    if (!STATE.serpLook) STATE.serpLook = {};
+    const L = STATE.serpLook;
+    SERP_OPTS.forEach(([key, label]) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = label; row.appendChild(lab);
+      const ctl = document.createElement('div'); ctl.className = 'ctl'; row.appendChild(ctl);
+      const nat = document.createElement('button'); nat.className = 'ch' + (L[key] == null ? ' on' : ''); nat.textContent = 'Natural'; nat.title = 'His own colour';
+      nat.addEventListener('click', () => { delete L[key]; save(); rebuildSerpent(); renderCustom(); }); ctl.appendChild(nat);
+      SERP_SW[key].forEach(col => { const b = document.createElement('button'); b.className = 'sw' + (L[key] === col ? ' on' : ''); b.style.background = hex(col);
+        if (key === 'eye' || key === 'mark') b.style.boxShadow = `0 0 8px ${hex(col)}`;
+        b.addEventListener('click', () => { L[key] = col; save(); rebuildSerpent(); renderCustom(); }); ctl.appendChild(b); });
+      panelBody.appendChild(row);
+    });
+    const note = document.createElement('p'); note.className = 'note';
+    note.textContent = (ELD.on ? 'Yer serpent is repainted on the spot.' : 'Sound the horn (3) to see him. Yer colours are used whenever he answers.') + ' Glowing markings and armour plates show on the Elder Serpent. Other captains see him in yer colours too.';
+    const rb = document.createElement('button'); rb.className = 'ch'; rb.style.marginTop = '12px'; rb.textContent = 'Reset to his natural colours';
+    rb.addEventListener('click', () => { STATE.serpLook = {}; save(); rebuildSerpent(); renderCustom(); });
+    panelBody.appendChild(rb); panelBody.appendChild(note);
+  }
   function renderCustom() {
     document.querySelectorAll('#panel .tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === customTab));
     const pirate = customTab === 'pirate', opts = pirate ? PIRATE_OPTS : SHIP_OPTS, obj = pirate ? STATE.look : STATE.shipStyle;
     panelBody.innerHTML = '';
+    if (customTab === 'serpent') { renderSerpentCustom(); return; }
     opts.forEach(o => {
       const row = document.createElement('div'); row.className = 'row';
       const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = o.label; row.appendChild(lab);
@@ -9639,6 +9675,20 @@ window.__pgBoot = () => {
     eye: new THREE.MeshBasicMaterial({ color: 0xffd23a }), mouth: new THREE.MeshLambertMaterial({ color: 0x5a1414 }), tooth: new THREE.MeshLambertMaterial({ color: 0xf2ecd8 }),
     glow: new THREE.MeshLambertMaterial({ color: 0x5a1414 }),
   };
+  // yer own colours for the serpent yer horn calls: any part left unset keeps its natural colour
+  function serpentMats(K, look) {
+    const B = K.elder ? ELD_MATS : COMMON_MATS, M = {};
+    for (const k in B) M[k] = B[k].clone();
+    const L = look || {};
+    if (L.scale != null) { M.scale.color.setHex(L.scale); if (M.plate) M.plate.color.setHex(L.scale).multiplyScalar(1.35); }
+    if (L.belly != null) M.belly.color.setHex(L.belly);
+    if (L.fin != null) M.fin.color.setHex(L.fin);
+    if (L.horn != null) M.horn.color.setHex(L.horn);
+    if (L.eye != null) M.eye.color.setHex(L.eye);
+    if (L.mark != null) { if (M.rune) M.rune.color.setHex(L.mark); if (M.glow) M.glow.color.setHex(L.mark); }
+    M.eyeGlow = L.eye != null ? L.eye : K.elder ? 0xff3010 : 0xffd23a;
+    return M;
+  }
   // yer serpent's name in messages
   const mountName = () => ELD.K && ELD.K.elder ? 'the Elder Serpent' : 'yer sea serpent';   // the one ye're riding: only the true horn's serpent is the Elder
   const etoast = msg => toast(ELD.K.elder ? msg : msg.replace(/the Elder Serpent/g, 'yer sea serpent').replace(/The Elder Serpent/g, 'Yer sea serpent').replace(/Elder Serpent/g, 'sea serpent'));
@@ -9648,8 +9698,8 @@ window.__pgBoot = () => {
     for (let i = 0; i <= segs; i++) { const u = i / segs, c = curve.getPointAt(u), k = Math.max(0.03, 1 - u * 0.97); for (let j = 0; j <= radial; j++) { const idx = i * (radial + 1) + j; pos.setXYZ(idx, c.x + (pos.getX(idx) - c.x) * k, c.y + (pos.getY(idx) - c.y) * k, c.z + (pos.getZ(idx) - c.z) * k); } }
     geo.computeVertexNormals(); return new THREE.Mesh(geo, mat);
   }
-  function makeElderMesh(K) {
-    const M = K.elder ? ELD_MATS : COMMON_MATS, SC = K.scale, g = new THREE.Group(), N = K.segN, SPACING = K.segSp, segs = [];   // the Elder Serpent's body is twice as many, closer segments, so it reads as one long body
+  function makeElderMesh(K, look) {
+    const M = serpentMats(K, look), SC = K.scale, g = new THREE.Group(), N = K.segN, SPACING = K.segSp, segs = [];   // the Elder Serpent's body is twice as many, closer segments, so it reads as one long body
     scene.add(g);
     for (let k = 0; k < N; k++) {
       const r = 3.0 * SC * (K.elder ? 1 - 0.62 * Math.pow(k / N, 1.6) : 1 - (k / N) * 0.8), m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), M.scale);   // the Elder's tail stays thick almost to the end
@@ -9696,7 +9746,7 @@ window.__pgBoot = () => {
         // eyes set into the sides of the skull, slit pupils, a burning glow
         const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8), M.eye); eye.position.set(s * (SKL.w / 2 - 0.08), BOT + SKL.h - 0.5, 1.45); eye.scale.set(0.7, 0.55, 1.5); head.add(eye);
         const slit = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.24, 0.08), M.pupil); slit.position.set(s * (SKL.w / 2 + 0.1), BOT + SKL.h - 0.5, 1.45); head.add(slit);
-        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xff3010, transparent: true, depthWrite: false, opacity: 0.8 })); gl.scale.set(1.2, 0.7, 1); gl.position.set(s * (SKL.w / 2 + 0.05), BOT + SKL.h - 0.5, 1.45); head.add(gl); eyeGlow.push(gl);
+        const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: M.eyeGlow, transparent: true, depthWrite: false, opacity: 0.8 })); gl.scale.set(1.2, 0.7, 1); gl.position.set(s * (SKL.w / 2 + 0.05), BOT + SKL.h - 0.5, 1.45); head.add(gl); eyeGlow.push(gl);
         // a great horn rising out of the crown, sweeping back and curling down at the tip
         const hornPts = [[0.62, BOT + SKL.h - 0.3, 0.3], [0.85, BOT + SKL.h + 0.5, -0.3], [1.1, BOT + SKL.h + 1.05, -1.2], [1.22, BOT + SKL.h + 1.2, -2.2], [1.18, BOT + SKL.h + 0.95, -3.1], [1.02, BOT + SKL.h + 0.5, -3.6]].map(([x, y, z]) => new THREE.Vector3(s * x, y, z));
         head.add(taperedHorn(hornPts, 0.36, M.horn));
@@ -10500,7 +10550,8 @@ window.__pgBoot = () => {
     if (!q) { toast("The horn's call rolls out... but there's no deep water near enough for him to rise. Try it at sea."); return; }
     if (ELD.mesh && ELD.mesh.K !== K) { scene.remove(ELD.mesh.g); ELD.mesh = null; }
     ELD.K = K;
-    if (!ELD.mesh) ELD.mesh = makeElderMesh(K);
+    if (ELD.mesh && JSON.stringify(ELD.mesh.look || {}) !== JSON.stringify(STATE.serpLook || {})) { scene.remove(ELD.mesh.g); ELD.mesh = null; }
+    if (!ELD.mesh) { ELD.mesh = makeElderMesh(K, STATE.serpLook); ELD.mesh.look = Object.assign({}, STATE.serpLook || {}); }
     Object.assign(ELD, { roared: false, grab: null, on: true, mode: 'guard', x: q.x, z: q.z, h: Math.atan2(H.x - q.x, H.z - q.z), speed: 0, thr: 0, st: 'swim', sk: 0, strikeT: 1, tg: null, pick: null, emerge: 0, leaving: false, side: Math.random() < 0.5 ? 1 : -1, waiting: false });
     elderResetTrail(ELD.mesh, ELD.x, ELD.z, ELD.h);
     wSplash(q.x, 2, q.z, true); SFX.splash({ x: q.x, z: q.z }, true);
@@ -10587,7 +10638,8 @@ window.__pgBoot = () => {
       if (el[17] && el[17] === MP.me) stalker = { el, p };
       const K = el[7] === 0 ? ELD_KINDS.common : ELD_KINDS.elder;
       if (p.elder && p.elder.m.K !== K) { scene.remove(p.elder.m.g); p.elder = null; }
-      if (!p.elder) { const m = makeElderMesh(K); p.elder = { m, x: el[0], z: el[1], h: el[2] }; elderResetTrail(m, el[0], el[1], el[2]); }
+      { const sl = JSON.stringify(p.tgt.sl || null); if (p.elder && p.elder.sl !== sl) { scene.remove(p.elder.m.g); p.elder = null; } }   // they've repainted their serpent
+      if (!p.elder) { const m = makeElderMesh(K, p.tgt.sl || null); p.elder = { m, x: el[0], z: el[1], h: el[2], sl: JSON.stringify(p.tgt.sl || null) }; elderResetTrail(m, el[0], el[1], el[2]); }
       const E = p.elder, k = Math.min(1, dt * 4);
       if (Math.hypot(el[0] - E.x, el[1] - E.z) > (el[17] ? 150 : 60 * K.scale)) { E.x = el[0]; E.z = el[1]; elderResetTrail(E.m, E.x, E.z, el[2]); }   // a stalker vanishes and turns up elsewhere: snap, no gliding
       E.x += (el[0] - E.x) * k; E.z += (el[1] - E.z) * k; E.h += angDiff(E.h, el[2]) * k;
@@ -11414,6 +11466,7 @@ window.__pgBoot = () => {
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null,   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
+          sl: ELD.on && STATE.serpLook && Object.keys(STATE.serpLook).length ? STATE.serpLook : null,   // yer serpent's colours, so others see him as ye've painted him
           swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
           el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [-1, -1] : (ELD.stk.win || [-1, -1])), ELD.stk.hush ? 1 : 0, r(ELD.stk.tension), r(ELD.stk.jaw || 0), ...(ELD.stk.arch ? [r(ELD.stk.arch.x0), r(ELD.stk.arch.z0), r(ELD.stk.arch.h), ELD.stk.arch.L, ELD.stk.arch.H] : [])] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
