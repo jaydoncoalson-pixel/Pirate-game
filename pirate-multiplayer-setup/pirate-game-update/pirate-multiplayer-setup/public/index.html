@@ -6227,6 +6227,7 @@ window.__pgBoot = () => {
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
       if (b.enemy && SEACTL.wallT > 0 && Math.hypot(x - seaWallC().x, z - seaWallC().z) < SEACTL.wallR && y < (SEACTL.wallH || 22) + 2) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
+      if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { hit = true; hurtPlayer(18); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball slams into the Elder Serpent beneath ye!'); }   // shot at while riding
       if (!hit && b.enemy && (krSwimming() || seaRunning()) && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
       const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
@@ -6346,7 +6347,7 @@ window.__pgBoot = () => {
     if (Math.hypot(r.x - camera.position.x, r.z - camera.position.z) < 1500) for (const f of r.flags) f.wave(t);
   }
   function updateRaiders(dt, t) {
-    const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : (krSwimming() || seaRunning()) && !DUN.on ? P.pos : null;   // in the water, or running on it, ye're the target
+    const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : (krSwimming() || seaRunning() || RIDE.on) && !DUN.on ? P.pos : null;   // in the water, or running on it, ye're the target
     for (const r of raiders) {
       // Online, the server sails the raiders; this only follows its snapshots.
       const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
@@ -9299,7 +9300,7 @@ window.__pgBoot = () => {
   }
   // who it goes for: yer ship, while ye're aboard, unless ye carry the Sword of the Sea
   const SERP_SWIMMER = { swim: true, x: 0, z: 0, heading: 0, speed: 0 };   // ye, in the water: they'll come for a swimmer as readily as for a ship
-  const serpPrey = () => { if (ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior)) return ship; if (krSwimming() && !DUN.on) { SERP_SWIMMER.x = P.pos.x; SERP_SWIMMER.z = P.pos.z; SERP_SWIMMER.heading = P.facing; SERP_SWIMMER.speed = P.speed || 0; return SERP_SWIMMER; } return null; };
+  const serpPrey = () => { if (ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior)) return ship; if ((krSwimming() || RIDE.on) && !DUN.on) { SERP_SWIMMER.x = P.pos.x; SERP_SWIMMER.z = P.pos.z; SERP_SWIMMER.heading = P.facing; SERP_SWIMMER.speed = P.speed || 0; return SERP_SWIMMER; } return null; };
   // serpents never leave the mist: anything they steer for is pulled back inside its edge
   const inMistAt = (x, z, m = 0) => Math.hypot(x - MIST.x, z - MIST.z) < MIST.r + m;
   function clampMist(x, z) { const dx = x - MIST.x, dz = z - MIST.z, d = Math.hypot(dx, dz), lim = MIST.r - 40; return d <= lim ? [x, z] : [MIST.x + dx / d * lim, MIST.z + dz / d * lim]; }
@@ -9417,6 +9418,7 @@ window.__pgBoot = () => {
   // its claws close on yer ship
   function bwHitMe(dmg, swim) {
     if (SEACTL.wallT > 0 && SEACTL.wallMode === 'me' && !(sailing || onShip || inInterior)) { const c = seaWallC(); wSplash(c.x + (Math.random() - 0.5) * 30, 6, c.z + (Math.random() - 0.5) * 30, true); SFX.clawClack({ x: c.x, z: c.z }); SFX.splash({ x: c.x, z: c.z }, true); toast('The Beast\'s claws slam against yer Sea Wall... and can\'t get through!'); return; }   // the Sea Wall holds it off
+    if (RIDE.on) { hurtPlayer(Math.round(dmg * 1.3)); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast rears up and rakes ye from the Elder Serpent\'s back!' : 'The Blackwater Beast tears ye from yer mount...'); return; }   // riding: its claws reach right up to ye
     if (swim || ((krSwimming() || seaRunning()) && !(sailing || onShip || inInterior))) { hurtPlayer(Math.round(dmg * 1.5)); wSplash(P.pos.x, 1, P.pos.z, true); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast snaps its claws shut on ye in the water!' : 'The Blackwater Beast drags ye down into the dark...'); return; }   // caught swimming
     if (!ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
@@ -9456,10 +9458,10 @@ window.__pgBoot = () => {
   // online: the server says when a serpent strikes our hull, and when one dies
   function serpentBiteSwimmer(s, dmg = 22) {   // its jaws close on ye in the water
     hurtPlayer(dmg); wSplash(P.pos.x, 0.8, P.pos.z, true); SFX.crash({ x: P.pos.x, z: P.pos.z });
-    toast(PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
+    toast(RIDE.on ? (PLAYER.hp > 0 ? 'A sea serpent rears up and strikes at ye on the Elder Serpent\'s back!' : 'The sea serpent tears ye from yer mount...') : PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
   }
   function serpentBite(i, dmg, swim) {
-    const s = SERP[i]; if (s && (swim || (krSwimming() && !(sailing || onShip || inInterior)))) { serpentBiteSwimmer(s, dmg); return; }
+    const s = SERP[i]; if (s && (swim || RIDE.on || (krSwimming() && !(sailing || onShip || inInterior)))) { serpentBiteSwimmer(s, dmg); return; }
     if (!s || !ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + s.side * 0.1;
     SFX.crash({ x: ship.x, z: ship.z }); wSplash(s.x, 0.6, s.z, true);
@@ -9562,7 +9564,7 @@ window.__pgBoot = () => {
           lift = s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6);
           if (!s.hit && s.sk > 1.15 && prey) {
             s.hit = true;
-            if (prey.swim && d < 30) serpentBiteSwimmer(s);
+            if (prey.swim && d < (RIDE.on ? 70 : 30)) serpentBiteSwimmer(s);
             else if (!prey.swim && d < 48) {
               damageShip(prey, 22); prey.krJolt = Math.max(prey.krJolt || 0, 1.2); prey.krRz = (prey.krRz || 0) + s.side * 0.1;
               SFX.crash({ x: prey.x, z: prey.z }); wSplash(s.x, 0.6, s.z, true);
@@ -11384,7 +11386,7 @@ window.__pgBoot = () => {
         const r = v => Math.round(v * 100) / 100;
         const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null,   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
-          swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0,   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
+          swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? 1 : 0,   // rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
           el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [-1, -1] : (ELD.stk.win || [-1, -1])), ELD.stk.hush ? 1 : 0, r(ELD.stk.tension), r(ELD.stk.jaw || 0), ...(ELD.stk.arch ? [r(ELD.stk.arch.x0), r(ELD.stk.arch.z0), r(ELD.stk.arch.h), ELD.stk.arch.L, ELD.stk.arch.H] : [])] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)

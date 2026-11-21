@@ -193,7 +193,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     const ships = [];
     for (const [id, q] of players) {
       // a captain swimming in the fog is prey too: they hunt swimmers just as they hunt ships
-      if (q.p && q.p.swm === 1 && !(q.p.sh && q.p.sh.a === 1) && typeof q.p.x === 'number') { prevSh.delete(id); ships.push({ id, x: q.p.x, z: q.p.z, h: q.p.f || 0, sp: 3, calm: q.p.sw === 'seasword', swim: true }); continue; }
+      if (q.p && (q.p.swm === 1 || q.p.rid === 1) && !(q.p.sh && q.p.sh.a === 1) && typeof q.p.x === 'number') { prevSh.delete(id); ships.push({ id, x: q.p.x, z: q.p.z, h: q.p.f || 0, sp: 3, calm: q.p.sw === 'seasword', swim: true, rid: q.p.rid === 1 }); continue; }   // swimmers, and riders on a serpent's back
       if (!q.p || !q.p.sh || q.p.sh.a !== 1) { prevSh.delete(id); continue; }
       const sh = q.p.sh, pv = prevSh.get(id), raw = pv ? Math.min(150, Math.hypot(sh.x - pv.x, sh.z - pv.z) / Math.max(dt, 0.01)) : 0, sp = pv ? pv.sp + (raw - pv.sp) * Math.min(1, dt * 3) : 0;
       prevSh.set(id, { x: sh.x, z: sh.z, sp });
@@ -248,7 +248,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
       } else if (s.st === 'strike') {
         s.sk += dt;
         if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? Math.max(4, prey.sp) : prey.sp + 18 * SPD, dt, 3);   // keep pace with her while rearing up
-        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < (prey.swim ? 30 : 48)) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22, sw: prey.swim ? 1 : 0 }); }
+        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < (prey.rid ? 70 : prey.swim ? 30 : 48)) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22, sw: prey.swim ? 1 : 0 }); }
         if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
       }
     }
@@ -309,7 +309,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     }
     const ships = [];
     for (const [id, q] of players) if (q.p && q.p.sh && q.p.sh.a === 1 && typeof q.p.sh.x === 'number') ships.push({ id, x: q.p.sh.x, z: q.p.sh.z });
-      else if (q.p && (q.p.swm === 1 || q.p.wwk === 1) && typeof q.p.x === 'number') ships.push({ id, x: q.p.x, z: q.p.z, swim: true });   // and anyone swimming, or running on the water
+      else if (q.p && (q.p.swm === 1 || q.p.wwk === 1 || q.p.rid === 1) && typeof q.p.x === 'number') ships.push({ id, x: q.p.x, z: q.p.z, swim: true });   // and anyone swimming, or running on the water
     let prey = BW.tg ? ships.find(p => p.id === BW.tg) : null;
     if (BW.st === 'hunt') {
       if (!prey) { let bd = 1e9; for (const p of ships) { const d = Math.hypot(p.x - BW.x, p.z - BW.z); if (d < bd && bwSea(p.x, p.z)) { bd = d; prey = p; } } BW.tg = prey ? prey.id : null; }
