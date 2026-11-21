@@ -6406,10 +6406,11 @@ window.__pgBoot = () => {
         for (const b of bandits) {
           if (b.state === 'dead' || b.state === 'gone') continue;
           const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-          const sw = curSword(); if (d < sw.reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > sw.arc) { hitBandit(b, sw.dmg); if (STATE.sword === 'ghost') ghostDrain(b.pos); }
+          const sw = curSword(); if (d < sw.reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > sw.arc) { hitBandit(b, sw.dmg); if (STATE.sword === 'ghost') ghostDrain(b.pos); if (STATE.sword === 'seasword') seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); }
         }
         krSwordHit(curSword());
         serpentSwordHit(curSword());
+        if (STATE.sword === 'seasword') { const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const rx = wp.x + fx * 2.2, rz = wp.z + fz * 2.2; for (let k = 0; k < 8; k++) { const a = P.facing + (k - 3.5) * 0.28; puff(rx, wp.y + 1.1, rz, { color: 0xbff8ff, size: 0.7, life: 0.5, grow: 2.2, vx: Math.sin(a) * 10, vz: Math.cos(a) * 10, vy: 1.5, op: 0.75 }); } }   // the swing throws a fan of spray
       }
     }
     PLAYER.hurtT += dt;
@@ -6571,16 +6572,16 @@ window.__pgBoot = () => {
     add(pts, 1.6, true);
     for (let b = 0; b < 3; b++) { const k = 4 + Math.floor(Math.random() * 12), s0 = pts[k], a = Math.random() * 6.28, L = 60 + Math.random() * 120; add(boltPath(s0.x, s0.y, s0.z, s0.x + Math.sin(a) * L, s0.y - L * 1.2, s0.z + Math.cos(a) * L, 7, 30), 0.7, false); }   // forks
     const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xd8ecff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); fl.position.set(x, 12, z); fl.scale.set(160, 120, 1); g.add(fl);
-    const L2 = new THREE.PointLight(0xc8e0ff, 7, 1100, 1.4); L2.position.set(x, 60, z); g.add(L2);
+    const L2 = new THREE.PointLight(0xc8e0ff, 3, 700, 1.6); L2.position.set(x, 60, z); g.add(L2);
     scene.add(g); BOLTS.push({ g, fl, L: L2, t: 0 });
     for (let k = 0; k < 8; k++) { const a = Math.random() * 6.28, r = Math.random() * 25; puff(x + Math.sin(a) * r, 2, z + Math.cos(a) * r, { color: 0xffffff, size: 8 + Math.random() * 8, life: 1.2, grow: 2, vy: 10 + Math.random() * 10, op: 0.8 }); }
     puff(x, 6, z, { color: 0xcfd8e0, size: 40, life: 2.4, grow: 1.6, vy: 8, op: 0.45 });   // steam
-    flashT = 0.28; SFX.thunder(Math.hypot(x - camera.position.x, z - camera.position.z));
+    flashT = 0.28; const dc = Math.hypot(x - camera.position.x, z - camera.position.z); SFX.thunder(dc); if (typeof SEACTL !== 'undefined') SEACTL.shake = Math.max(SEACTL.shake, Math.max(0, 1.1 - dc / 700));
   }
   function updateBolts(dt) {
     for (let i = BOLTS.length - 1; i >= 0; i--) { const B = BOLTS[i]; B.t += dt; const flick = B.t < 0.32 ? (Math.random() < 0.75 ? 1 : 0.15) * (1 - B.t / 0.4) : 0;
       B.g.children.forEach(c => { if (c.material && c !== B.fl) c.material.opacity = (c.material.color.r > 0.9 ? 1 : 0.35) * flick; });
-      B.fl.material.opacity = Math.max(0, 1 - B.t / 0.5); B.L.intensity = 7 * Math.max(0, 1 - B.t / 0.4);
+      B.fl.material.opacity = Math.max(0, 1 - B.t / 0.5); B.L.intensity = 3 * Math.max(0, 1 - B.t / 0.4);
       if (B.t > 0.6) { scene.remove(B.g); B.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); BOLTS.splice(i, 1); } }
   }
   // the lighthouse sweeps its beam at night
@@ -6636,6 +6637,7 @@ window.__pgBoot = () => {
     }
     const tgt = WEATHERS[weatherKey], wk = Math.min(1, dt * 0.1);
     for (const key in tgt) if (key !== 'name') Wx[key] += (tgt[key] - Wx[key]) * wk;
+    { const sk = window.__seaSky || 0; if (sk > 0.01) { Wx.cloud = Math.max(Wx.cloud, sk); Wx.rain = Math.max(Wx.rain, sk); Wx.storm = Math.max(Wx.storm, sk); Wx.wave = Math.max(Wx.wave, 1 + 0.4 * sk); Wx.fog = Math.max(Wx.fog, 0.25 * sk); } }   // the Sword of the Sea's Tempest: black sky, driving rain, heaving sea
     // the sun rises in the east, crosses the southern sky and sets in the west; the moon follows
     const ph = (gameTime - 6) / 12 * Math.PI;
     SUN_DIR.set(Math.cos(ph), Math.sin(ph) * 0.88, Math.sin(ph) * 0.42 + 0.12).normalize();
@@ -10862,7 +10864,8 @@ window.__pgBoot = () => {
   // G Maelstrom: a vast whirlpool that drags ships in from far off and grinds them for 12 seconds.
   // T Tempest: a storm breaks around ye; for 25 seconds lightning strikes yer enemies again and again.
   // H Sea Wall: a ring of water rises round yer ship for 10 seconds and swallows every shot fired at her.
-  const SEACTL = { fCd: 0, gCd: 0, tCd: 0, vCd: 0, stormT: 0, boltT: 0, wallT: 0, wallR: 0, wall: null };
+  const cTmpSea = new THREE.Color();
+  const SEACTL = { shake: 0, fCd: 0, gCd: 0, tCd: 0, vCd: 0, stormT: 0, boltT: 0, wallT: 0, wallR: 0, wall: null };
   const seaOn = () => STATE.sword === 'seasword';
   const seaBusy = () => talk || uiOpen || STOM.on || MERM.held || inInterior || DUN.on;
   // a breaking wave, built fresh each frame: a cross-section (back slope, crest, curling lip) swept round an arc,
@@ -10889,6 +10892,25 @@ window.__pgBoot = () => {
       puff(W.x + Math.sin(ca) * r, 17.6 * sc * e, W.z + Math.cos(ca) * r, { color: 0xffffff, size: 5 + Math.random() * 6, life: 1.1, grow: 2.2, vy: 5 + Math.random() * 6, vx: Math.sin(ca) * 18, vz: Math.cos(ca) * 18, op: 0.75 * W.mesh.userData.fade }); }
     if (Math.random() < 0.7) { const a = (Math.random() * 2 - 1) * T2.span, ca = W.h + a, r = d + 12 * Math.max(0.6, sc); puff(W.x + Math.sin(ca) * r, 1.5, W.z + Math.cos(ca) * r, { color: 0xf4fdff, size: 12 + Math.random() * 10, life: 1.6, grow: 1.8, vy: 1.5, op: 0.6 * W.mesh.userData.fade }); }
   }
+  function seaCastFx(col = 0x5fe8ff, big = 1) {
+    const c = new THREE.Vector3(); player.root.getWorldPosition(c);   // (on deck, P.pos is in the ship's own frame)
+    const g = new THREE.Group(); g.position.set(c.x, c.y, c.z); scene.add(g);
+    const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.6, 60, 16, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); col2.position.y = 30; g.add(col2);   // a pillar of light and water
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.025, 6, 64), new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.3; g.add(ring);   // a shockwave
+    const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); fl.scale.set(7, 7, 1); fl.position.y = 2; fl.material.opacity = 0.7; g.add(fl);
+    const L = new THREE.PointLight(col, 1.6, 45, 2); L.position.y = 6; g.add(L);
+    SEACAST.push({ g, col2, ring, fl, L, t: 0, big });
+    for (let k = 0; k < 16; k++) { const a = k / 16 * 6.28; puff(c.x + Math.sin(a) * 2, c.y + 0.5, c.z + Math.cos(a) * 2, { color: 0x9fe6f5, size: 1.2 + Math.random() * 1.2, life: 0.9, grow: 2, vx: Math.sin(a) * 14, vz: Math.cos(a) * 14, vy: 3 + Math.random() * 3, op: 0.9 }); }
+    SEACTL.shake = Math.max(SEACTL.shake, 0.9 * big); PLAYER.slashDur = 0.4; PLAYER.slashT = 0.4;   // the blade swept up
+  }
+  const SEACAST = [];
+  function updateSeaCast(dt) {
+    for (let i = SEACAST.length - 1; i >= 0; i--) { const C = SEACAST[i]; C.t += dt; const u = C.t / 1.1;
+      C.col2.scale.set(1 + u * 1.5, 0.2 + Math.min(1, u * 4), 1 + u * 1.5); C.col2.material.opacity = 0.4 * Math.max(0, 1 - u);
+      const rr = 2 + u * 45 * C.big; C.ring.scale.set(rr, rr, rr); C.ring.material.opacity = 0.7 * Math.max(0, 1 - u);
+      C.fl.material.opacity = 0.7 * Math.max(0, 1 - u * 2); C.L.intensity = 1.6 * Math.max(0, 1 - u * 1.6);
+      if (u >= 1) { scene.remove(C.g); C.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); SEACAST.splice(i, 1); } }
+  }
   function seaTsunami() {
     if (!seaOn() || seaBusy()) return;
     if (SEACTL.fCd > 0) { toast(`The sea is still drawing back... (${Math.ceil(SEACTL.fCd)}s)`); return; }
@@ -10897,7 +10919,7 @@ window.__pgBoot = () => {
     TIDE.waves.push({ mesh, tsu, wall: null, crest: [], x: A.x, z: A.z, h: A.h, t: 0, hit: new Set(), big: true });
     for (let k = 0; k < 14; k++) { const a = A.h + (Math.random() - 0.5) * 1.6, r = 20 + Math.random() * 30; puff(A.x + Math.sin(a) * r, 2, A.z + Math.cos(a) * r, { color: 0xffffff, size: 10 + Math.random() * 8, life: 1.4, grow: 2, vy: 9 + Math.random() * 8, op: 0.8 }); }   // the sea heaves up where ye point
     SEACTL.fCd = 15; SFX.splash({ x: A.x, z: A.z }, true); SFX.roar(); setTimeout(() => SFX.splash({ x: A.x + Math.sin(A.h) * 200, z: A.z + Math.cos(A.h) * 200 }, true), 600);
-    toast('Ye sweep the Sword of the Sea... and a TSUNAMI rises before ye!');
+    seaCastFx(0x5fe8ff, 1.2); toast('Ye sweep the Sword of the Sea... and a TSUNAMI rises before ye!');
   }
   function seaMaelstrom() {
     if (!seaOn() || seaBusy()) return;
@@ -10913,14 +10935,14 @@ window.__pgBoot = () => {
     const rim = new THREE.Mesh(new THREE.TorusGeometry(122, 3.2, 6, 72), new THREE.MeshBasicMaterial({ color: 0xf4fdff, transparent: true, opacity: 0, depthWrite: false })); rim.rotation.x = Math.PI / 2; rim.position.y = 1; fx2.add(rim);
     const bits = []; for (let k = 0; k < 46; k++) { const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })); b.userData = { a: Math.random() * 6.28, r: 30 + Math.random() * 130 }; fx2.add(b); bits.push(b); }
     TIDE.pools.push({ disc, fx2, outer, eye, rim, bits, x, z, t: 0, tick: 0, big: true }); SEACTL.gCd = 25;
-    SFX.splash({ x, z }, true); SFX.roar(); toast('The sea obeys ye... a MAELSTROM tears open ahead!');
+    SFX.splash({ x, z }, true); SFX.roar(); seaCastFx(0x3aa8ff, 1); toast('The sea obeys ye... a MAELSTROM tears open ahead!');
   }
   function seaTempest() {
     if (!seaOn() || seaBusy()) return;
     if (SEACTL.tCd > 0) { toast(`The sky has spent its fury for now... (${Math.ceil(SEACTL.tCd)}s)`); return; }
     SEACTL.stormT = 25; SEACTL.boltT = 0.6; SEACTL.tCd = 60;
     const c = sailing && ship ? ship : P.pos; strikeAt(c.x + 300, c.z + 200); setTimeout(() => strikeAt(c.x - 250, c.z - 300), 350);
-    toast('Ye raise the Sword of the Sea to the sky... and the TEMPEST answers!');
+    seaCastFx(0xbfd8ff, 1.4); toast('Ye raise the Sword of the Sea to the sky... and the TEMPEST answers!');
   }
   function seaWall() {
     if (!seaOn() || seaBusy()) return;
@@ -10937,12 +10959,43 @@ window.__pgBoot = () => {
       SEACTL.wall2 = new THREE.Mesh(new THREE.CylinderGeometry(0.96, 1.0, 1, 64, 1, true), new THREE.MeshBasicMaterial({ map: tex2, color: 0xbff4ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); scene.add(SEACTL.wall2);
       SEACTL.crest = new THREE.Mesh(new THREE.TorusGeometry(1, 0.022, 8, 96), new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0x8fdfff, emissiveIntensity: 0.3, transparent: true, opacity: 0.95, depthWrite: false })); SEACTL.crest.rotation.x = Math.PI / 2; scene.add(SEACTL.crest);
     }
-    SFX.splash({ x: ship.x, z: ship.z }, true); toast('The sea rises in a wall around yer ship!');
+    SFX.splash({ x: ship.x, z: ship.z }, true); seaCastFx(0x7ff0ff, 1); toast('The sea rises in a wall around yer ship!');
   }
   const seaHud = document.createElement('div');
   seaHud.style.cssText = 'position:absolute;right:16px;bottom:96px;color:#cff4ff;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.8);pointer-events:none;text-align:right;line-height:1.55';
   document.body.appendChild(seaHud);
+  // the blade: a cold blue light, motes of water spiralling up and round it, glowing water at its edge
+  const SEABLADE = { g: null, motes: [], trail: [], trailMesh: null };
+  function seaBladeFx(dt, t) {
+    const B = player.props && player.props.blade, on = seaOn() && B && PLAYER.weapon === 'cutlass' && !sailing && !inInterior && !DUN.on;   // (the aura hangs on the blade, so it hides whenever the blade does)
+    if (on && (!SEABLADE.g || SEABLADE.g.parent !== B)) {
+      if (SEABLADE.g && SEABLADE.g.parent) SEABLADE.g.parent.remove(SEABLADE.g);
+      const g = SEABLADE.g = new THREE.Group(); B.add(g); SEABLADE.motes = [];
+      { const L = new THREE.PointLight(0x3ad0ff, 1.6, 10, 2); L.position.set(0, 0, 0.9); g.add(L); }
+      for (let k = 0; k < 6; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x3ad0ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false })); sp.position.set(0, 0, 0.25 + k * 0.28); sp.scale.setScalar(0.42 - k * 0.025); g.add(sp); }
+      for (let k = 0; k < 14; k++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), new THREE.MeshBasicMaterial({ color: k % 3 ? 0x9ff6ff : 0xffffff, transparent: true, opacity: 0.9 })); m.userData = { a: Math.random() * 6.28, z: Math.random() * 1.7, sp: 2 + Math.random() * 3, r: 0.07 + Math.random() * 0.08 }; g.add(m); SEABLADE.motes.push(m); }
+    }
+    if (SEABLADE.g) SEABLADE.g.visible = !!on;
+    if (on) for (const m of SEABLADE.motes) { const u = m.userData; u.a += dt * u.sp; u.z += dt * (0.6 + (PLAYER.slashT > 0 ? 3 : 0)); if (u.z > 1.75) u.z = 0.1; m.position.set(Math.cos(u.a) * u.r, Math.sin(u.a) * u.r, u.z); m.material.opacity = 0.9 * Math.sin(Math.min(1, u.z / 1.75) * Math.PI); }
+    // the swing: a sheet of glowing water following the blade
+    if (on && PLAYER.slashT > 0) { const a = new THREE.Vector3(0, 0, 0.35), b = new THREE.Vector3(0, 0, 1.75); B.localToWorld(a); B.localToWorld(b); SEABLADE.trail.push({ a, b, t: 0 }); }
+    for (const p of SEABLADE.trail) p.t += dt; while (SEABLADE.trail.length && SEABLADE.trail[0].t > 0.22) SEABLADE.trail.shift();
+    if (!SEABLADE.trailMesh) { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(64 * 6), 3)); geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(64 * 6), 3)); const idx = []; for (let i = 0; i < 63; i++) { const q = i * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); } geo.setIndex(idx);
+      SEABLADE.trailMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); SEABLADE.trailMesh.frustumCulled = false; scene.add(SEABLADE.trailMesh); }
+    const T3 = SEABLADE.trail, n = Math.min(64, T3.length), pa = SEABLADE.trailMesh.geometry.attributes.position, ca = SEABLADE.trailMesh.geometry.attributes.color;
+    SEABLADE.trailMesh.visible = n > 1;
+    if (n > 1) { for (let i = 0; i < 64; i++) { const p = T3[Math.min(n - 1, Math.max(0, n - 64 + i))], f = Math.max(0, 1 - p.t / 0.22) * (i / 63);
+        pa.setXYZ(i * 2, p.a.x, p.a.y, p.a.z); pa.setXYZ(i * 2 + 1, p.b.x, p.b.y, p.b.z); ca.setXYZ(i * 2, 0.02 * f, 0.22 * f, 0.38 * f); ca.setXYZ(i * 2 + 1, 0.3 * f, 0.75 * f, 0.9 * f); }
+      pa.needsUpdate = true; ca.needsUpdate = true; }
+  }
+  // a blow struck with it: a burst of water and light, a ring racing out, and the world jolts
+  function seaImpact(x, y, z) {
+    for (let k = 0; k < 12; k++) { const a = Math.random() * 6.28, e = Math.random() * 1.2; puff(x, y, z, { color: k % 3 ? 0x9ff6ff : 0xffffff, size: 0.8 + Math.random(), life: 0.6, grow: 2, vx: Math.cos(a) * Math.cos(e) * 9, vz: Math.sin(a) * Math.cos(e) * 9, vy: Math.sin(e) * 9, op: 0.9 }); }
+    puff(x, y, z, { color: 0x5fe8ff, size: 3.5, life: 0.35, grow: 2.5, op: 1 });
+    SEACTL.shake = Math.max(SEACTL.shake, 0.45); SFX.splash({ x, z }, true);
+  }
   function updateSeaControl(dt, t) {
+    window.__seaSky = SEACTL.sky || 0; seaBladeFx(dt, t); updateSeaCast(dt); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
     for (const k of ['fCd', 'gCd', 'tCd', 'vCd']) SEACTL[k] = Math.max(0, SEACTL[k] - dt);
     const cd = v => v > 0 ? `(${Math.ceil(v)}s)` : '&middot; ready';
     const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}` : '';
@@ -10952,17 +11005,18 @@ window.__pgBoot = () => {
     if (seaOn() && krSwimming() && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 8 * dt);
     // the storm sky: black clouds wheeling overhead and the light going grey-blue
     { const want = SEACTL.stormT > 0 ? Math.min(1, SEACTL.stormT / 1.5, (25 - SEACTL.stormT) / 2 + 0.01) : 0; SEACTL.sky = (SEACTL.sky || 0) + (want - (SEACTL.sky || 0)) * Math.min(1, dt * 1.5);
-      if (SEACTL.sky > 0.01 && !SEACTL.clouds) { SEACTL.clouds = new THREE.Group(); for (let k = 0; k < 34; k++) { const c2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: k % 3 ? 0x1c2230 : 0x2a3242, transparent: true, depthWrite: false, opacity: 0 })); const a = Math.random() * 6.28, r = Math.random() * 900; c2.position.set(Math.cos(a) * r, 300 + Math.random() * 90, Math.sin(a) * r); const sz = 260 + Math.random() * 260; c2.scale.set(sz, sz * 0.5, 1); SEACTL.clouds.add(c2); } scene.add(SEACTL.clouds);
-        SEACTL.tint = document.createElement('div'); SEACTL.tint.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at center, rgba(16,24,42,.32) 25%, rgba(6,10,22,.7) 100%);opacity:0'; document.body.appendChild(SEACTL.tint); }
-      if (SEACTL.clouds) { const c = sailing && ship ? ship : P.pos; SEACTL.clouds.visible = SEACTL.sky > 0.01; SEACTL.clouds.position.set(c.x, 0, c.z); SEACTL.clouds.rotation.y += dt * 0.05; SEACTL.clouds.children.forEach((c2, k) => c2.material.opacity = 0.85 * SEACTL.sky * (0.75 + 0.25 * Math.sin(t * 0.7 + k))); SEACTL.tint.style.opacity = (SEACTL.sky * (flashT > 0 ? 0.3 : 1)).toFixed(3); } }
+      if (SEACTL.sky > 0.01 && !SEACTL.clouds) { SEACTL.clouds = new THREE.Group(); for (let k = 0; k < 60; k++) { const c2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: k % 3 ? 0x141924 : 0x232a38, transparent: true, depthWrite: false, opacity: 0 })); const a = Math.random() * 6.28, r = Math.random() * 1100; c2.position.set(Math.cos(a) * r, 190 + Math.random() * 110, Math.sin(a) * r); const sz = 320 + Math.random() * 320; c2.scale.set(sz, sz * 0.5, 1); SEACTL.clouds.add(c2); } scene.add(SEACTL.clouds);
+        SEACTL.tint = document.createElement('div'); SEACTL.tint.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at center, rgba(12,18,34,.45) 20%, rgba(4,7,16,.85) 100%);opacity:0'; document.body.appendChild(SEACTL.tint); }
+      if (SEACTL.clouds) { const c = sailing && ship ? ship : P.pos; SEACTL.clouds.visible = SEACTL.sky > 0.01; SEACTL.clouds.position.set(c.x, 0, c.z); SEACTL.clouds.rotation.y += dt * 0.05; const lit = flashT > 0 ? Math.min(1, flashT / 0.1) : 0; SEACTL.clouds.children.forEach((c2, k) => { c2.material.opacity = 0.92 * SEACTL.sky * (0.75 + 0.25 * Math.sin(t * 0.7 + k)); c2.material.color.setHex(k % 3 ? 0x141924 : 0x232a38).lerp(cTmpSea.setHex(0xb8c8ff), lit * 0.8); }); SEACTL.tint.style.opacity = (SEACTL.sky * (flashT > 0 ? 0.3 : 1)).toFixed(3); } }   // clouds lit from within by every flash
     // the Tempest: a bolt every second or so on whatever's nearest and hostile; when nothing is, the sea all round is struck
     if (SEACTL.stormT > 0) {
       SEACTL.stormT -= dt; SEACTL.boltT -= dt;
       if (SEACTL.boltT <= 0) {
-        SEACTL.boltT = 0.9 + Math.random() * 0.6; const c = sailing && ship ? ship : P.pos;
+        SEACTL.boltT = 0.55 + Math.random() * 0.45; const c = sailing && ship ? ship : P.pos;
         const near = tideTargets().filter(T2 => Math.hypot(T2.e.x - c.x, T2.e.z - c.z) < 850);
         if (near.length) { const T2 = near[Math.floor(Math.random() * near.length)]; strikeAt(T2.e.x, T2.e.z); T2.hit(T2.ship ? 30 : 45); wSplash(T2.e.x, 4, T2.e.z, true); puff(T2.e.x, 8, T2.e.z, { color: 0xfff6c0, size: 10, life: 0.6, grow: 2.5, vy: 4, op: 0.9 }); }
         else { const a = Math.random() * 6.28, d = 250 + Math.random() * 500; strikeAt(c.x + Math.sin(a) * d, c.z + Math.cos(a) * d); }
+        if (Math.random() < 0.45) { const a = Math.random() * 6.28, d = 900 + Math.random() * 900; setTimeout(() => strikeAt(c.x + Math.sin(a) * d, c.z + Math.cos(a) * d), 200 + Math.random() * 300); }   // more, far off across the sea
       }
     }
     // the Sea Wall: rises, follows the ship, ripples, and falls away
@@ -11544,6 +11598,7 @@ window.__pgBoot = () => {
       camTarget.y + Math.sin(pitch) * dist,
       camTarget.z + Math.cos(yaw) * Math.cos(pitch) * dist
     );
+    if (typeof SEACTL !== 'undefined' && SEACTL.shake > 0 && !DUN.on) { const k = SEACTL.shake * SEACTL.shake * 0.8; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; }   // the power of the Sword of the Sea
     if (STV.shake > 0 && !DUN.on) { const k = STV.shake * STV.shake * 0.9; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; }   // something huge just moved under ye
     if (DUN.on) {   // stay inside whichever hall ye're in
       const lx = P.pos.x - DUN.O.x, lz = P.pos.z - DUN.O.z, r = DUN.rects.find(([x0, x1, z0, z1]) => lx >= x0 - 0.5 && lx <= x1 + 0.5 && lz >= z0 - 0.5 && lz <= z1 + 0.5) || DUN.rects[0];
