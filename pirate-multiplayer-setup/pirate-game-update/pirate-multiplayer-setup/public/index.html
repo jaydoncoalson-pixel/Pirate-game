@@ -4991,9 +4991,18 @@ window.__pgBoot = () => {
         b.addEventListener('click', () => { L[key] = col; save(); rebuildSerpent(); renderCustom(); }); ctl.appendChild(b); });
       panelBody.appendChild(row);
     });
+    const hd = document.createElement('div'); hd.className = 'lab'; hd.style.cssText = 'margin:14px 0 4px;font-weight:bold;letter-spacing:1px'; hd.textContent = 'COSMETICS'; panelBody.appendChild(hd);
+    [['hat', 'On his head', SERP_HATS], ['back', 'On his back', SERP_BACKS], ['aura', 'Aura', SERP_AURAS]].forEach(([key, label, list]) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = label; row.appendChild(lab);
+      const ctl = document.createElement('div'); ctl.className = 'ctl'; row.appendChild(ctl);
+      list.forEach(([v, t2]) => { const b = document.createElement('button'); b.className = 'ch' + ((L[key] || 'none') === v ? ' on' : ''); b.textContent = t2;
+        b.addEventListener('click', () => { if (v === 'none') delete L[key]; else L[key] = v; save(); rebuildSerpent(); renderCustom(); }); ctl.appendChild(b); });
+      panelBody.appendChild(row);
+    });
     const note = document.createElement('p'); note.className = 'note';
     note.textContent = (ELD.on ? 'Yer serpent is repainted on the spot.' : 'Sound the horn (3) to see him. Yer colours are used whenever he answers.') + ' Glowing markings and armour plates show on the Elder Serpent. Other captains see him in yer colours too.';
-    const rb = document.createElement('button'); rb.className = 'ch'; rb.style.marginTop = '12px'; rb.textContent = 'Reset to his natural colours';
+    const rb = document.createElement('button'); rb.className = 'ch'; rb.style.marginTop = '12px'; rb.textContent = 'Reset him (colours and cosmetics)';
     rb.addEventListener('click', () => { STATE.serpLook = {}; save(); rebuildSerpent(); renderCustom(); });
     panelBody.appendChild(rb); panelBody.appendChild(note);
   }
@@ -9788,7 +9797,85 @@ window.__pgBoot = () => {
       });
 
     }
-    return { K, g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10, eyeGlow };
+    const mesh = { K, g, segs, head, jaw, N, SPACING, trail: [], t: Math.random() * 10, eyeGlow };
+    addSerpentCosmetics(mesh, look);
+    return mesh;
+  }
+  // ---- serpent cosmetics: something for his head, something for his back, and an aura ----
+  const COS_M = {
+    gold: new THREE.MeshPhongMaterial({ color: 0xe9bf4a, specular: 0xfff1b0, shininess: 90, emissive: 0x3a2604 }),
+    iron: new THREE.MeshPhongMaterial({ color: 0x5a5e66, specular: 0xaab0bb, shininess: 60, flatShading: true }),
+    leather: new THREE.MeshLambertMaterial({ color: 0x5a3418 }), cloth: new THREE.MeshLambertMaterial({ color: 0x141414, side: THREE.DoubleSide }),
+    red: new THREE.MeshLambertMaterial({ color: 0x8a1010, side: THREE.DoubleSide }), bone: new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }),
+    gemR: new THREE.MeshPhongMaterial({ color: 0xff2040, emissive: 0x600010, shininess: 120 }), gemB: new THREE.MeshPhongMaterial({ color: 0x30a0ff, emissive: 0x002060, shininess: 120 }),
+    feather: new THREE.MeshLambertMaterial({ color: 0xf2f2f2, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x050505 }),
+    halo: new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+  };
+  const SERP_HATS = [['none', 'None'], ['crown', 'Golden crown'], ['pirate', 'Pirate hat'], ['helm', 'War helm'], ['skull', 'Skull mask'], ['halo', 'Halo']];
+  const SERP_BACKS = [['none', 'None'], ['saddle', 'Saddle'], ['banners', 'War banners'], ['chains', 'Gold chains'], ['armor', 'Iron armour']];
+  const SERP_AURAS = [['none', 'None'], ['embers', 'Embers'], ['mist', 'Sea mist'], ['sparkle', 'Gold sparkle'], ['storm', 'Storm sparks']];
+  function addSerpentCosmetics(m, look) {
+    const L = look || {}, K = m.K, H = m.head, M = COS_M;
+    const A = K.elder ? { top: 0.85, z: 0.5, w: 2.2, back: -0.9, nose: 4.5, noseY: 0.05 } : { top: 0.8, z: 0.7, w: 2.4, back: -0.8, nose: 4.3, noseY: 0.3 };   // where things sit on each kind of head
+    const add = (par, mesh, x, y, z) => { mesh.position.set(x, y, z); par.add(mesh); return mesh; };
+    const hat = new THREE.Group(); H.add(hat);
+    if (L.hat === 'crown') {
+      add(hat, new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.7, 0.32, 16, 1, true), M.gold), 0, A.top + 0.12, A.z).material.side = THREE.DoubleSide;
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add(hat, new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.45, 4), M.gold), Math.cos(a) * 0.62, A.top + 0.48, A.z + Math.sin(a) * 0.62); if (i % 2 === 0) add(hat, new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), i % 4 ? M.gemB : M.gemR), Math.cos(a) * 0.68, A.top + 0.14, A.z + Math.sin(a) * 0.68); }
+    } else if (L.hat === 'pirate') {
+      const brim = add(hat, new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.1, 3), M.cloth), 0, A.top + 0.12, A.z); brim.rotation.y = Math.PI;
+      add(hat, new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.65, 12), M.cloth), 0, A.top + 0.48, A.z);
+      const trim = add(hat, new THREE.Mesh(new THREE.TorusGeometry(0.71, 0.04, 6, 24), M.gold), 0, A.top + 0.2, A.z); trim.rotation.x = Math.PI / 2;
+      const sk = add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), M.bone), 0, A.top + 0.5, A.z + 0.68); [-1, 1].forEach(sd => add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), M.dark), sd * 0.06, A.top + 0.53, A.z + 0.83));
+      const fe = add(hat, new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), M.feather), 0.5, A.top + 0.9, A.z - 0.2); fe.rotation.set(-0.7, 0.4, -0.35);
+    } else if (L.hat === 'helm') {
+      const dome = add(hat, new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.iron), 0, A.top - 0.15, A.z); dome.scale.set(A.w * 0.55, 0.55, 1.5);
+      const ridge = add(hat, new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 2.6), M.iron), 0, A.top + 0.38, A.z); ridge.rotation.x = 0.05;
+      add(hat, new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 1.6), M.iron), 0, A.top - 0.05, A.z + 1.4);   // nose guard
+      for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + (i / 7) * Math.PI; add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), M.gold), Math.sin(a) * A.w * 0.55, A.top - 0.1, A.z + Math.cos(a) * 1.5); }
+      [-1, 1].forEach(sd => { const sp = add(hat, new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 5), M.iron), sd * 0.5, A.top + 0.4, A.z - 0.4); sp.rotation.z = -sd * 0.5; });
+    } else if (L.hat === 'skull') {
+      const face = add(hat, new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), M.bone), 0, A.noseY + 0.15, A.nose - 1.3); face.rotation.x = Math.PI / 2; face.scale.set(A.w * 0.42, 1.4, 0.55);
+      [-1, 1].forEach(sd => { const sock = add(hat, new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), M.dark), sd * 0.38, A.noseY + 0.42, A.nose - 1.6); sock.scale.set(1, 0.8, 0.5); });
+      for (let i = 0; i < 5; i++) add(hat, new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.06), M.bone), -0.24 + i * 0.12, A.noseY - 0.2, A.nose - 0.45);
+    } else if (L.hat === 'halo') {
+      const h = add(hat, new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.07, 8, 32), M.halo), 0, A.top + 1.6, A.z); h.rotation.x = Math.PI / 2; m.halo = h;
+    }
+    const seg = k => m.segs[Math.min(m.N - 1, k)], segR = k => seg(k).geometry.parameters.radius;
+    if (L.back === 'saddle') {
+      const s0 = seg(2), r = segR(2);
+      const sd = add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.62, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.6), M.leather), 0, r * 0.72, 0); sd.scale.set(1, 0.6, 0.75);
+      add(s0, new THREE.Mesh(new THREE.BoxGeometry(r * 0.14, r * 0.35, r * 0.12), M.leather), 0, r * 1.02, r * 0.35);   // pommel
+      const tr = add(s0, new THREE.Mesh(new THREE.TorusGeometry(r * 0.62, r * 0.03, 6, 24), M.gold), 0, r * 0.74, 0); tr.rotation.x = Math.PI / 2; tr.scale.y = 0.75;
+      [-1, 1].forEach(sd2 => { add(s0, new THREE.Mesh(new THREE.BoxGeometry(r * 0.04, r * 0.7, r * 0.08), M.leather), sd2 * r * 0.62, r * 0.35, 0); add(s0, new THREE.Mesh(new THREE.TorusGeometry(r * 0.07, r * 0.015, 4, 10), M.iron), sd2 * r * 0.64, r * 0.02, 0); });
+    } else if (L.back === 'banners') {
+      for (let k = 3; k < m.N * 0.45; k += (K.elder ? 9 : 5)) { const s0 = seg(k), r = segR(k);
+        add(s0, new THREE.Mesh(new THREE.CylinderGeometry(r * 0.03, r * 0.03, r * 2.2, 5), M.leather), 0, r * 1.9, 0);
+        const fl = add(s0, new THREE.Mesh(new THREE.PlaneGeometry(r * 0.9, r * 0.55), (k / 3) % 2 < 1 ? M.cloth : M.red), 0, r * 2.6, -r * 0.5); fl.rotation.y = Math.PI / 2;
+        add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.09, 6, 5), M.bone), 0, r * 2.75, -r * 0.5).position.x = r * 0.02; }
+    } else if (L.back === 'chains') {
+      for (let k = 2; k < m.N - 2; k += (K.elder ? 5 : 3)) { const s0 = seg(k), r = segR(k); const ring = add(s0, new THREE.Mesh(new THREE.TorusGeometry(r * 1.02, r * 0.06, 6, 24), M.gold), 0, 0, 0); ring.scale.y = 0.9;
+        if (k % 2 === 0) add(s0, new THREE.Mesh(new THREE.OctahedronGeometry(r * 0.12, 0), M.gemR), 0, r * 0.95, 0); }
+    } else if (L.back === 'armor') {
+      for (let k = 1; k < m.N * 0.55; k += 2) { const s0 = seg(k), r = segR(k);
+        const pl = add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 1.0, 10, 5, 0, Math.PI * 2, 0, Math.PI / 3), M.iron), 0, r * 0.2, 0); pl.scale.set(1.05, 0.9, 0.8);
+        [-1, 1].forEach(sd => add(s0, new THREE.Mesh(new THREE.SphereGeometry(r * 0.06, 5, 4), M.gold), sd * r * 0.6, r * 0.82, 0)); }
+    }
+    m.aura = L.aura && L.aura !== 'none' ? L.aura : null;
+  }
+  // the aura drifting off him (called as he's posed, for yer serpent and other captains' alike)
+  const _auraV = new THREE.Vector3();
+  function serpentAura(m, t) {
+    if (m.halo) m.halo.rotation.z = t * 0.6;
+    if (!m.aura || !m.g.visible || Math.random() > 0.55) return;
+    const SC = m.K.scale, onHead = Math.random() < 0.45;
+    if (onHead) m.head.getWorldPosition(_auraV); else _auraV.copy(m.segs[Math.floor(Math.random() * m.N * 0.6)].position);
+    if (_auraV.distanceTo(camera.position) > 2500) return;
+    const j = () => (Math.random() - 0.5) * 4 * SC, x = _auraV.x + j(), y = _auraV.y + j() * 0.5 + SC, z = _auraV.z + j();
+    if (m.aura === 'embers') puff(x, y, z, { color: Math.random() < 0.5 ? 0xff8a30 : 0xffc040, size: 0.35 * SC, life: 1.4, grow: 0.5, vy: 1.6 * SC, op: 0.95 });
+    else if (m.aura === 'mist') puff(x, y - SC, z, { color: 0xa8d8f0, size: 1.6 * SC, life: 2.2, grow: 1.6, vy: 0.3 * SC, op: 0.32 });
+    else if (m.aura === 'sparkle') puff(x, y, z, { color: 0xfff0a0, size: 0.28 * SC, life: 0.9, grow: 0.2, vy: 0.5 * SC, op: 1 });
+    else if (m.aura === 'storm') { puff(x, y, z, { color: 0xbfe0ff, size: 0.5 * SC, life: 0.25, grow: 2.5, op: 1 }); }
   }
   function elderResetTrail(m, x, z, h) { const st = m.K.trail; m.trail.length = 0; m.sh = undefined; for (let k = 0; k < m.N * m.SPACING / st + 8; k++) m.trail.push({ x: x - Math.sin(h) * k * st, z: z - Math.cos(h) * k * st }); }
   // lay the body along its path; lift rears the head up (to strike), emerge lowers the whole beast below the waves
@@ -9849,6 +9936,7 @@ window.__pgBoot = () => {
     if (I && I.k === 'yawn') lift = 0.2 * bell;
     const near = Math.hypot(x - camera.position.x, z - camera.position.z) < 4500 && !inInterior;
     m.g.visible = near && (emerge > 0.02 || opts.sil > 0.01); if (!m.g.visible) return;   // deep under, he's only drawn while his shadow shows
+    if (emerge > 0.3) serpentAura(m, t);
     const fwdL = SP ? SP.fwd * SC * 6 : 0;   // a lunge thrusts the head forward: the neck stretches with it
     const freq = K.elder ? 1.5 : 2.6, latA = SC * (K.elder ? 0.9 : 0.6) * (0.25 + 0.75 * swim), tailK = Math.floor(m.N * 0.72);
     // sample the trail at an exact distance behind the head, blending between its points, so the body glides
