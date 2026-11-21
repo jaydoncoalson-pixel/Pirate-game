@@ -9291,7 +9291,8 @@ window.__pgBoot = () => {
     while (trail.length > maxLen) trail.pop();
   }
   // who it goes for: yer ship, while ye're aboard, unless ye carry the Sword of the Sea
-  const serpPrey = () => ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null;
+  const SERP_SWIMMER = { swim: true, x: 0, z: 0, heading: 0, speed: 0 };   // ye, in the water: they'll come for a swimmer as readily as for a ship
+  const serpPrey = () => { if (ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior)) return ship; if (krSwimming() && !DUN.on) { SERP_SWIMMER.x = P.pos.x; SERP_SWIMMER.z = P.pos.z; SERP_SWIMMER.heading = P.facing; SERP_SWIMMER.speed = P.speed || 0; return SERP_SWIMMER; } return null; };
   // serpents never leave the mist: anything they steer for is pulled back inside its edge
   const inMistAt = (x, z, m = 0) => Math.hypot(x - MIST.x, z - MIST.z) < MIST.r + m;
   function clampMist(x, z) { const dx = x - MIST.x, dz = z - MIST.z, d = Math.hypot(dx, dz), lim = MIST.r - 40; return d <= lim ? [x, z] : [MIST.x + dx / d * lim, MIST.z + dz / d * lim]; }
@@ -9444,8 +9445,13 @@ window.__pgBoot = () => {
     }
   }
   // online: the server says when a serpent strikes our hull, and when one dies
-  function serpentBite(i, dmg) {
-    const s = SERP[i]; if (!s || !ship || ship.sinking) return;
+  function serpentBiteSwimmer(s, dmg = 22) {   // its jaws close on ye in the water
+    hurtPlayer(dmg); wSplash(P.pos.x, 0.8, P.pos.z, true); SFX.crash({ x: P.pos.x, z: P.pos.z });
+    toast(PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
+  }
+  function serpentBite(i, dmg, swim) {
+    const s = SERP[i]; if (s && (swim || (krSwimming() && !(sailing || onShip || inInterior)))) { serpentBiteSwimmer(s, dmg); return; }
+    if (!s || !ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = Math.max(ship.krJolt || 0, 1.2); ship.krRz = (ship.krRz || 0) + s.side * 0.1;
     SFX.crash({ x: ship.x, z: ship.z }); wSplash(s.x, 0.6, s.z, true);
     if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(22);
@@ -9547,7 +9553,8 @@ window.__pgBoot = () => {
           lift = s.sk < 0.9 ? s.sk / 0.9 : s.sk < 1.15 ? 1 : Math.max(0, 1 - (s.sk - 1.15) / 0.6);
           if (!s.hit && s.sk > 1.15 && prey) {
             s.hit = true;
-            if (d < 48) {
+            if (prey.swim && d < 30) serpentBiteSwimmer(s);
+            else if (!prey.swim && d < 48) {
               damageShip(prey, 22); prey.krJolt = Math.max(prey.krJolt || 0, 1.2); prey.krRz = (prey.krRz || 0) + s.side * 0.1;
               SFX.crash({ x: prey.x, z: prey.z }); wSplash(s.x, 0.6, s.z, true);
               if (onShip && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 14) hurtPlayer(22);
@@ -11301,7 +11308,7 @@ window.__pgBoot = () => {
       window.__mpMe = () => MP.me;
       MP.room.on('ksunk', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; const name = peerName(d.id); toast(`Yer kraken drags ${name}'s ship down to the depths!`); addGold(300, `Yer kraken sank ${name}'s ship!`); });
       MP.room.on('ssnap', m => { if (m.peer !== 'server' || !Array.isArray(m.data)) return; const t = performance.now(); for (const e of m.data) { const sp = SERP[e[0]]; if (sp) sp.net = { x: e[1], z: e[2], h: e[3], hp: e[4], st: ['roam', 'hunt', 'circle', 'strike', 'escort', 'dying', 'gone', 'bow'][e[5]] || 'roam', sk: e[6], sp: e[7], tg: e[8], t }; } });
-      MP.room.on('sbite', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { serpentBite(d.i | 0, Math.min(30, +d.dmg || 0)); } catch (e) {} });
+      MP.room.on('sbite', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { serpentBite(d.i | 0, Math.min(30, +d.dmg || 0), d.sw === 1); } catch (e) {} });
       // The Blackwater raid and its Beast: the server runs both
       MP.room.on('bwsnap', m => { const e = m.data; if (m.peer !== 'server' || !Array.isArray(e)) return; const at = performance.now(), o = BWS.net;
         const nn = { x: e[0], z: e[1], h: e[2], st: BW_ST[e[3]] || 'caged', hp: e[4], max: e[5] || 1500, tg: e[6], pk: e[7], deep: e[9] === 1, at };

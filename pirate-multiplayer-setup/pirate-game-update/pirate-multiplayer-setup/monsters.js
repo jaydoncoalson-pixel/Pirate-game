@@ -192,6 +192,8 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     // each crewed ship, with how fast she's going and whether her captain carries the Sword of the Sea
     const ships = [];
     for (const [id, q] of players) {
+      // a captain swimming in the fog is prey too: they hunt swimmers just as they hunt ships
+      if (q.p && q.p.swm === 1 && !(q.p.sh && q.p.sh.a === 1) && typeof q.p.x === 'number') { prevSh.delete(id); ships.push({ id, x: q.p.x, z: q.p.z, h: q.p.f || 0, sp: 3, calm: q.p.sw === 'seasword', swim: true }); continue; }
       if (!q.p || !q.p.sh || q.p.sh.a !== 1) { prevSh.delete(id); continue; }
       const sh = q.p.sh, pv = prevSh.get(id), raw = pv ? Math.min(150, Math.hypot(sh.x - pv.x, sh.z - pv.z) / Math.max(dt, 0.01)) : 0, sp = pv ? pv.sp + (raw - pv.sp) * Math.min(1, dt * 3) : 0;
       prevSh.set(id, { x: sh.x, z: sh.z, sp });
@@ -205,7 +207,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     for (const s of SERP) s.want = null;
     for (const p of ships) {
       if (!inMist(p.x, p.z)) continue;
-      let room = (p.calm ? 2 : 3) - busy(p.id, p.calm);
+      let room = (p.calm ? 2 : p.swim ? 2 : 3) - busy(p.id, p.calm);
       const idle = SERP.filter(o => o.st === 'roam' && !o.want).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
       for (const o of idle) { if (room-- <= 0) break; o.want = p.id; }
     }
@@ -246,7 +248,7 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
       } else if (s.st === 'strike') {
         s.sk += dt;
         if (prey) serpSteer(s, prey.x, prey.z, s.sk < 0.9 ? Math.max(4, prey.sp) : prey.sp + 18 * SPD, dt, 3);   // keep pace with her while rearing up
-        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < 48) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22 }); }
+        if (!s.hit && s.sk > 1.15) { s.hit = true; if (prey && d < (prey.swim ? 30 : 48)) sendTo(prey.id, 'sbite', { to: prey.id, i: SERP.indexOf(s), dmg: 22, sw: prey.swim ? 1 : 0 }); }
         if (s.sk > 1.9) { s.st = leash ? 'circle' : 'roam'; s.strikeT = 2 + Math.random() * 1.5; }
       }
     }
