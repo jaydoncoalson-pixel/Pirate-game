@@ -6227,7 +6227,7 @@ window.__pgBoot = () => {
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
       if (b.enemy && SEACTL.wallT > 0 && Math.hypot(x - seaWallC().x, z - seaWallC().z) < SEACTL.wallR && y < (SEACTL.wallH || 22) + 2) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
-      if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { hit = true; hurtPlayer(18); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball slams into the Elder Serpent beneath ye!'); }   // shot at while riding
+      if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { hit = true; hurtPlayer(18); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast(`A cannonball slams into ${mountName()} beneath ye!`); }   // shot at while riding
       if (!hit && b.enemy && (krSwimming() || seaRunning()) && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
       const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
@@ -9418,7 +9418,7 @@ window.__pgBoot = () => {
   // its claws close on yer ship
   function bwHitMe(dmg, swim) {
     if (SEACTL.wallT > 0 && SEACTL.wallMode === 'me' && !(sailing || onShip || inInterior)) { const c = seaWallC(); wSplash(c.x + (Math.random() - 0.5) * 30, 6, c.z + (Math.random() - 0.5) * 30, true); SFX.clawClack({ x: c.x, z: c.z }); SFX.splash({ x: c.x, z: c.z }, true); toast('The Beast\'s claws slam against yer Sea Wall... and can\'t get through!'); return; }   // the Sea Wall holds it off
-    if (RIDE.on) { hurtPlayer(Math.round(dmg * 1.3)); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast rears up and rakes ye from the Elder Serpent\'s back!' : 'The Blackwater Beast tears ye from yer mount...'); return; }   // riding: its claws reach right up to ye
+    if (RIDE.on) { hurtPlayer(Math.round(dmg * 1.3)); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? `The Blackwater Beast rears up and rakes ye from ${mountName()}'s back!` : 'The Blackwater Beast tears ye from yer mount...'); return; }   // riding: its claws reach right up to ye
     if (swim || ((krSwimming() || seaRunning()) && !(sailing || onShip || inInterior))) { hurtPlayer(Math.round(dmg * 1.5)); wSplash(P.pos.x, 1, P.pos.z, true); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast snaps its claws shut on ye in the water!' : 'The Blackwater Beast drags ye down into the dark...'); return; }   // caught swimming
     if (!ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
@@ -9458,7 +9458,7 @@ window.__pgBoot = () => {
   // online: the server says when a serpent strikes our hull, and when one dies
   function serpentBiteSwimmer(s, dmg = 22) {   // its jaws close on ye in the water
     hurtPlayer(dmg); wSplash(P.pos.x, 0.8, P.pos.z, true); SFX.crash({ x: P.pos.x, z: P.pos.z });
-    toast(RIDE.on ? (PLAYER.hp > 0 ? 'A sea serpent rears up and strikes at ye on the Elder Serpent\'s back!' : 'The sea serpent tears ye from yer mount...') : PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
+    toast(RIDE.on ? (PLAYER.hp > 0 ? `A sea serpent rears up and strikes at ye on ${mountName()}'s back!` : 'The sea serpent tears ye from yer mount...') : PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
   }
   function serpentBite(i, dmg, swim) {
     const s = SERP[i]; if (s && (swim || RIDE.on || (krSwimming() && !(sailing || onShip || inInterior)))) { serpentBiteSwimmer(s, dmg); return; }
@@ -9638,6 +9638,7 @@ window.__pgBoot = () => {
     glow: new THREE.MeshLambertMaterial({ color: 0x5a1414 }),
   };
   // yer serpent's name in messages
+  const mountName = () => ELD.K && ELD.K.elder ? 'the Elder Serpent' : 'yer sea serpent';   // the one ye're riding: only the true horn's serpent is the Elder
   const etoast = msg => toast(ELD.K.elder ? msg : msg.replace(/the Elder Serpent/g, 'yer sea serpent').replace(/The Elder Serpent/g, 'Yer sea serpent').replace(/Elder Serpent/g, 'sea serpent'));
   // a horn that tapers smoothly to a point along a curve
   function taperedHorn(pts, r0, mat) {
@@ -11635,7 +11636,7 @@ window.__pgBoot = () => {
     else if (MERM.attack && MERM.attack.phase === 'mouth') { const pc = Math.min(100, MERM.attack.struggle * 100); promptHtml = `Mash <b>E</b> / <b>F</b> to struggle free! <span style="display:inline-block;width:120px;height:10px;background:#3a1a10;border-radius:5px;vertical-align:middle;margin-left:8px;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:#ffcf40"></span></span>`; }
     else if (STOM.done || MERM.held) promptHtml = null;
     else if (RIDE.on) promptHtml = `<b>W</b>/<b>S</b> Pace (${Math.round(ELD.speed)} m/s) · <b>A</b>/<b>D</b> Turn · <b>F</b> Bite${ELD.K.elder ? ` · <b>V</b> Devour${(ELD.devourCd || 0) > 0 ? ' (' + Math.ceil(ELD.devourCd) + 's)' : ''}` : ''}${ELD.K.elder ? ` · <b>H</b> Call the brood${BROOD.cd > 0 ? ' (' + Math.ceil(BROOD.cd) + 's)' : ''}` : ''} · <b>E</b> Climb down`;
-    else if (canMount()) promptHtml = '<b>E</b> Climb onto the Elder Serpent';
+    else if (canMount()) promptHtml = ELD.K.elder ? '<b>E</b> Climb onto the Elder Serpent' : '<b>E</b> Climb onto yer sea serpent';
     else if (sailing) promptHtml = ship && ship.submerged ? '<b>C</b> Rise · <b>V</b> Dive · <b>E</b> Leave wheel' : '<b>E</b> Step away from the wheel';
     else if (inInterior) { const n = nearestNpc(); promptHtml = nearLadder() ? '<b>E</b> ' + interior.exitLabel : nearBed() ? '<b>E</b> Sleep until morning' : nearWardrobe() ? '<b>E</b> Change yer outfit at the looking-glass' : nearTrophies() ? '<b>E</b> Look at yer trophies' : n ? `<b>E</b> Talk to ${n.def.name}` : null; }
     else if (nearHatch()) promptHtml = '<b>E</b> Go below deck';
