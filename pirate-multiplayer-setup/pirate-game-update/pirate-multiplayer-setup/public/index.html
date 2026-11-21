@@ -6227,7 +6227,8 @@ window.__pgBoot = () => {
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
       if (b.enemy && SEACTL.wallT > 0 && Math.hypot(x - seaWallC().x, z - seaWallC().z) < SEACTL.wallR && y < (SEACTL.wallH || 22) + 2) { hit = true; wSplash(x, 3, z, true); puff(x, y, z, { color: 0xffffff, size: 9, life: 0.9, grow: 2.4, vy: 4, op: 0.9 }); SFX.splash({ x, z }, false); }   // the Sea Wall swallows it in a burst of spray
-      if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { hit = true; hurtPlayer(18); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast(`A cannonball slams into ${mountName()} beneath ye!`); }   // shot at while riding
+      if (!hit && b.enemy && !RIDE.on && elderBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }   // shot that strikes the Elder Serpent's body
+      if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { elderHurt(b.dmg || 11); hit = true; hurtPlayer(18); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast(`A cannonball slams into ${mountName()} beneath ye!`); }   // shot at while riding
       if (!hit && b.enemy && (krSwimming() || seaRunning()) && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
       const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
@@ -9418,7 +9419,7 @@ window.__pgBoot = () => {
   // its claws close on yer ship
   function bwHitMe(dmg, swim) {
     if (SEACTL.wallT > 0 && SEACTL.wallMode === 'me' && !(sailing || onShip || inInterior)) { const c = seaWallC(); wSplash(c.x + (Math.random() - 0.5) * 30, 6, c.z + (Math.random() - 0.5) * 30, true); SFX.clawClack({ x: c.x, z: c.z }); SFX.splash({ x: c.x, z: c.z }, true); toast('The Beast\'s claws slam against yer Sea Wall... and can\'t get through!'); return; }   // the Sea Wall holds it off
-    if (RIDE.on) { hurtPlayer(Math.round(dmg * 1.3)); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? `The Blackwater Beast rears up and rakes ye from ${mountName()}'s back!` : 'The Blackwater Beast tears ye from yer mount...'); return; }   // riding: its claws reach right up to ye
+    if (RIDE.on) { elderHurt(dmg * 4); hurtPlayer(Math.round(dmg * 1.3)); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? `The Blackwater Beast rears up and rakes ye from ${mountName()}'s back!` : 'The Blackwater Beast tears ye from yer mount...'); return; }   // riding: its claws reach right up to ye
     if (swim || ((krSwimming() || seaRunning()) && !(sailing || onShip || inInterior))) { hurtPlayer(Math.round(dmg * 1.5)); wSplash(P.pos.x, 1, P.pos.z, true); SFX.clawClack({ x: P.pos.x, z: P.pos.z }); SFX.crash({ x: P.pos.x, z: P.pos.z }); toast(PLAYER.hp > 0 ? 'The Blackwater Beast snaps its claws shut on ye in the water!' : 'The Blackwater Beast drags ye down into the dark...'); return; }   // caught swimming
     if (!ship || ship.sinking) return;
     damageShip(ship, dmg); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
@@ -9457,6 +9458,7 @@ window.__pgBoot = () => {
   }
   // online: the server says when a serpent strikes our hull, and when one dies
   function serpentBiteSwimmer(s, dmg = 22) {   // its jaws close on ye in the water
+    if (RIDE.on) elderHurt(dmg * 2);
     hurtPlayer(dmg); wSplash(P.pos.x, 0.8, P.pos.z, true); SFX.crash({ x: P.pos.x, z: P.pos.z });
     toast(RIDE.on ? (PLAYER.hp > 0 ? `A sea serpent rears up and strikes at ye on ${mountName()}'s back!` : 'The sea serpent tears ye from yer mount...') : PLAYER.hp > 0 ? 'A sea serpent lunges and seizes ye in its jaws! Get out of the water!' : 'The sea serpent drags ye under...');
   }
@@ -10355,7 +10357,8 @@ window.__pgBoot = () => {
   function updateElder(dt, t) {
     if (!ELD.on) return;
     if (ELD.leaving) { ELD.emerge = Math.max(0, ELD.emerge - dt / 2.5); if (ELD.emerge <= 0) { ELD.on = false; ELD.leaving = false; if (ELD.mesh) ELD.mesh.g.visible = false; ELD.stk = null; } }
-    else if (ELD.mode !== 'stalk') ELD.emerge = Math.min(1, ELD.emerge + dt / 3);   // stalking, he decides when he shows himself
+    else if (ELD.mode !== 'stalk') ELD.emerge = Math.min(1, ELD.emerge + dt / 3);
+    if (ELD.hp < ELD_HP && ELD.hp > 0) ELD.hp = Math.min(ELD_HP, ELD.hp + 200 * dt);   // he heals, slowly   // stalking, he decides when he shows himself
     if (ELD.mode !== 'stalk' && ELD.stk) { ELD.stk = null; ELD.stkDive = false; ELD.roared = false; }   // called off: he comes up again, roaring
     const H = elderHome();
     let fighting = false;
@@ -10468,7 +10471,28 @@ window.__pgBoot = () => {
     for (let i = 0; i < 80; i++) { const a = Math.random() * 6.28, r = r0 + Math.random() * (r1 - r0), px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; let ok = Math.abs(px) < EDGE - 100 && Math.abs(pz) < EDGE - 100; for (let k = 0; k < 8 && ok; k++) ok = heightAt(px + Math.cos(k) * clear, pz + Math.sin(k) * clear) < -6; if (ok) return { x: px, z: pz }; }
     return null;
   }
+  // the Elder Serpent's health: a million (never shown). Enemy shot that strikes his body, the Blackwater Beast's claws and
+  // the mist serpents' fangs all wear it down; it slowly heals. If it ever runs out he is slain and sinks, and the horn
+  // can't raise him again for ten minutes.
+  const ELD_HP = 1000000; ELD.hp = ELD_HP; ELD.deadUntil = 0;
+  function elderHurt(n) {
+    if (!ELD.on || ELD.leaving || !ELD.K.elder || !(n > 0)) return;
+    ELD.hp -= n;
+    if (ELD.hp <= 0) {
+      ELD.hp = 0; if (RIDE.on) elderDismount(); if (ELD.grab && ELD.grab.e) ELD.grab.e.eHold = false; ELD.grab = null; ELD.stk = null;
+      elderRoar(2); ELD.leaving = true; ELD.deadUntil = clock.elapsedTime + 600;
+      toast('The Elder Serpent gives a last, dreadful roar... and sinks into the deep, slain. The horn will not raise him again for a while.');
+    }
+  }
+  function elderBallHit(x, y, z, dmg) {   // does a shot strike his body?
+    if (!ELD.on || !ELD.mesh || !ELD.K.elder || ELD.emerge < 0.3 || y > 60) return false;
+    const m = ELD.mesh, R = 3.2 * ELD.K.scale;
+    for (let k = 0; k < m.N; k += 3) { const p = m.segs[k].position; if (Math.abs(p.x - x) < R && Math.abs(p.z - z) < R && Math.hypot(p.x - x, p.z - z) < R * (1 - 0.5 * k / m.N)) { elderHurt(dmg); wSplash(x, 2, z, false); return true; } }
+    return false;
+  }
   function summonElder() {
+    if (hornIsTrue() && clock.elapsedTime < ELD.deadUntil) { toast(`The horn's call rolls out over the sea... but the Elder Serpent does not answer. He was slain, and the deep has not yet given him back. (${Math.ceil((ELD.deadUntil - clock.elapsedTime) / 60)} min)`); return; }
+    if (hornIsTrue() && ELD.deadUntil && clock.elapsedTime >= ELD.deadUntil) { ELD.hp = ELD_HP; ELD.deadUntil = 0; }
     const K = hornIsTrue() ? ELD_KINDS.elder : ELD_KINDS.common, H = elderHome(), q = deepSpotNear(H.x, H.z, K.spawn[0], K.spawn[1], K.probe * 0.8);
     if (!q) { toast("The horn's call rolls out... but there's no deep water near enough for him to rise. Try it at sea."); return; }
     if (ELD.mesh && ELD.mesh.K !== K) { scene.remove(ELD.mesh.g); ELD.mesh = null; }
