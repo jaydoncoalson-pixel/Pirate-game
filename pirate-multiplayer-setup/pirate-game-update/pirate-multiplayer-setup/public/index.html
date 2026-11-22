@@ -10579,7 +10579,7 @@ window.__pgBoot = () => {
       if (r.state === 'patrol' || r.state === 'attack') { if (!window.__mpRaiderKill || !window.__mpRaiderKill(r)) damageShip(r, r.hp + 1); }
       r.group.position.y = -12;
     }
-    if (Gr.t > 3.4) { ELD.grab = null; ELD.st = 'swim'; if (Gr.T.kind === 'raider' || Gr.T.kind === 'player') { if (ELD.mode === 'attack' && ELD.pick && (ELD.pick === Gr.T || ELD.pick.ent === Gr.e || ELD.pick.peer === Gr.T.peer)) { ELD.mode = 'guard'; ELD.pick = null; } if (ELD.tg && (ELD.tg.ent === Gr.e || ELD.tg.peer === Gr.T.peer)) ELD.tg = null; } }
+    if (Gr.t > 3.4) { ELD.grab = null; ELD.st = 'swim'; if (Gr.T.kind === 'raider' || Gr.T.kind === 'player') { if (ELD.mode === 'attack' && ELD.pick && ELD.pick.kind !== 'rserp' && (ELD.pick === Gr.T || ELD.pick.ent === Gr.e || ELD.pick.peer === Gr.T.peer)) { ELD.mode = 'guard'; ELD.pick = null; } if (ELD.pickPrev && (ELD.pickPrev.ent === Gr.e || ELD.pickPrev.peer === Gr.T.peer)) ELD.pickPrev = null; if (ELD.tg && ELD.tg.kind !== 'rserp' && (ELD.tg.ent === Gr.e || ELD.tg.peer === Gr.T.peer)) ELD.tg = null; } }   // (a rival serpent he's fighting isn't finished just because its captain's ship is)
   }
   // a raider held in the jaws: placed there every frame after the raiders move
   function elderHoldRaider(r, t) {
@@ -10600,7 +10600,8 @@ window.__pgBoot = () => {
     if (T.kind === 'raider') { e.devoured = true; e.group.visible = false; e.eHold = false; if (!window.__mpRaiderKill || !window.__mpRaiderKill(e)) damageShip(e, e.hp + 1); }
     else if (T.kind === 'player' && window.__mpElderDevour) window.__mpElderDevour(T.peer);
     etoast(`The Elder Serpent swallows ${elderName(T)} whole!`);
-    if (ELD.mode === 'attack' && ELD.pick && (ELD.pick === T || ELD.pick.ent === e || (T.peer && ELD.pick.peer === T.peer))) { ELD.mode = 'guard'; ELD.pick = null; }
+    if (ELD.mode === 'attack' && ELD.pick && ELD.pick.kind !== 'rserp' && (ELD.pick === T || ELD.pick.ent === e || (T.peer && ELD.pick.peer === T.peer))) { ELD.mode = 'guard'; ELD.pick = null; }
+    if (ELD.pickPrev && (ELD.pickPrev === T || ELD.pickPrev.ent === e || (T.peer && ELD.pickPrev.peer === T.peer))) ELD.pickPrev = null;
     if (ELD.tg && (ELD.tg.ent === e || (T.peer && ELD.tg.peer === T.peer))) ELD.tg = null;
   }
   function startDevour(T, e, ride) {
@@ -11008,7 +11009,8 @@ window.__pgBoot = () => {
       ELD.scanT -= dt;
       if (ELD.mode === 'guard' && ELD.scanT <= 0) { ELD.scanT = 0.5; const T = elderThreat(); if (T && (!ELD.tg || !elderTgPos(ELD.tg) || (T.kind === 'rserp' && ELD.tg.kind !== 'rserp'))) { ELD.tg = T; etoast(`The Elder Serpent turns on ${elderName(T)}!`); elderRoar(0.7); } else if (!T && ELD.tg && !elderTgPos(ELD.tg)) ELD.tg = null; }
       const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg, e = elderTgPos(T);
-      if (ELD.mode === 'attack' && !e) { ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; etoast('The Elder Serpent has no prey left. He returns to guard yer ship.'); }
+      if (ELD.mode === 'attack' && !e && ELD.pickPrev && elderTgPos(ELD.pickPrev)) { ELD.pick = ELD.pickPrev; ELD.pickPrev = null; ELD.st = 'swim'; etoast(`The rival serpent is gone. ${mountName()} goes back after ${elderName(ELD.pick)}!`); }   // the guard's beaten off: back to the original prey
+      else if (ELD.mode === 'attack' && !e) { ELD.pickPrev = null; ELD.mode = 'guard'; ELD.pick = null; ELD.st = 'swim'; etoast('The Elder Serpent has no prey left. He returns to guard yer ship.'); }
       else if (ELD.mode === 'guard' && ELD.tg && (!e || Math.hypot(e.x - H.x, e.z - H.z) > 1600)) { ELD.tg = null; ELD.st = 'swim'; }
       if (e && (ELD.mode === 'attack' || ELD.tg)) { elderFight(T, e, dt); fighting = true; }
       else {
@@ -11833,6 +11835,10 @@ window.__pgBoot = () => {
           for (let i = 0; i < 4; i++) wSplash(ELD.x + (Math.random() - 0.5) * 30, 3, ELD.z + (Math.random() - 0.5) * 30, true); SFX.crash({ x: ELD.x, z: ELD.z });
           if (!ELD.sbT || clock.elapsedTime - ELD.sbT > 8) { ELD.sbT = clock.elapsedTime; toast(`${MP.peers.get(m.peer)?.name || 'A rival captain'}'s ${d.big ? 'Elder Serpent' : 'serpent'} sinks its fangs into ${mountName()}! ${ELD.hp > 0 ? 'He turns to fight!' : ''}`); }
           if (ELD.mode === 'guard' && ELD.tg && ELD.tg.kind !== 'rserp') { ELD.tg = { kind: 'rserp', peer: m.peer }; }
+          if (ELD.mode === 'attack' && !(ELD.pick && ELD.pick.kind === 'rserp' && ELD.pick.peer === m.peer)) {   // on the attack and a guarding serpent bites him: he turns on it, then goes back to his prey
+            if (!ELD.pick || ELD.pick.kind !== 'rserp') ELD.pickPrev = ELD.pick;
+            ELD.pick = { kind: 'rserp', peer: m.peer }; if (ELD.st !== 'strike') ELD.st = 'swim'; elderRoar(0.9);
+            etoast(`${mountName()} breaks off and turns on ${MP.peers.get(m.peer)?.name || 'a rival captain'}'s ${d.big ? 'Elder Serpent' : 'serpent'}!`); }
         } catch (e) {} });
       window.__mpElderDevour = peer => { MP.room.emit('ebite', { to: peer, kill: 1, dmg: 1, devour: 1 }).catch(() => {}); };
       window.__mpRaiderHoldEl = (i, on) => { if (!online() || i < 0) return; MP.room.emit('rhold', { i, on: on ? 1 : 0 }).catch(() => {}); };
