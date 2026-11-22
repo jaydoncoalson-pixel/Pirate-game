@@ -72,7 +72,15 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    const type = TYPES[path.extname(file)] || 'application/octet-stream', m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (m && /^audio\//.test(type)) {   // byte ranges, so the music can stream, seek and loop
+      let a = m[1] === '' ? buf.length - (+m[2] || 0) : +m[1], b = m[1] !== '' && m[2] !== '' ? +m[2] : buf.length - 1;
+      a = Math.max(0, a); b = Math.min(buf.length - 1, b);
+      if (a > b) { res.writeHead(416, { 'Content-Range': `bytes */${buf.length}` }); return res.end(); }
+      res.writeHead(206, { 'Content-Type': type, 'Content-Range': `bytes ${a}-${b}/${buf.length}`, 'Accept-Ranges': 'bytes', 'Content-Length': b - a + 1, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(buf.subarray(a, b + 1));
+    }
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': /^audio\//.test(type) ? 'public, max-age=86400' : 'no-cache', ...(/^audio\//.test(type) ? { 'Accept-Ranges': 'bytes' } : {}) });
     res.end(buf);
   });
 });

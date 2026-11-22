@@ -7848,7 +7848,12 @@ window.__pgBoot = () => {
   const sndBtn = document.getElementById('sndBtn');
   const sndLabel = () => { sndBtn.innerHTML = `N &middot; Sound ${SFX.muted ? 'off' : 'on'}`; };
   sndLabel();
-  function toggleSound() { SFX.init(); const m = SFX.toggle(); sndLabel(); toast(m ? 'Sound off' : 'Sound on'); }
+  // background music: "Sea Shanty Sway", looping quietly under everything; it starts on the first click or key press
+  // (browsers won't play sound before that) and follows the sound toggle (N)
+  const MUSIC = new Audio('sea-shanty-sway.mp3'); MUSIC.loop = true; MUSIC.volume = 0.32; MUSIC.preload = 'auto';
+  function musicSync() { if (SFX.muted) MUSIC.pause(); else if (MUSIC.paused) MUSIC.play().catch(() => {}); }
+  addEventListener('pointerdown', musicSync); addEventListener('keydown', musicSync);
+  function toggleSound() { SFX.init(); const m = SFX.toggle(); sndLabel(); musicSync(); toast(m ? 'Sound off' : 'Sound on'); }
   sndBtn.addEventListener('click', toggleSound);
   addEventListener('keydown', e => { if (!e.repeat && e.key.toLowerCase() === 'n' && !talk) toggleSound(); });
   let lastStep = 0, flapT = 0, creakT = 4, gullT = 6, cricketT = 3;
