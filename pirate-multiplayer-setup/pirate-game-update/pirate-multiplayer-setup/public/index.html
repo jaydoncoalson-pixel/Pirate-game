@@ -2424,14 +2424,14 @@ window.__pgBoot = () => {
   // the Titan: a colossal man-o'-war on the galleon's lines, built at twice the galleon's size in every direction,
   // black-hulled with gilded wales and blood-red sails, two full gun decks firing twice as many guns
   SHIP_TYPES.titan = {   // her own lines: a four-masted ship-of-the-line, deep-hulled with three gun decks, a long low waist and a towering stern
-    name: 'Titan', L: 56, B: 15.5, D: 5.4, draft: 5.6, sternRise: 3.2, bowRise: 2.0, tumble: 0.3, transom: 0.7, bulwark: 1.2,
+    name: 'Titan', L: 56, B: 15.5, D: 5.4, draft: 5.6, sternRise: 3.2, bowRise: 2.0, tumble: 0.3, transom: 0.7, bulwark: 0.62,
     hull: 0x2a2c31, bottom: 0x111113, wale: 0x8e1414, portLid: 0x0c0c0e, castleWindows: 6, wales: [0.565, 0.68, 0.8, 0.925], gunRows: [0.625, 0.745, 0.865], guns: 16, maxGuns: 16, gunFrom: 0.16, gunTo: 0.76, sail: 0x1e1b1d,
-    castles: [{ z0: 16.5, z1: 26.5, h: 2.6, front: 0.58, wk: 0.94 }, { z0: -28.6, z1: -9.5, h: 3.0, wk: 1.0, gaps: [[-4.9, -3.3], [3.3, 4.9]] }, { z0: -28.9, z1: -16.5, h: 2.6, wk: 0.92, on: 1 }, { z0: -29.1, z1: -22.5, h: 2.3, wk: 0.8, on: 2 }],
+    castles: [{ z0: 16.5, z1: 26.5, h: 1.5, front: 0.58, wk: 0.94 }, { z0: -28.6, z1: -9.5, h: 1.7, wk: 1.0, gaps: [[-4.65, -3.55], [3.55, 4.65]] }, { z0: -28.9, z1: -16.5, h: 1.35, wk: 0.92, on: 1 }, { z0: -29.1, z1: -22.5, h: 1.15, wk: 0.8, on: 2 }],
     masts: [{ z: 19.5, h: 34, square: 3, w: 17 }, { z: 5.5, h: 44, square: 3, w: 22 }, { z: -6, h: 37, square: 3, w: 18 }, { z: -19.5, h: 25, lateen: 19 }],
     bowsprit: { angle: 0.34, len: 21, spritsail: true, topmast: true },
     flags: [{ mast: 1, kind: 'red', w: 7, h: 4.4 }, { mast: 0, kind: 'red', w: 5.4, h: 1.6 }, { mast: 2, kind: 'red', w: 5.4, h: 1.6 }, { mast: 3, kind: 'jolly', w: 3.4, h: 2.1 }, { sprit: true, kind: 'red', w: 3, h: 1.6 }],
     helm: { z: -12.5, castle: 1 }, lanterns: false, beak: false, hatchZ: 11.5,
-    stairs: { castle: 1, xs: [4.1, -4.1], w: 1.4, zLow: -4.2, zHigh: -9.5 }, quarters: { castle: 1 }, deckItems: true,
+    stairs: { castle: 1, xs: [4.1, -4.1], w: 0.8, zLow: -5.6, zHigh: -9.5, n: 24 }, quarters: { castle: 1 }, deckItems: false,   // (her deck is dressed by titanDecor, at her own scale)
     speed: 11, turn: 0.34, titan: true };
   const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 2.86 };   // (the Titan: 160 m long, 44 m in the beam)
   function hullFns(S) {
@@ -2502,19 +2502,19 @@ window.__pgBoot = () => {
   // what only the Titan carries: she's built for war. Cannons run out of all three gun decks, a riveted iron belt on the
   // waterline, iron battlements along her waist, spikes studding her upper sides, a great spiked ram, a horned iron skull
   // for a figurehead with burning eyes, and braziers of fire on her stern castle
-  function titanDecor(g, F, S, L) {
+  function titanDecor(g, F, S, L, obstacles) {
     const iron = new THREE.MeshLambertMaterial({ color: 0x34373d }), dark = new THREE.MeshLambertMaterial({ color: 0x1a1b1e }), rivet = new THREE.MeshLambertMaterial({ color: 0x6a6e76 }),
       red = new THREE.MeshLambertMaterial({ color: 0x8e1414 }), fire = new THREE.MeshBasicMaterial({ color: 0xff6a1a }), glow = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
     const dummy = new THREE.Object3D();
     // run-out cannons: a barrel poking from every port, all three decks, both sides
-    const nG = S.guns * S.gunRows.length * 2, bar = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.26, 2.2, 8), dark, nG), muz = new THREE.InstancedMesh(new THREE.TorusGeometry(0.24, 0.07, 5, 10), dark, nG);
+    const nG = S.guns * S.gunRows.length * 2, bar = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.13, 1.0, 8), dark, nG), muz = new THREE.InstancedMesh(new THREE.TorusGeometry(0.12, 0.035, 5, 10), dark, nG);   // (about 2.9 m of barrel showing)
     let n = 0;
     for (const sd of [-1, 1]) S.gunRows.forEach(v => { for (let i = 0; i < S.guns; i++) {
       const f = S.gunFrom + (S.gunTo - S.gunFrom) * i / (S.guns - 1), u = 2 * f - 1, [x, y] = F.pt(u, v);
-      dummy.position.set(sd * (x + 0.75), y, u * L / 2); dummy.rotation.set(0, 0, Math.PI / 2); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); bar.setMatrixAt(n, dummy.matrix);
-      dummy.position.set(sd * (x + 1.85), y, u * L / 2); dummy.rotation.set(0, Math.PI / 2, 0); dummy.updateMatrix(); muz.setMatrixAt(n, dummy.matrix); n++; } });
+      dummy.position.set(sd * (x + 0.4), y, u * L / 2); dummy.rotation.set(0, 0, Math.PI / 2); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); bar.setMatrixAt(n, dummy.matrix);
+      dummy.position.set(sd * (x + 0.9), y, u * L / 2); dummy.rotation.set(0, Math.PI / 2, 0); dummy.updateMatrix(); muz.setMatrixAt(n, dummy.matrix); n++; } });
     g.add(bar, muz);
-    const plate = new THREE.BoxGeometry(0.16, 1, 1), rv = new THREE.SphereGeometry(0.07, 5, 4), spikeG = new THREE.ConeGeometry(0.16, 0.9, 5), merlon = new THREE.BoxGeometry(0.5, 1, 1.2);
+    const plate = new THREE.BoxGeometry(0.16, 1, 1), rv = new THREE.SphereGeometry(0.07, 5, 4), spikeG = new THREE.ConeGeometry(0.1, 0.55, 5), merlon = new THREE.BoxGeometry(0.3, 0.42, 1.1);
     [-1, 1].forEach(sd => {
       // armour belt on the waterline: overlapping riveted iron plates, two rows
       for (let row = 0; row < 2; row++) for (let u = -0.86; u <= 0.88; u += 0.055) {
@@ -2523,10 +2523,10 @@ window.__pgBoot = () => {
         for (const dz of [-0.35, 0.35]) { const r = new THREE.Mesh(rv, rivet); r.position.set(sd * (x + 0.15 + row * 0.01), y + 0.3, u * L / 2 + dz); g.add(r); }
       }
       // iron spikes studding the upper side, between the top wale and the rail
-      for (let u = -0.8; u <= 0.85; u += 0.075) { const [x, y] = F.pt(u, 0.955); const sp = new THREE.Mesh(spikeG, iron); sp.position.set(sd * (x + 0.4), y, u * L / 2); sp.rotation.z = -sd * Math.PI / 2; g.add(sp); }
+      for (let u = -0.8; u <= 0.85; u += 0.075) { const [x, y] = F.pt(u, 0.955); const sp = new THREE.Mesh(spikeG, iron); sp.position.set(sd * (x + 0.25), y, u * L / 2); sp.rotation.z = -sd * Math.PI / 2; g.add(sp); }
       // iron battlements along the waist rail
-      for (let u = -0.31; u <= 0.56; u += 0.045) { const [x, y] = F.pt(u, 1), m = new THREE.Mesh(merlon, iron); m.position.set(sd * (x - 0.15), y + 0.5, u * L / 2); g.add(m);
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 1.32), red); cap.position.set(sd * (x - 0.15), y + 1.02, u * L / 2); g.add(cap); }
+      for (let u = -0.31; u <= 0.56; u += 0.045) { const [x, y] = F.pt(u, 1), m = new THREE.Mesh(merlon, iron); m.position.set(sd * (x - 0.12), y + 0.21, u * L / 2); g.add(m);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 1.2), red); cap.position.set(sd * (x - 0.12), y + 0.44, u * L / 2); g.add(cap); }
     });
     // the ram: a great iron spike at the cutwater, flanked by blades
     const [, yw] = F.pt(0.97, 0.52), ram = new THREE.Group(); ram.position.set(0, yw, L / 2 - 0.6); g.add(ram);
@@ -2540,8 +2540,73 @@ window.__pgBoot = () => {
     for (let k = -2; k <= 2; k++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), rivet); t.rotation.x = Math.PI; t.position.set(k * 0.27, -0.55, 1.15); fh.add(t); }
     [-1, 1].forEach(sd => { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), glow); eye.position.set(sd * 0.45, 0.15, 1.1); eye.scale.z = 0.5; fh.add(eye);
       const horn = new THREE.Mesh(new THREE.ConeGeometry(0.35, 3, 7), dark); horn.position.set(sd * 1.3, 1.0, -0.2); horn.rotation.set(-0.5, 0, -sd * 0.9); fh.add(horn); });
+    // ---- her main deck, dressed at person scale (1 m = 1/K): guns, shot, powder, a longboat, the capstan, racks of arms ----
+    const m = 1 / SHIP_SCALE.titan, dy = z => F.deckY(z), half = z => F.pt(z / (L / 2), 1)[0] - 0.25;
+    const wood = new THREE.MeshLambertMaterial({ color: 0x5a3a22 }), dwood = new THREE.MeshLambertMaterial({ color: 0x3a2516 }), rope = new THREE.MeshLambertMaterial({ color: 0xb8a27a }), canvas = new THREE.MeshLambertMaterial({ color: 0x8a8070 });
+    const block = (x, z, hw, hd) => obstacles.push({ x, z, hw, hd, y: dy(z) });
+    const deckGun = (x, z, sd) => { const y = dy(z), c = new THREE.Group(); c.position.set(x, y, z); c.rotation.y = sd > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(c);
+      const car = new THREE.Mesh(new THREE.BoxGeometry(1.0 * m, 0.45 * m, 1.6 * m), wood); car.position.y = 0.32 * m; c.add(car);
+      for (const wx of [-0.55, 0.55]) for (const wz of [-0.55, 0.55]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * m, 0.22 * m, 0.12 * m, 10), dwood); wh.rotation.z = Math.PI / 2; wh.position.set(wx * m, 0.22 * m, wz * m); c.add(wh); }
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * m, 0.24 * m, 2.6 * m, 10), dark); br.rotation.x = Math.PI / 2; br.position.set(0, 0.75 * m, 0.55 * m); c.add(br);
+      block(x, z, 0.8 * m, 0.8 * m); };
+    const shotPile = (x, z) => { const y = dy(z), bg = new THREE.SphereGeometry(0.11 * m, 6, 5); for (let l = 0; l < 3; l++) for (let i = 0; i < 3 - l; i++) for (let j = 0; j < 3 - l; j++) { const b = new THREE.Mesh(bg, dark); b.position.set(x + (i - (2 - l) / 2) * 0.22 * m, y + (0.11 + l * 0.18) * m, z + (j - (2 - l) / 2) * 0.22 * m); g.add(b); } };
+    const keg = (x, z, y = dy(z)) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * m, 0.28 * m, 0.8 * m, 10), wood); b.position.set(x, y + 0.4 * m, z); g.add(b);
+      for (const h of [0.12, 0.68]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.29 * m, 0.29 * m, 0.05 * m, 10), dark); r.position.set(x, y + h * m, z); g.add(r); } };
+    const crate = (x, z, sz, y = dy(z)) => { const c = new THREE.Mesh(new THREE.BoxGeometry(sz * m, sz * m, sz * m), new THREE.MeshLambertMaterial({ color: 0x8a6538 })); c.position.set(x, y + sz * m / 2, z); c.rotation.y = Math.abs(x * 7 + z) % 0.6; g.add(c); };
+    const coil = (x, z) => { for (let i = 0; i < 4; i++) { const t = new THREE.Mesh(new THREE.TorusGeometry((0.34 - i * 0.03) * m, 0.05 * m, 6, 14), rope); t.rotation.x = Math.PI / 2; t.position.set(x, dy(z) + (0.05 + i * 0.09) * m, z); g.add(t); } };
+    // a gun every few metres down both sides of the waist, a pile of shot by every other one
+    let gi = 0;
+    for (let z = -7.8; z <= 15.4; z += 1.35) { if (Math.abs(z - 5.5) < 1.2 || Math.abs(z + 6) < 1.2 || Math.abs(z - 11.5) < 1.6) continue;
+      for (const sd of [-1, 1]) { const x = sd * (half(z) - 0.75 * m); deckGun(x, z, sd); if (gi++ % 2 === 0) shotPile(x - sd * 1.4 * m, z + 0.9 * m); } }
+    // two longboats side by side on their chocks between the main and mizzen masts, covered with tarps
+    for (const bx of [-1.6 * m, 1.6 * m]) { const z = -0.3, y = dy(z) + 0.5 * m, bt = new THREE.Group(); bt.position.set(bx, y, z); g.add(bt);
+      const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), wood); hull.scale.set(1.2 * m, 0.8 * m, 3.6 * m); hull.position.y = 0.8 * m; bt.add(hull);
+      const tarp = new THREE.Mesh(new THREE.BoxGeometry(2.3 * m, 0.08 * m, 6.6 * m), canvas); tarp.position.y = 0.82 * m; bt.add(tarp);
+      for (const cz of [-2, 2]) { const ch = new THREE.Mesh(new THREE.BoxGeometry(2.4 * m, 0.5 * m, 0.3 * m), dwood); ch.position.set(0, -0.25 * m, cz * m); bt.add(ch); }
+      block(bx, z, 1.3 * m, 3.7 * m); }
+    // the great capstan before the main hatch
+    { const z = 8.6, y = dy(z), cp = new THREE.Group(); cp.position.set(0, y, z); g.add(cp);
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * m, 0.7 * m, 1.1 * m, 12), dwood); drum.position.y = 0.55 * m; cp.add(drum);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.85 * m, 0.85 * m, 0.25 * m, 12), wood); head.position.y = 1.15 * m; cp.add(head);
+      for (let k = 0; k < 4; k++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(3.4 * m, 0.1 * m, 0.1 * m), wood); bar.position.y = 1.15 * m; bar.rotation.y = k * Math.PI / 4; cp.add(bar); }
+      block(0, z, 0.8 * m, 0.8 * m); }
+    // powder kegs, crates and rope by each mast in the waist
+    for (const mz of [5.5, -6]) { for (const sd of [-1, 1]) { keg(sd * 1.5 * m, mz + 0.6 * m); keg(sd * 2.1 * m, mz - 0.1 * m); keg(sd * 1.6 * m, mz - 0.8 * m); coil(sd * 1.1 * m, mz + 1.6 * m); block(sd * 1.8 * m, mz, 0.6 * m, 1.0 * m); }
+      crate(2.6 * m, mz - 1.8 * m, 1.0); crate(2.6 * m, mz - 1.8 * m, 0.7, dy(mz) + 1.0 * m); crate(-2.7 * m, mz + 2.2 * m, 0.9); }
+    // racks of muskets against the quarterdeck's front wall, and a war drum
+    for (const sd of [-1, 1]) { const rz = -9.5 + 0.25 * m, rx = sd * 2.2 * m, y = dy(rz), rk = new THREE.Group(); rk.position.set(rx, y, rz); g.add(rk);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(2.4 * m, 0.12 * m, 0.4 * m), dwood); frame.position.y = 0.4 * m; rk.add(frame); const top = frame.clone(); top.position.y = 1.5 * m; rk.add(top);
+      for (let k = 0; k < 7; k++) { const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * m, 0.04 * m, 1.6 * m, 5), k % 2 ? dark : rivet); gun.position.set((k - 3) * 0.32 * m, 1.0 * m, 0); gun.rotation.z = 0.08; rk.add(gun); }
+      block(rx, rz, 1.2 * m, 0.25 * m); }
+    { const z = -8.4, drum = new THREE.Mesh(new THREE.CylinderGeometry(0.45 * m, 0.45 * m, 0.6 * m, 14), red); drum.position.set(1.2 * m, dy(z) + 0.3 * m, z); g.add(drum); }
+    // fife rails round the main and mizzen masts, bristling with belaying pins and hung with rope
+    for (const mz of [5.5, -6]) { const y = dy(mz);
+      for (const [fx, fz, w, d] of [[0, 1.5, 3.2, 0.2], [0, -1.5, 3.2, 0.2], [1.5, 0, 0.2, 3.2], [-1.5, 0, 0.2, 3.2]]) {
+        const r = new THREE.Mesh(new THREE.BoxGeometry(w * m, 0.15 * m, d * m), dwood); r.position.set(fx * m, y + 0.95 * m, mz + fz * m); g.add(r);
+        for (const px of [-1.4, 1.4]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.15 * m, 0.95 * m, 0.15 * m), dwood); post.position.set((fx || px) * m, y + 0.47 * m, mz + (fz || px) * m); g.add(post); }
+        for (let k = -3; k <= 3; k++) { const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * m, 0.03 * m, 0.4 * m, 5), wood); pin.position.set((fx || k * 0.4) * m, y + 1.1 * m, mz + (fz || k * 0.4) * m); g.add(pin); } } }
+    // gratings over the lower decks
+    for (const gz of [2.6, 14.2]) { const y = dy(gz), gr = new THREE.Group(); gr.position.set(0, y + 0.06 * m, gz); g.add(gr);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(3 * m, 0.12 * m, 2.2 * m), dwood); gr.add(fr);
+      for (let k = -6; k <= 6; k++) { const sl = new THREE.Mesh(new THREE.BoxGeometry(0.06 * m, 0.14 * m, 2.1 * m), wood); sl.position.set(k * 0.22 * m, 0.02 * m, 0); gr.add(sl); const sl2 = new THREE.Mesh(new THREE.BoxGeometry(2.9 * m, 0.14 * m, 0.06 * m), wood); if (Math.abs(k) <= 4) { sl2.position.set(0, 0.02 * m, k * 0.22 * m); gr.add(sl2); } } }
+    // cargo lashed down before the forecastle: crate stacks, barrels, sacks under a net
+    for (const sd of [-1, 1]) { const cx = sd * 5.2 * m, cz = 15.4;
+      crate(cx, cz, 1.2); crate(cx + sd * 1.3 * m, cz, 1.1); crate(cx + sd * 0.6 * m, cz, 1.0, dy(cz) + 1.2 * m); crate(cx, cz - 1.3 * m, 0.9);
+      for (let k = 0; k < 5; k++) keg(cx - sd * (1.2 + (k % 3) * 0.62) * m, cz - 1.6 * m - Math.floor(k / 3) * 0.62 * m);
+      const net = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), canvas); net.scale.set(1.1 * m, 0.7 * m, 0.8 * m); net.position.set(cx + sd * 2.6 * m, dy(cz), cz - 0.6 * m); g.add(net);
+      block(cx + sd * 0.6 * m, cz - 0.6 * m, 2.3 * m, 1.8 * m); }
+    // big water butts by the mizzen, and the ship's bell on the forecastle front
+    for (const sd of [-1, 1]) { const z = -3.6, x = sd * 5 * m, b = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * m, 0.6 * m, 1.3 * m, 12), wood); b.position.set(x, dy(z) + 0.65 * m, z); g.add(b);
+      for (const h of [0.2, 1.1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.61 * m, 0.61 * m, 0.06 * m, 12), dark); r.position.set(x, dy(z) + h * m, z); g.add(r); } block(x, z, 0.6 * m, 0.6 * m); }
+    { const z = 16.5 - 0.3 * m, y = dy(16.5), bf = new THREE.Group(); bf.position.set(0, y, z); g.add(bf);
+      for (const px of [-0.5, 0.5]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12 * m, 1.9 * m, 0.12 * m), dwood); post.position.set(px * m, 0.95 * m, 0); bf.add(post); }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(1.2 * m, 0.14 * m, 0.14 * m), dwood); beam.position.y = 1.9 * m; bf.add(beam);
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * m, 0.3 * m, 0.42 * m, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xb08a3a, side: THREE.DoubleSide })); bell.position.y = 1.6 * m; bf.add(bell); }
+    // tall red war standards at the quarterdeck rail
+    for (const sd of [-1, 1]) { const z = -10.1, y = F.deckY(z) + 1.7, x = sd * (F.pt(z / (L / 2), 1)[0] - 0.4), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.2, 6), dark); pole.position.set(x, y + 1.6, z); g.add(pole);
+      const ban = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), new THREE.MeshLambertMaterial({ color: 0x8e1414, side: THREE.DoubleSide })); ban.position.set(x, y + 2.3, z + 0.48); ban.rotation.y = Math.PI / 2; g.add(ban); }
     // braziers burning on the stern castle's top deck
-    const zb = -26.5, yb = F.deckY(zb) + 3.0 + 2.6 + 2.3, xb = F.pt(zb / (L / 2), 1)[0] * 0.62;
+    const zb = -26.5, yb = F.deckY(zb) + 1.7 + 1.35 + 1.15, xb = F.pt(zb / (L / 2), 1)[0] * 0.62;
     [-1, 1].forEach(sd => { const b = new THREE.Group(); b.position.set(sd * xb, yb, zb); g.add(b);
       const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.35, 0.6, 10), iron); bowl.position.y = 1.5; b.add(bowl);
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 1.3, 6), iron); leg.position.y = 0.6; b.add(leg);
@@ -2652,7 +2717,7 @@ window.__pgBoot = () => {
     // grand double staircase up to the helm
     if (S.stairs) {
       const st = S.stairs, top = tops[st.castle], yLow = F.deckY(st.zLow);
-      const N = 16, rise = (top - yLow) / N, run = (st.zLow - st.zHigh) / N;
+      const N = st.n || 16, rise = (top - yLow) / N, run = (st.zLow - st.zHigh) / N;
       const stepM = lam(0x4a2a18), carpet = lam(0x8e1f1f), post = lam(0x3a2012);
       st.xs.forEach(sx => {
         for (let i = 0; i < N; i++) {
@@ -2919,7 +2984,7 @@ window.__pgBoot = () => {
     const K = SHIP_SCALE[key];
     g.scale.setScalar(K);
     T.L = L * K; T.B = B * K; T.H = (S.D + 3) * K; T.speed = S.speed * 3.2;
-    if (S.titan) titanDecor(g, F, S, L);
+    if (S.titan) titanDecor(g, F, S, L, obstacles);
     return { group: g, T, K, flags, furl, capstan, helm: V(0, hy + 0.09, hz), key, walk: { L, B, F, hatch: S.hatchZ !== undefined ? { z: S.hatchZ } : null, door, stairs: walkStairs, obstacles, castles: walkCastles, masts: mastInfo.map(m => ({ z: m.z, r: m.r, pTop: m.pTop })) } };
   }
 
