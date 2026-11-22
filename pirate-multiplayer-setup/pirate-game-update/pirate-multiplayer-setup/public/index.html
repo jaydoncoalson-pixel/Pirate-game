@@ -4468,6 +4468,7 @@ window.__pgBoot = () => {
     const krFight = KR.lock === ship && (KR.st === 'attack' || KR.st === 'grip'), fighters = krFight ? krCrewOf(ship) : [];
     for (const c of ship.crew) {
       if (krFight && fighters.includes(c)) krCrewStep(c, dt, ship);
+      else if (SIEGE.on && isDefender(c)) defenderStep(c, dt);   // boarders on deck: the crew draw steel
       else animateCrewMember(c, dt, ship.K, (onShip || sailing) ? PL.x : null, PL.z, shipFloor);
       placeTag(c, 2.9 * (c.def.look.scale || 1), !inInterior);
     }
@@ -6516,17 +6517,18 @@ window.__pgBoot = () => {
     if (c.hp <= 0) { c.st = 'dead'; c.deadT = 0; c.slashT = 0; c.windT = 0; }
   }
   // one deck fighter's turn: closes on ye along the deck, circles, winds up and strikes (blockable, parryable)
-  function fighterStep(c, S, dt, mine, dmg) {
+  function fighterStep(c, S, dt, mine, dmg, pickTarget) {
     const K = S.K, root = c.ch.root;
     if (c.st === 'dead') { c.deadT += dt; root.rotation.x = -Math.min(Math.PI / 2, c.deadT * 3); c.ch.update(dt, 0, false, false, null); if (c.ch.props.blade) c.ch.props.blade.visible = c.deadT < 0.6;
       if (c.deadT > 3.5) { root.visible = false; c.st = 'gone'; } root.getWorldPosition(c.pos); return; }
     if (c.st !== 'fight') return;
     let spd = 0, action = null;
-    const dx = PL.x - c.lp.x, dz = PL.z - c.lp.z, dm = Math.hypot(dx, dz) * K;
+    const tg = pickTarget ? pickTarget(c) : mine && PLAYER.hp > 0 ? { x: PL.x, y: PL.y, z: PL.z, hit: dm => meleeHurt(dm, c) } : null;   // the captain, or (in a siege) whichever crewman is nearest
+    const dx = tg ? tg.x - c.lp.x : 0, dz = tg ? tg.z - c.lp.z : 0, dm = Math.hypot(dx, dz) * K;
     if (c.stagT > 0) c.stagT -= dt; if (c.flinchT > 0) c.flinchT -= dt;
     const tryMove = (vx, vz) => { const nx = c.lp.x + vx, nz = c.lp.z + vz, f = shipFloor(nx, nz, S);
       if (f !== null && Math.abs(f - c.lp.y) < 2.5 && !shipBlockedAt(nx, nz, f, S)) { c.lp.x = nx; c.lp.z = nz; c.lp.y += (f - c.lp.y) * Math.min(1, dt * 12); return true; } return false; };
-    if (mine && PLAYER.hp > 0) {
+    if (tg) {
       c.facing = angLerp(c.facing, Math.atan2(dx, dz), Math.min(1, dt * (dm > 1.8 ? 8 : 10)));
       const busy = c.stagT > 0 || c.windT > 0 || c.slashT > 0;
       if (dm > 1.8) { if (!busy) { spd = dm > 5 ? 4.6 : 3; const st = spd / K * dt; if (!tryMove(Math.sin(c.facing) * st, Math.cos(c.facing) * st) && !tryMove(Math.sin(c.facing) * st, 0)) tryMove(0, Math.cos(c.facing) * st); } }
@@ -6540,15 +6542,59 @@ window.__pgBoot = () => {
     }
     if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / 0.45); }
     if (c.slashT > 0) { c.slashT -= dt; action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, c.slashT) / 0.4);
-      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && mine && dm < 2.7 && Math.abs(PL.y - c.lp.y) * K < 2) meleeHurt(dmg(), c); } }
+      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && tg && dm < 2.7 && Math.abs(tg.y - c.lp.y) * K < 2) tg.hit(dmg()); } }
     root.position.copy(c.lp); root.rotation.set(-((c.flinchT > 0 ? Math.sin(c.flinchT / 0.3 * Math.PI) * 0.35 : 0) + (c.stagT > 0 ? 0.25 : 0)), c.facing, 0);
     c.ch.update(dt, spd, false, false, action); if (c.ch.props.blade) c.ch.props.blade.visible = true;
     root.getWorldPosition(c.pos);
     if (c.stagT > 0 && Math.random() < dt * 6) puff(c.pos.x + (Math.random() - 0.5) * 0.6, c.pos.y + 2.4, c.pos.z + (Math.random() - 0.5) * 0.6, { color: 0xfff27a, size: 0.25, life: 0.5, grow: 0.3, vy: 0.4, op: 0.9 });
   }
+  // ---- the crew defend the ship: everyone not up a mast draws a cutlass and goes for the nearest boarder ----
+  const isDefender = c => !c.climb && !c.silent && !c.fixedY;
+  function armCrew(on) {
+    if (!ship || !ship.crew) return;
+    for (const c of ship.crew) { if (!isDefender(c)) continue;
+      if (on) { c.def0 = c.def0 || { lp: c.lp.clone(), facing: c.facing }; c.hp = 40; c.down = false; c.downT = 0; c.atkT = 0.3 + Math.random() * 0.8; c.windT = 0; c.slashT = 0; c.hitAt = 0; c.flinchT = 0;
+        if (!c.ch.props.blade) { addProp(c.ch, 'blade'); c.addedBlade = true; } c.ch.props.blade.visible = true; }
+      else { c.down = false; c.ch.root.rotation.x = 0; c.ch.root.visible = true; if (c.def0) { c.lp.copy(c.def0.lp); c.facing = c.def0.facing; c.def0 = null; } if (c.addedBlade && c.ch.props.blade) c.ch.props.blade.visible = false; } }
+  }
+  function boarderTarget(b, mine) {   // whoever's nearest: the captain (if aboard) or a crewman still on his feet
+    let best = mine && PLAYER.hp > 0 ? { x: PL.x, y: PL.y, z: PL.z, hit: dm => meleeHurt(dm, b) } : null, bd = best ? Math.hypot(PL.x - b.lp.x, PL.z - b.lp.z) * 0.9 : 1e9;
+    for (const c of ship.crew || []) { if (!isDefender(c) || c.down) continue; const d = Math.hypot(c.lp.x - b.lp.x, c.lp.z - b.lp.z); if (d < bd) { bd = d; best = { x: c.lp.x, y: c.lp.y, z: c.lp.z, hit: dm => crewHurt(c, dm) }; } }
+    return best;
+  }
+  function crewHurt(c, dm) {
+    c.hp -= dm; c.flinchT = 0.3; c.ch.root.getWorldPosition(c.pos); SFX.hit(c.pos);
+    puff(c.pos.x, c.pos.y + 1.4, c.pos.z, { color: 0xb02020, size: 0.7, life: 0.4, grow: 1, op: 0.9 });
+    if (c.windT > 0 && Math.random() < 0.5) { c.windT = 0; c.atkT = 0.6; }
+    if (c.hp <= 0 && !c.down) { c.down = true; c.downT = 0; c.windT = 0; c.slashT = 0; if (Math.random() < 0.5) toast(`${c.def.name} is cut down!`); }
+  }
+  function defenderStep(c, dt) {
+    const K = ship.K, root = c.ch.root;
+    if (c.down) { c.downT += dt; root.rotation.x = -Math.min(Math.PI / 2, c.downT * 3); c.ch.update(dt, 0, false, false, null); root.getWorldPosition(c.pos); return; }   // wounded, on the deck till it's over
+    let tg = null, bd = 1e9;
+    for (const b of SIEGE.list) { if (b.st !== 'fight') continue; const d = Math.hypot(b.lp.x - c.lp.x, b.lp.z - c.lp.z); if (d < bd) { bd = d; tg = b; } }
+    let spd = 0, action = null;
+    if (c.flinchT > 0) c.flinchT -= dt;
+    if (tg) {
+      const dx = tg.lp.x - c.lp.x, dz = tg.lp.z - c.lp.z, dm = Math.hypot(dx, dz) * K;
+      c.facing = angLerp(c.facing, Math.atan2(dx, dz), Math.min(1, dt * 9));
+      const busy = c.windT > 0 || c.slashT > 0;
+      if (dm > 1.7) { if (!busy) { spd = dm > 5 ? 4.4 : 2.8; const st = spd / K * dt, f = shipFloor(c.lp.x + Math.sin(c.facing) * st, c.lp.z + Math.cos(c.facing) * st);
+          if (f !== null && Math.abs(f - c.lp.y) < 2.5) { c.lp.x += Math.sin(c.facing) * st; c.lp.z += Math.cos(c.facing) * st; c.lp.y += (f - c.lp.y) * Math.min(1, dt * 12); } else spd = 0; } }
+      else { c.atkT -= dt;
+        if (c.windT > 0) { c.windT -= dt; if (c.windT <= 0) { SFX.swing(c.pos); c.slashT = 0.4; c.hitAt = 0.15; } }
+        else if (c.atkT <= 0 && c.slashT <= 0) { c.windT = 0.35; c.atkT = 1.0 + Math.random() * 0.8; } }
+      if (c.slashT > 0 && c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && dm < 2.6 && tg.st === 'fight') hitFighter(tg, 9 + Math.floor(Math.random() * 6), false); }
+    }
+    if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / 0.35); }
+    if (c.slashT > 0) { c.slashT -= dt; action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, c.slashT) / 0.4); }
+    root.position.copy(c.lp); root.rotation.set(-(c.flinchT > 0 ? Math.sin(c.flinchT / 0.3 * Math.PI) * 0.35 : 0), c.facing, 0);
+    c.ch.update(dt, spd, false, false, action); if (c.ch.props.blade) c.ch.props.blade.visible = true;
+    root.getWorldPosition(c.pos);
+  }
   function startSiege(r) {
-    const n = Math.min(r.galleon ? 5 : 3, crewOf(r).length || (r.galleon ? 5 : 3));
-    SIEGE.on = true; SIEGE.r = r; SIEGE.t = 0; SIEGE.list = [];
+    const nDef = (ship.crew || []).filter(isDefender).length, n = Math.min(16, (r.galleon ? 5 : 3) + Math.floor(nDef / 4));   // a bigger crew to cut through means more boarders
+    SIEGE.on = true; SIEGE.r = r; SIEGE.t = 0; SIEGE.list = []; armCrew(true);
     ship.group.updateMatrixWorld(); const W = ship.walk, side = Math.sign(shipLocal(ship, r.x, r.z).lx) || 1;
     crewOf(r).slice(0, n).forEach(c => { c.ch.root.visible = false; c.st = 'gone'; });   // they've come across
     for (let i = 0; i < n; i++) {
@@ -6558,12 +6604,12 @@ window.__pgBoot = () => {
       const c = { ch, lp: ch.root.position, facing: side > 0 ? -Math.PI / 2 : Math.PI / 2 }; initFighter(c, r.galleon ? 50 : 38); c.atkT = 1 + Math.random(); SIEGE.list.push(c);
     }
     SFX.creak(); SFX.crash({ x: ship.x, z: ship.z });
-    toast(`Grapples! The Blackwater ${r.galleon ? 'galleon' : 'raider'} lashes onto yer hull and ${n} boarders swarm over the rail!${sailing ? ' Leave the wheel (E) and fight them off!' : ''}`);
+    toast(`Grapples! The Blackwater ${r.galleon ? 'galleon' : 'raider'} lashes onto yer hull and ${n} boarders swarm over the rail! ${nDef ? `Yer crew draw their cutlasses!` : ''}${sailing ? ' Leave the wheel (E) and fight them off!' : ''}`);
   }
   function endSiege(won) {
     for (const c of SIEGE.list) if (c.ch.root.parent) c.ch.root.parent.remove(c.ch.root);
-    if (won) { addGold(SIEGE.list.length * 45, 'Threw the boarders back into the sea!'); toast('The last boarder falls! Ye hack through the grapple lines and she drifts free.'); }
-    SIEGE.on = false; SIEGE.r = null; SIEGE.list = []; BOARD.cool = 75;
+    if (won) { const hurt = (ship && ship.crew || []).filter(c => c.down).length; addGold(SIEGE.list.length * 45, 'Threw the boarders back into the sea!'); toast(`The last boarder falls! Ye hack through the grapple lines and she drifts free.${hurt ? ` ${hurt} of yer crew were cut down, but they'll live.` : ''}`); }
+    SIEGE.on = false; SIEGE.r = null; SIEGE.list = []; BOARD.cool = 75; armCrew(false);
   }
   function captureRaider(r) {
     r.captured = true; BOARD.scuttleT = 14;
@@ -6611,7 +6657,7 @@ window.__pgBoot = () => {
       if (gone) endSiege(false);
       else {
         const dmg = () => (q.galleon ? 11 : 9) + Math.floor(Math.random() * 5), mine = onShip && !inInterior;
-        for (const c of SIEGE.list) fighterStep(c, ship, dt, mine, dmg);
+        for (const c of SIEGE.list) fighterStep(c, ship, dt, mine, dmg, b => boarderTarget(b, mine));
         ship.speed = Math.min(ship.speed, 2); if (!online) q.speed = Math.min(q.speed, 2);
         if (!SIEGE.list.some(c => c.st === 'fight' || c.st === 'dead')) endSiege(true);
       }
