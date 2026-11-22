@@ -2415,7 +2415,14 @@ window.__pgBoot = () => {
       speed: 13, turn: 0.42 },
   };
 
-  const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0 };
+  // the Titan: a colossal man-o'-war on the galleon's lines, built at twice the galleon's size in every direction,
+  // black-hulled with gilded wales and blood-red sails, two full gun decks firing twice as many guns
+  SHIP_TYPES.titan = Object.assign(JSON.parse(JSON.stringify(SHIP_TYPES.galleon)), {
+    name: 'Titan', hull: 0x17151a, bottom: 0x0e0c0f, wale: 0xd9ad4a, portLid: 0x6e1414, sail: 0x7d1d1d,
+    gunRows: [0.62, 0.78], guns: 16, maxGuns: 16,
+    flags: [{ mast: 1, kind: 'jolly', w: 5.2, h: 3.2 }, { mast: 2, kind: 'red', w: 2.8, h: 1.7 }, { mast: 0, kind: 'red', w: 4, h: 1.3 }, { sprit: true, kind: 'jolly', w: 2.6, h: 1.4 }],
+    speed: 11, turn: 0.34, titan: true });
+  const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 4.0 };
   function hullFns(S) {
     const half = u => u >= 0 ? Math.pow(Math.max(0, 1 - Math.pow(u, 2.2)), 0.55) : 1 - (1 - S.transom) * Math.pow(-u, 3);
     const sheer = u => S.D + (u < 0 ? S.sternRise * Math.pow(Math.max(0, (-u - 0.3) / 0.7), 1.6) : S.bowRise * Math.pow(Math.max(0, (u - 0.35) / 0.65), 1.8));
@@ -3095,7 +3102,7 @@ window.__pgBoot = () => {
     }
     m.wraith = true;
   }
-  const SHIP_HP = { sloop: 70, brig: 130, galleon: 240 };
+  const SHIP_HP = { sloop: 70, brig: 130, galleon: 240, titan: 3000 };   // the Titan: over twelve galleons' worth of hull
   // ---- Ship upgrades: bought from Harbormaster Hal, kept for each kind of ship ye own ----
   const UPGRADES = {
     hull:    { name: 'Reinforced hull', max: 4, what: L => `+${L * 20}% hull`, mats: L => ({ wood: 2 + 2 * L }), icon: '#8a5a33' },
@@ -3104,13 +3111,14 @@ window.__pgBoot = () => {
     crew:    { name: 'Gun crew drills', max: 3, what: L => `${L * 12}% faster reloading`, mats: () => ({}), icon: '#c9a646' },
     plating: { name: 'Iron plating', max: 3, what: L => `${L * 10}% less hull damage taken`, mats: L => ({ iron: 3 + 2 * L, steel: 1 + L }), icon: '#8a8f96' },
   };
-  const UPG_GOLD = [800, 2000, 4500, 9000], UPG_CLASS = { sloop: 1, brig: 2.5, galleon: 5 };
+  const UPG_GOLD = [800, 2000, 4500, 9000], UPG_CLASS = { sloop: 1, brig: 2.5, galleon: 5, titan: 25 };
   const upgOf = key => { STATE.upg = STATE.upg || {}; return STATE.upg[key] = STATE.upg[key] || {}; };
   const upgL = (key, k) => (STATE.upg && STATE.upg[key] && STATE.upg[key][k]) || 0;
   const upgCost = (key, k, L) => ({ gold: Math.round(UPG_GOLD[L] * (UPG_CLASS[key] || 1) * (k === 'crew' ? 0.8 : 1) / 50) * 50, mats: UPGRADES[k].mats(L) });   // L = the level being bought (0-based)
   const ownKey = () => STATE.shipKey || (ship && ship.key) || 'sloop';
   const hullMul = key => 1 + 0.2 * upgL(key, 'hull'), speedMul = key => 1 + 0.08 * upgL(key, 'sails'), turnMul = key => 1 + 0.05 * upgL(key, 'sails');
-  const gunMul = () => 1 + 0.15 * upgL(ownKey(), 'cannons'), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => 1 - 0.1 * upgL(ownKey(), 'plating');
+  const isTitan = () => ownKey() === 'titan';   // her guns hit two and a half times as hard, and her timbers shrug off most of what hits her
+  const gunMul = () => (1 + 0.15 * upgL(ownKey(), 'cannons')) * (isTitan() ? 2.5 : 1), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => (1 - 0.1 * upgL(ownKey(), 'plating')) * (isTitan() ? 0.4 : 1);
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
@@ -3606,7 +3614,7 @@ window.__pgBoot = () => {
     g.fillStyle = '#5a4020'; g.font = '16px Georgia'; g.fillText('N', 228, 30);
   }));
   function buildInterior(key) {
-    const big = key === 'galleon';
+    const big = key === 'galleon' || key === 'titan';
     const C = big ? { W: 8, Lr: 26, H: 3.6, guns: 6, masts: [11, -1], ladderZ: 16, cabinZ: -13 } : { W: 5.5, Lr: 15, H: 3.3, guns: 4, masts: [6], ladderZ: 9, cabinZ: -8 };
     const sc = new THREE.Scene(); sc.background = new THREE.Color(0x140d08); sc.fog = new THREE.Fog(0x140d08, 20, 70);
     const root = new THREE.Group(); sc.add(root);
@@ -4235,7 +4243,7 @@ window.__pgBoot = () => {
 
   function spawnCrew() {
     ship.crew = [];
-    const plan = CREW_PLANS[ship.key]; if (!plan) return;
+    const plan = CREW_PLANS[ship.key] || (ship.key === 'titan' ? CREW_PLANS.galleon : null); if (!plan) return;   // the Titan is crewed like a galleon
     const used = [];
     plan.forEach(p => {
       const q = Object.assign({}, p);
@@ -4333,7 +4341,7 @@ window.__pgBoot = () => {
   updateGold();
 
   // ---------- Ship shop ----------
-  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 15000], ['galleon', 'Galleon', "big, grand and terrifyin'", 25000], ['upgrade', 'Upgrade yer ship', 'hull, sails, guns, crew and plating', 0], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
+  const SHOP = [['sloop', 'Sloop', 'small and quick', 0], ['brig', 'Brigantine', 'a fine all-rounder with a crew', 15000], ['galleon', 'Galleon', "big, grand and terrifyin'", 25000], ['titan', 'Titan', 'a colossal black man-o\'-war: twice a galleon\'s size, sixteen-gun broadsides, a hull like a fortress', 500000], ['upgrade', 'Upgrade yer ship', 'hull, sails, guns, crew and plating', 0], ['paint', 'Paint yer ship', 'sails, hull, trim and flag', 0], [null, 'Never mind', '', 0]];
   function openUpgrades() {
     const el = document.getElementById('upgr'), body = document.getElementById('upgrBody'), key = ownKey(), nm = (SHIP_TYPES[key] || {}).name || 'ship';
     document.getElementById('upgrTitle').textContent = `Upgrade yer ${nm}`;
@@ -6558,7 +6566,7 @@ window.__pgBoot = () => {
   // ---------- Cannons ----------
   const balls = [], pendingShots = [];
   const ballGeo = new THREE.SphereGeometry(0.45, 8, 6), ballMat = lam(0x1a1a1a);
-  const gunCount = ent => ent.T.gunRows && ent.T.gunRows.length ? Math.min(ent.T.guns, 8) : 2;
+  const gunCount = ent => ent.T.gunRows && ent.T.gunRows.length ? Math.min(ent.T.guns, ent.T.maxGuns || 8) : 2;
   function fireBroadside(ent, side, enemy) {
     if (ent === ship && !enemy && window.__mpFire) window.__mpFire(side);
     const n = gunCount(ent);
