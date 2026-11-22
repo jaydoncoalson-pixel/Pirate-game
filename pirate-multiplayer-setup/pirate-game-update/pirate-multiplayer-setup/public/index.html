@@ -1879,6 +1879,19 @@ window.__pgBoot = () => {
   // ---------- Characters ----------
   // sword swing keyframes (see the 'slash' pose): ready guard, the wind-up extreme, and the end of the strike
   const SWING_KF = {
+    // the Sword of the Sea: a great blade swung two-handed in one unbroken flow. Each cut ends where the next begins,
+    // so its quick chain reads as a single dance: a wide sweep, the sweep back rising, then a diagonal slam from high.
+    sea: {
+      0: { w: 0.16, s: 0.55, dep: 1.1,
+        wind: { shR: -1.55, elR: -1.25, shRz: 1.05, shL: -1.25, elL: -1.45, shLz: 0.65, twist: 0.95, yaw: 0.42, lean: 0.02, bob: -0.04, headY: -0.35, headX: 0.05, wrX: 1.05, wrY: 0.35 },
+        hit:  { shR: -1.45, elR: -0.3, shRz: -1.1, shL: -1.35, elL: -0.55, shLz: -0.25, twist: -1.0, yaw: -0.48, lean: 0.26, bob: -0.09, headY: 0.3, headX: 0.1, wrX: 1.25, wrY: -0.35 } },
+      1: { w: 0.14, s: 0.55, dep: 1.0,
+        wind: { shR: -1.3, elR: -1.5, shRz: -1.25, shL: -1.05, elL: -1.2, shLz: -0.45, twist: -1.1, yaw: -0.52, lean: 0.2, bob: -0.1, headY: 0.38, headX: 0.12, wrX: 1.0, wrY: -0.6 },
+        hit:  { shR: -2.05, elR: -0.22, shRz: 1.15, shL: -1.5, elL: -0.75, shLz: 0.55, twist: 1.0, yaw: 0.5, lean: 0.12, bob: -0.04, headY: -0.3, headX: -0.02, wrX: 0.65, wrY: 0.4 } },
+      2: { w: 0.3, s: 0.6, dep: 1.5,
+        wind: { shR: -3.0, elR: -1.0, shRz: 0.5, shL: -2.85, elL: -1.1, shLz: 0.1, twist: 0.55, yaw: 0.28, lean: -0.28, bob: 0.03, headY: -0.12, headX: -0.18, wrX: -0.85, wrY: 0.1 },
+        hit:  { shR: -0.5, elR: -0.1, shRz: -0.5, shL: -0.6, elL: -0.3, shLz: 0.25, twist: -0.65, yaw: -0.32, lean: 0.62, bob: -0.17, headY: 0.15, headX: 0.3, wrX: 0.6, wrY: -0.15 } },
+    },
     ready: { shR: -0.95, elR: -0.95, shRz: 0.18, shL: -0.45, elL: -0.95, shLz: -0.28, twist: 0.05, yaw: 0, lean: 0.1, bob: -0.03, headY: 0, headX: 0.04, wrX: -0.15, wrY: 0 },
     0: { w: 0.3, s: 0.56, dep: 1,   // forehand: high on the right, cutting down across to the low left
       wind: { shR: -2.75, elR: -1.35, shRz: 0.8, shL: -0.75, elL: -1.15, shLz: -0.55, twist: 0.7, yaw: 0.28, lean: -0.04, bob: 0.0, headY: -0.3, headX: 0, wrX: -0.75, wrY: 0.15 },
@@ -2140,13 +2153,14 @@ window.__pgBoot = () => {
             // keyframed swing: a gathering wind-up, a fast whipping strike that decelerates through the target, then a
             // follow-through and an unhurried recovery to guard. The hips and torso lead, the arm follows, the wrist snaps last,
             // the off arm counterbalances and the feet step into it.
-            const F = SWING_KF[kd] || SWING_KF[0], R = SWING_KF.ready;
+            const sea = !!ch.seaSwing, F = (sea ? SWING_KF.sea[kd] : SWING_KF[kd]) || SWING_KF[0], R = SWING_KF.ready;
+            const from = sea && kd > 0 ? SWING_KF.sea[kd - 1].hit : R;   // the sea blade's next cut flows straight on from the last
             const eIO = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2, eOut = x => 1 - Math.pow(1 - x, 3.2), eIn = x => x * x * x;
             const wA = F.w, wB = F.s;   // where the wind-up ends and the strike ends
             let A, B, u;
-            if (q < wA) { A = R; B = F.wind; u = eIO(q / wA); }
+            if (q < wA) { A = from; B = F.wind; u = eIO(q / wA); }
             else if (q < wB) { A = F.wind; B = F.hit; const x = (q - wA) / (wB - wA); u = eOut(eIn(Math.min(1, x * 1.15)) * 0.35 + x * 0.65); }   // accelerate hard, then bleed off speed past the target
-            else { A = F.hit; B = R; u = eIO((q - wB) / (1 - wB)) * 0.92; }   // follow-through settling back toward guard
+            else { A = F.hit; B = R; u = eIO((q - wB) / (1 - wB)) * (sea ? 0.45 : 0.92); }   // follow-through settling back toward guard (the sea blade keeps its momentum, ready for the next cut)
             for (const key in B) t[key] = A[key] + (B[key] - A[key]) * u;
             const step = q < wA ? 0 : q < wB ? eOut((q - wA) / (wB - wA)) : 1 - eIO((q - wB) / (1 - wB)) * 0.6, dep = F.dep || 1;   // step into the blow
             if (still) { t.hipL = -0.3 - 0.32 * step * dep; t.kneeL = 0.35 + 0.3 * step * dep; t.hipR = 0.22 + 0.25 * step * dep; t.kneeR = 0.12 + 0.22 * step * dep; }
@@ -6273,7 +6287,7 @@ window.__pgBoot = () => {
       col.setX(i * 2, a * 0.85); col.setX(i * 2 + 1, a * 0.08); }
     pos.needsUpdate = true; col.needsUpdate = true;
   }
-  function plAction() { player.slashKind = PLAYER.swingKind || 0; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
+  function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
     CMB.nums.push({ el, x: pos.x + (Math.random() - 0.5) * 0.6, y: pos.y + 2.4, z: pos.z + (Math.random() - 0.5) * 0.6, t: 0, vx: (Math.random() - 0.5) * 0.8 });
@@ -6356,7 +6370,10 @@ window.__pgBoot = () => {
     if (!STOM.on && !onShip && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (CMB.blocking) return; if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword();
       CMB.combo = CMB.comboT > 0 ? (CMB.combo + 1) % 3 : 0; const fin = CMB.combo === 2; PLAYER.swingKind = CMB.combo;   // chain swings: slash, backhand, then a heavy overhead
-      PLAYER.slashDur = Math.max(0.34, Math.min(0.62, sw.cool * 1.05)) * (fin ? 1.3 : 1); PLAYER.slashT = PLAYER.slashDur; PLAYER.cool = Math.max(sw.cool * (fin ? 1.5 : 0.85), PLAYER.slashDur * 0.62); PLAYER.hitPending = PLAYER.slashDur * (SWING_KF[CMB.combo].w + (SWING_KF[CMB.combo].s - SWING_KF[CMB.combo].w) * 0.55);
+      const SEA = STATE.sword === 'seasword', KF = SEA ? SWING_KF.sea[CMB.combo] : SWING_KF[CMB.combo];
+      if (SEA) { PLAYER.slashDur = fin ? 0.46 : 0.3; PLAYER.cool = fin ? 0.42 : 0.24; }   // its own rhythm: each cut gets to finish before the next flows on
+      else { PLAYER.slashDur = Math.max(0.34, Math.min(0.62, sw.cool * 1.05)) * (fin ? 1.3 : 1); PLAYER.cool = Math.max(sw.cool * (fin ? 1.5 : 0.85), PLAYER.slashDur * 0.62); }
+      PLAYER.slashT = PLAYER.slashDur; PLAYER.hitPending = PLAYER.slashDur * (KF.w + (KF.s - KF.w) * 0.55);
       CMB.comboT = PLAYER.cool + 0.6; CMB.lungeT = fin ? 0.16 : 0.1; CMB.lungeV = fin ? 7 : 4; SFX.swing(); if (fin) setTimeout(() => SFX.swing(), 60); if (window.__mpSlash) window.__mpSlash(PLAYER.slashDur * 0.45); return; }
     if (PLAYER.reload > 0) { toast('Reloadin\' the pistol...'); return; }
     P.facing = yaw + Math.PI;                       // aim where the camera is looking
@@ -11445,7 +11462,7 @@ window.__pgBoot = () => {
   function seaSlash() {
     const wp = new THREE.Vector3(), q = new THREE.Quaternion(); player.root.getWorldPosition(wp); player.root.getWorldQuaternion(q);
     const fw = new THREE.Vector3(0, 0, 1).applyQuaternion(q); fw.y = 0; fw.normalize();
-    const g = new THREE.Group(); g.position.set(wp.x + fw.x * 1.5, wp.y + 1.2, wp.z + fw.z * 1.5); g.rotation.y = Math.atan2(fw.x, fw.z); scene.add(g);
+    const g = new THREE.Group(); g.position.set(wp.x + fw.x * 1.5, wp.y + 1.2, wp.z + fw.z * 1.5); g.rotation.order = 'YXZ'; g.rotation.y = Math.atan2(fw.x, fw.z); g.rotation.z = [0.18, -0.3, 1.05][PLAYER.swingKind || 0]; scene.add(g);   // tilted to match the cut: the sweep, the rising sweep back, the diagonal slam
     const core = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.34, 6, 32, Math.PI), slashM.clone()); core.material.color.setHex(0xd8fcff); core.scale.y = 0.35; core.rotation.set(Math.PI / 2, 0, Math.PI); g.add(core);
     const glow = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.9, 6, 32, Math.PI), slashM.clone()); glow.material.opacity = 0.5; glow.scale.y = 0.45; glow.rotation.copy(core.rotation); g.add(glow);
     SLASHES.push({ g, core, glow, fw, t: 0, hit: new Set() });
@@ -11857,7 +11874,7 @@ window.__pgBoot = () => {
       p.sp += ((d.s || 0) - p.sp) * k;
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
       try {
-        p.ch.slashP = p.sl; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null);
+        p.ch.slashP = p.sl; p.ch.seaSwing = d.sw === 'seasword'; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null);
         seaAuraRemote(p, d, dt);
         // ch.update() hides all props, so the weapon has to be shown after it, the same way the local player does.
         const w = d.w === undefined ? 1 : d.w;
