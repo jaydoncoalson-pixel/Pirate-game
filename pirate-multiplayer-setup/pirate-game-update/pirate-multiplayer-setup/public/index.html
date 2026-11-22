@@ -2360,6 +2360,12 @@ window.__pgBoot = () => {
       woodLines(g, w, h, 10);
       g.fillStyle = hex(S.wale); g.fillRect(0, 0, w, 10); g.fillRect(0, h - 12, w, 8);
       const n = S.castleWindows || 4;
+      if (S.titan) {   // the Titan's castles are iron-plated, pierced with narrow firing slits lit red from within
+        g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 2; for (let x = 0; x < w; x += 42) { g.beginPath(); g.moveTo(x, 10); g.lineTo(x, h - 12); g.stroke(); }
+        g.fillStyle = 'rgba(160,165,175,0.5)'; for (let x = 6; x < w; x += 21) { g.fillRect(x, 18, 3, 3); g.fillRect(x, h - 24, 3, 3); }
+        for (let i = 0; i < n; i++) { const x = (i + 0.5) * w / n; g.fillStyle = '#0a0a0a'; g.fillRect(x - 5, 32, 10, 52); g.fillRect(x - 14, 50, 28, 9); g.fillStyle = 'rgba(255,70,30,0.55)'; g.fillRect(x - 3, 36, 6, 44); }
+        return;
+      }
       for (let i = 0; i < n; i++) {
         const x = (i + 0.5) * w / n;
         g.fillStyle = hex(S.wale); g.fillRect(x - 15, 30, 30, 50);
@@ -2419,12 +2425,12 @@ window.__pgBoot = () => {
   // black-hulled with gilded wales and blood-red sails, two full gun decks firing twice as many guns
   SHIP_TYPES.titan = {   // her own lines: a four-masted ship-of-the-line, deep-hulled with three gun decks, a long low waist and a towering stern
     name: 'Titan', L: 56, B: 15.5, D: 5.4, draft: 5.6, sternRise: 3.2, bowRise: 2.0, tumble: 0.3, transom: 0.7, bulwark: 1.2,
-    hull: 0x17151a, bottom: 0x0e0c0f, wale: 0xd9ad4a, portLid: 0x7a1616, wales: [0.565, 0.68, 0.8, 0.925], gunRows: [0.625, 0.745, 0.865], guns: 16, maxGuns: 16, gunFrom: 0.16, gunTo: 0.76, sail: 0x7d1d1d,
+    hull: 0x2a2c31, bottom: 0x111113, wale: 0x8e1414, portLid: 0x0c0c0e, castleWindows: 6, wales: [0.565, 0.68, 0.8, 0.925], gunRows: [0.625, 0.745, 0.865], guns: 16, maxGuns: 16, gunFrom: 0.16, gunTo: 0.76, sail: 0x1e1b1d,
     castles: [{ z0: 16.5, z1: 26.5, h: 2.6, front: 0.58, wk: 0.94 }, { z0: -28.6, z1: -9.5, h: 3.0, wk: 1.0, gaps: [[-4.9, -3.3], [3.3, 4.9]] }, { z0: -28.9, z1: -16.5, h: 2.6, wk: 0.92, on: 1 }, { z0: -29.1, z1: -22.5, h: 2.3, wk: 0.8, on: 2 }],
     masts: [{ z: 19.5, h: 34, square: 3, w: 17 }, { z: 5.5, h: 44, square: 3, w: 22 }, { z: -6, h: 37, square: 3, w: 18 }, { z: -19.5, h: 25, lateen: 19 }],
     bowsprit: { angle: 0.34, len: 21, spritsail: true, topmast: true },
-    flags: [{ mast: 1, kind: 'jolly', w: 6, h: 3.7 }, { mast: 0, kind: 'red', w: 4.4, h: 1.4 }, { mast: 2, kind: 'red', w: 4.4, h: 1.4 }, { mast: 3, kind: 'red', w: 3, h: 1.8 }, { sprit: true, kind: 'jolly', w: 3, h: 1.6 }],
-    helm: { z: -12.5, castle: 1 }, lanterns: true, beak: true, hatchZ: 11.5,
+    flags: [{ mast: 1, kind: 'red', w: 7, h: 4.4 }, { mast: 0, kind: 'red', w: 5.4, h: 1.6 }, { mast: 2, kind: 'red', w: 5.4, h: 1.6 }, { mast: 3, kind: 'jolly', w: 3.4, h: 2.1 }, { sprit: true, kind: 'red', w: 3, h: 1.6 }],
+    helm: { z: -12.5, castle: 1 }, lanterns: false, beak: false, hatchZ: 11.5,
     stairs: { castle: 1, xs: [4.1, -4.1], w: 1.4, zLow: -4.2, zHigh: -9.5 }, quarters: { castle: 1 }, deckItems: true,
     speed: 11, turn: 0.34, titan: true };
   const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 2.86 };   // (the Titan: 160 m long, 44 m in the beam)
@@ -2493,41 +2499,54 @@ window.__pgBoot = () => {
     return m;
   }
 
-  // what only the Titan carries: an iron armour belt riveted along her waterline, a bronze ram at the bow,
-  // a gilded figurehead of a sea-titan with a trident under the bowsprit, and gold rails running her whole length
+  // what only the Titan carries: she's built for war. Cannons run out of all three gun decks, a riveted iron belt on the
+  // waterline, iron battlements along her waist, spikes studding her upper sides, a great spiked ram, a horned iron skull
+  // for a figurehead with burning eyes, and braziers of fire on her stern castle
   function titanDecor(g, F, S, L) {
-    const iron = new THREE.MeshLambertMaterial({ color: 0x3a3d42 }), rivet = new THREE.MeshLambertMaterial({ color: 0x5a5e66 }),
-      gold = new THREE.MeshLambertMaterial({ color: 0xd9ad4a, emissive: 0x2a1c04 }), bronze = new THREE.MeshLambertMaterial({ color: 0x9a6a2a, emissive: 0x1a0e02 });
-    const plate = new THREE.BoxGeometry(0.16, 1, 1), rv = new THREE.SphereGeometry(0.07, 5, 4);
+    const iron = new THREE.MeshLambertMaterial({ color: 0x34373d }), dark = new THREE.MeshLambertMaterial({ color: 0x1a1b1e }), rivet = new THREE.MeshLambertMaterial({ color: 0x6a6e76 }),
+      red = new THREE.MeshLambertMaterial({ color: 0x8e1414 }), fire = new THREE.MeshBasicMaterial({ color: 0xff6a1a }), glow = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
+    const dummy = new THREE.Object3D();
+    // run-out cannons: a barrel poking from every port, all three decks, both sides
+    const nG = S.guns * S.gunRows.length * 2, bar = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.26, 2.2, 8), dark, nG), muz = new THREE.InstancedMesh(new THREE.TorusGeometry(0.24, 0.07, 5, 10), dark, nG);
+    let n = 0;
+    for (const sd of [-1, 1]) S.gunRows.forEach(v => { for (let i = 0; i < S.guns; i++) {
+      const f = S.gunFrom + (S.gunTo - S.gunFrom) * i / (S.guns - 1), u = 2 * f - 1, [x, y] = F.pt(u, v);
+      dummy.position.set(sd * (x + 0.75), y, u * L / 2); dummy.rotation.set(0, 0, Math.PI / 2); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); bar.setMatrixAt(n, dummy.matrix);
+      dummy.position.set(sd * (x + 1.85), y, u * L / 2); dummy.rotation.set(0, Math.PI / 2, 0); dummy.updateMatrix(); muz.setMatrixAt(n, dummy.matrix); n++; } });
+    g.add(bar, muz);
+    const plate = new THREE.BoxGeometry(0.16, 1, 1), rv = new THREE.SphereGeometry(0.07, 5, 4), spikeG = new THREE.ConeGeometry(0.16, 0.9, 5), merlon = new THREE.BoxGeometry(0.5, 1, 1.2);
     [-1, 1].forEach(sd => {
-      // armour belt: overlapping iron plates on the waterline, two rows, studded with rivets
+      // armour belt on the waterline: overlapping riveted iron plates, two rows
       for (let row = 0; row < 2; row++) for (let u = -0.86; u <= 0.88; u += 0.055) {
         const lev = 0.47 + row * 0.055, [x, y] = F.pt(u, lev), [x2] = F.pt(u + 0.03, lev); if (x < 0.4) continue;
         const pl = new THREE.Mesh(plate, iron); pl.scale.set(1, 0.95, L * 0.03); pl.position.set(sd * (x + 0.06 + row * 0.01), y, u * L / 2); pl.rotation.y = sd * Math.atan2(x2 - x, L * 0.015); g.add(pl);
         for (const dz of [-0.35, 0.35]) { const r = new THREE.Mesh(rv, rivet); r.position.set(sd * (x + 0.15 + row * 0.01), y + 0.3, u * L / 2 + dz); g.add(r); }
       }
-      // gilded rail along the top of her side, and a second gold band just above the upper gun deck
-      for (const [lev, th] of [[1, 0.12], [0.6, 0.08]]) {
-        const pts = []; for (let k = 0; k <= 40; k++) { const u = -0.95 + 1.9 * k / 40, [x, y] = F.pt(u, lev); pts.push(new THREE.Vector3(sd * (x + 0.05), y + (lev === 1 ? 0.05 : 0), u * L / 2)); }
-        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, th, 5, false), gold));
-      }
+      // iron spikes studding the upper side, between the top wale and the rail
+      for (let u = -0.8; u <= 0.85; u += 0.075) { const [x, y] = F.pt(u, 0.955); const sp = new THREE.Mesh(spikeG, iron); sp.position.set(sd * (x + 0.4), y, u * L / 2); sp.rotation.z = -sd * Math.PI / 2; g.add(sp); }
+      // iron battlements along the waist rail
+      for (let u = -0.31; u <= 0.56; u += 0.045) { const [x, y] = F.pt(u, 1), m = new THREE.Mesh(merlon, iron); m.position.set(sd * (x - 0.15), y + 0.5, u * L / 2); g.add(m);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 1.32), red); cap.position.set(sd * (x - 0.15), y + 1.02, u * L / 2); g.add(cap); }
     });
-    // bronze ram at the cutwater, just under the waves
-    const [, yw] = F.pt(0.97, 0.49), ram = new THREE.Group(); ram.position.set(0, yw, L / 2 - 0.4); g.add(ram);
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5.5, 4), bronze); spike.rotation.x = Math.PI / 2; spike.rotation.y = Math.PI / 4; spike.position.z = 2.4; spike.scale.set(1, 1, 0.55); ram.add(spike);
-    for (const dy of [-0.5, 0.5]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 4), bronze); fin.position.set(0, dy, 1.4); ram.add(fin); }
-    // the figurehead: a crowned sea-titan leaning out over the waves, trident raised
-    const fh = new THREE.Group(); fh.position.set(0, S.D * 0.78, L / 2 + 0.6); fh.rotation.x = 0.55; g.add(fh);
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.55, 3, 10), gold); torso.position.y = 1.5; fh.add(torso);
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.6, 10), gold); tail.rotation.x = Math.PI; tail.position.y = -1.1; fh.add(tail);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 10), gold); head.position.y = 3.5; fh.add(head);
-    const beard = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 8), gold); beard.rotation.x = Math.PI; beard.position.set(0, 2.9, 0.38); fh.add(beard);
-    for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.6, 5), gold); const a = (k - 2) * 0.4; sp.position.set(Math.sin(a) * 0.45, 4.05, Math.cos(a) * 0.2 - 0.1); fh.add(sp); }   // crown
-    [-1, 1].forEach(sd => { const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 2.2, 7), gold); arm.position.set(sd * 0.95, 2.4, 0.5); arm.rotation.set(-1.0, 0, sd * 0.35); fh.add(arm); });
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6, 6), gold); shaft.position.set(0.9, 3.4, 1.4); shaft.rotation.x = -0.6; fh.add(shaft);
-    const tri = new THREE.Group(); tri.position.set(0.9, 5.9, 3.1); tri.rotation.x = -0.6; fh.add(tri);
-    for (const dx of [-0.35, 0, 0.35]) { const p = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.9, 5), gold); p.position.set(dx, dx ? 0.2 : 0.35, 0); tri.add(p); }
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.12, 0.12), gold); bar.position.y = -0.2; tri.add(bar);
+    // the ram: a great iron spike at the cutwater, flanked by blades
+    const [, yw] = F.pt(0.97, 0.52), ram = new THREE.Group(); ram.position.set(0, yw, L / 2 - 0.6); g.add(ram);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(1.4, 8, 4), iron); spike.rotation.x = Math.PI / 2; spike.rotation.y = Math.PI / 4; spike.position.z = 3.6; spike.scale.set(1, 1, 0.6); ram.add(spike);
+    [-1, 1].forEach(sd => { const bl = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4.5, 3), iron); bl.rotation.set(Math.PI / 2, 0, 0); bl.position.set(sd * 1.1, 0.3, 2.2); bl.rotation.z = sd * 0.5; ram.add(bl); });
+    for (const dy of [-0.8, 0.8]) { const band = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 0.3), red); band.position.set(0, dy, 0.6); ram.add(band); }
+    // figurehead: a horned iron skull with burning eyes, jutting under the bowsprit
+    const fh = new THREE.Group(); fh.position.set(0, S.D * 0.9, L / 2 + 0.2); g.add(fh);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(1.25, 14, 10), iron); skull.scale.set(1, 0.9, 1.15); fh.add(skull);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.55, 1.2), iron); jaw.position.set(0, -0.95, 0.55); fh.add(jaw);
+    for (let k = -2; k <= 2; k++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), rivet); t.rotation.x = Math.PI; t.position.set(k * 0.27, -0.55, 1.15); fh.add(t); }
+    [-1, 1].forEach(sd => { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), glow); eye.position.set(sd * 0.45, 0.15, 1.1); eye.scale.z = 0.5; fh.add(eye);
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.35, 3, 7), dark); horn.position.set(sd * 1.3, 1.0, -0.2); horn.rotation.set(-0.5, 0, -sd * 0.9); fh.add(horn); });
+    // braziers burning on the stern castle's top deck
+    const zb = -26.5, yb = F.deckY(zb) + 3.0 + 2.6 + 2.3, xb = F.pt(zb / (L / 2), 1)[0] * 0.62;
+    [-1, 1].forEach(sd => { const b = new THREE.Group(); b.position.set(sd * xb, yb, zb); g.add(b);
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.35, 0.6, 10), iron); bowl.position.y = 1.5; b.add(bowl);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 1.3, 6), iron); leg.position.y = 0.6; b.add(leg);
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.6, 7), fire); fl.position.y = 2.4; fl.userData.titanFire = true; b.add(fl);
+      const lt = new THREE.PointLight(0xff6a2a, 1.2, 30); lt.position.y = 2.6; b.add(lt); });
   }
   function makeShip(key, styleOverride) {
     const S = Object.assign({}, SHIP_TYPES[key]), st = styleOverride || STATE.shipStyle;
