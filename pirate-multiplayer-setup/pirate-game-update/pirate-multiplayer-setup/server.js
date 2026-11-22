@@ -23,7 +23,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
-const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite']);
+const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite', 'sbite']);
 // which version of the game page this server is handing out: browsers still running an older page are told to refresh
 const BUILD = (() => { try { return crypto.createHash('sha1').update(fs.readFileSync(path.join(__dirname, 'public', 'index.html'))).digest('hex').slice(0, 10); } catch (e) { return ''; } })();
 
@@ -110,6 +110,14 @@ function ebiteOk(me, d) {
   return (+d.dmg || 0) <= 45;
 }
 
+// a horn serpent biting another captain's serpent: both serpents must be out and close together; an Elder's bite needs the true horn
+function sbiteOk(me, d) {
+  const el = me.p && me.p.el, tq = d && players.get(d.to), el2 = tq && tq.p && tq.p.el;
+  if (!Array.isArray(el) || !Array.isArray(el2)) return false;
+  if (Math.hypot(el[0] - el2[0], el[1] - el2[1]) > 800) return false;
+  return d.big ? hornOwns(me) : true;
+}
+
 const env = createEnv();
 
 const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
@@ -180,6 +188,7 @@ wss.on('connection', ws => {
         sim.raidAdmin(d.cmd); console.log(`admin ${me.name}: raid ${d.cmd}`); return;
       }
       if (m.topic === 'ebite' && !ebiteOk(me, m.data)) return;
+      if (m.topic === 'sbite' && !sbiteOk(me, m.data)) return;
       if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
       if (RELAY_TOPICS.has(m.topic)) broadcastRaw({ t: 'emit', topic: m.topic, data: m.data, from: id }, id);
