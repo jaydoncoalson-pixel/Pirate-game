@@ -4911,6 +4911,16 @@ window.__pgBoot = () => {
     let c = sec('Resources');
     btn(c, '+1,000 gold', () => addGold(1000, 'Admin gift'));
     btn(c, '+10 of every material', () => Object.keys(MATS).forEach(k => addMat(k, 10)));
+    c = sec('Gift gold to myself');
+    { const amt = document.createElement('input'); amt.type = 'number'; amt.min = 1; amt.max = 1000000000; amt.value = ADMIN_GIFT.self || 10000; amt.style.cssText = 'width:130px;padding:5px;border-radius:6px;margin-right:6px';
+      amt.oninput = () => { ADMIN_GIFT.self = Math.floor(+amt.value || 0); };
+      ['keydown', 'keyup'].forEach(ev => amt.addEventListener(ev, e => e.stopPropagation()));   // typing the number mustn't trigger game hotkeys
+      const go = document.createElement('button'); go.className = 'ch'; go.textContent = 'Give me the gold';
+      go.onclick = () => { const n = Math.floor(+amt.value || 0); if (!(n > 0 && n <= 1000000000)) { toast('Pick an amount between 1 and 1,000,000,000.'); return; } addGold(n, 'Admin gift to yerself'); save(); toast(`${n.toLocaleString()} gold added to yer purse. Ye now have ${STATE.gold.toLocaleString()}.`); };
+      c.append(amt, go);
+      const quick = document.createElement('div'); quick.style.cssText = 'margin-top:6px;width:100%';
+      [10000, 100000, 500000, 1000000].forEach(v => { const b = document.createElement('button'); b.className = 'ch'; b.textContent = v.toLocaleString(); b.onclick = () => { amt.value = v; ADMIN_GIFT.self = v; }; quick.appendChild(b); });
+      c.appendChild(quick); }
     c = sec('Gift gold to a player');
     if (window.__mpGift && window.__mpPeople && window.__mpEnv && window.__mpEnv()) {
       const people = window.__mpPeople();
@@ -6538,9 +6548,9 @@ window.__pgBoot = () => {
     }, 900);
   }
   function playerAttack() {
-    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer || (onShip && serpFighting()) || (GUEST.on && GUEST.raider) || (onShip && !sailing && SIEGE.on);
+    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer || (onShip && serpFighting()) || GUEST.on || (onShip && !sailing) || (seaRunning() && !RIDE.on);   // swords work on any deck (not at the wheel) and when running on the water
     if ((!playerTargetable() && !STOM.on && !krDeckFight) || PLAYER.cool > 0 || PLAYER.hp <= 0) return;
-    if (!STOM.on && !onShip && !GUEST.on && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
+    if (!STOM.on && !onShip && !GUEST.on && !KR.heldPlayer && !seaRunning() && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (CMB.blocking) return; if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword();
       CMB.combo = CMB.comboT > 0 ? (CMB.combo + 1) % 3 : 0; const fin = CMB.combo === 2; PLAYER.swingKind = CMB.combo;   // chain swings: slash, backhand, then a heavy overhead
       const SEA = STATE.sword === 'seasword', KF = SEA ? SWING_KF.sea[CMB.combo] : SWING_KF[CMB.combo];
@@ -6550,6 +6560,7 @@ window.__pgBoot = () => {
       CMB.comboT = PLAYER.cool + 0.6; CMB.lungeT = fin ? 0.16 : 0.1; CMB.lungeV = fin ? 7 : 4; SFX.swing(); if (fin) setTimeout(() => SFX.swing(), 60); if (window.__mpSlash) window.__mpSlash(PLAYER.slashDur * 0.45); return; }
     if (PLAYER.reload > 0) { toast('Reloadin\' the pistol...'); return; }
     P.facing = yaw + Math.PI;                       // aim where the camera is looking
+    { const DS = GUEST.on ? GUEST.S : onShip ? ship : null; if (DS) PS.facing = yaw + Math.PI - DS.heading; }   // (on a deck, turn there too)
     PLAYER.aimT = 0.45; PLAYER.cool = 0.3; PLAYER.reload = 1.6; SFX.pistol();
     const fx = Math.sin(P.facing), fz = Math.cos(P.facing), mx = P.pos.x + fx * 1.3, my = P.pos.y + 1.65, mz = P.pos.z + fz * 1.3;
     puff(mx, my, mz, { color: 0xffb04a, size: 0.9, life: 0.12, grow: 0.5, op: 1 });
