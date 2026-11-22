@@ -6803,7 +6803,10 @@ window.__pgBoot = () => {
       list = list.concat(serpTargets());
     } else if (ent.remote) {           // another player's broadside, replayed here: it was aimed at us
       list = ship && !ship.sinking && !ship.submerged ? [ship] : [];
-    } else return null;                // raiders don't get auto-aim
+    } else if (raiders.includes(ent) && ship && !ship.sinking && !ship.submerged) {   // Blackwater gunners lead their shots at the ship they're hunting
+      const me = window.__mpMe && window.__mpMe(), online = !!(window.__mpOnline && window.__mpOnline());
+      list = (online ? ent.net && ent.net.tg && ent.net.tg === me : ent.huntsShip) ? [ship] : [];
+    } else return null;
     let best = null, bs = 1e9;
     for (const e of list) {
       const dx = e.x - x, dz = e.z - z, d = Math.hypot(dx, dz);
@@ -6831,7 +6834,7 @@ window.__pgBoot = () => {
   function shotDamage(ent, enemy) {
     if (ent === ship) return (STATE.sword === 'seasword' ? 22 : 11) * gunMul();
     if (ent.remote) return (ent.sw === 'seasword' ? 12 : 6) * (ent.gm || 1);
-    return 6;
+    return ent.galleon ? 12 : 9;   // Blackwater shot: a galleon's guns hit hardest
   }
   function updateBalls(dt, t) {
     for (let i = pendingShots.length - 1; i >= 0; i--) { const p = pendingShots[i]; p.delay -= dt; if (p.delay <= 0) { pendingShots.splice(i, 1); launchShot(p); } }
@@ -6947,7 +6950,7 @@ window.__pgBoot = () => {
       addProp(ch, 'blade');
       (m.deckCrew || (m.deckCrew = [])).push({ ch, lp: ch.root.position, facing: ch.root.rotation.y });
     }
-    const r = Object.assign(m, { home: { x, z }, maxHp: gal ? 240 : 110, galleon: gal, wp: Math.random() * 6.28, reload: { 1: 0, '-1': 0 }, steer: 0 });
+    const r = Object.assign(m, { home: { x, z }, maxHp: gal ? 520 : 230, galleon: gal, wp: Math.random() * 6.28, reload: { 1: 0, '-1': 0 }, steer: 0 });
     const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = (gal ? 'Blackwater galleon' : 'Blackwater raider') + '<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag);
     r.tag = tag; r.bar = tag.querySelector('.ehp div');
     if (raid) { r.raid = true; r.state = 'gone'; r.respawnT = Infinity; tag.style.display = 'none'; } else spawnRaider(r);
@@ -6980,16 +6983,17 @@ window.__pgBoot = () => {
       const tdx = target ? target.x - r.x : 0, tdz = target ? target.z - r.z : 0, td = Math.hypot(tdx, tdz);
       if (target && td < 1000 && !r.captured && !r.boarded) {   // (a crew fighting off boarders, or a prize that's struck, isn't working the guns)
         if (r.state !== 'attack' && !warned) { warned = true; toast('Blackwater raiders! At the wheel, press Space to fire the guns on the side ye\'re lookin\'.'); }
+        r.huntsShip = target === ship;
         if (r.state !== 'attack') r.boarder = target === ship && Math.random() < (r.galleon ? 0.55 : 0.35);   // some mean to grapple and board rather than trade broadsides
         r.state = 'attack';
         const b = Math.atan2(tdx, tdz);
         if (r.boarder && target === ship && !SIEGE.on && BOARD.cool <= 0 && td > 42) { desired = b; want = td > 260 ? 30 : 20; }
-        else if (td > 260) { desired = b; want = 30; }
-        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = 22; }
+        else if (td > 260) { desired = b; want = 34; }
+        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = 26; }
         if (td < 240) {
           const fwdDot = (tdx * Math.sin(r.heading) + tdz * Math.cos(r.heading)) / td;
           const side = tdx * Math.cos(r.heading) - tdz * Math.sin(r.heading) > 0 ? 1 : -1;
-          if (Math.abs(fwdDot) < 0.4 && r.reload[side] <= 0) { fireBroadside(r, side, true); r.reload[side] = 5 + Math.random() * 2; }
+          if (Math.abs(fwdDot) < 0.4 && r.reload[side] <= 0) { fireBroadside(r, side, true); r.reload[side] = 3.5 + Math.random() * 1.5; }
         }
       } else {
         r.state = 'patrol';

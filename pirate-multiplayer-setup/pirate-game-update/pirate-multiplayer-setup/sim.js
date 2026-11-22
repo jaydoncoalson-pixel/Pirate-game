@@ -180,12 +180,12 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
       if (tg && td < sight) {
         r.state = 'attack'; r.target = tg.id;
         const tdx = tg.x - r.x, tdz = tg.z - r.z, b = Math.atan2(tdx, tdz);
-        if (td > 260) { desired = b; want = fury ? 38 : 30; }
-        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = fury ? 28 : 22; }
+        if (td > 260) { desired = b; want = fury ? 42 : 34; }
+        else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = fury ? 32 : 26; }
         if (td < 240) {
           const fwdDot = (tdx * Math.sin(r.heading) + tdz * Math.cos(r.heading)) / td;
           const side = tdx * Math.cos(r.heading) - tdz * Math.sin(r.heading) > 0 ? 1 : -1;
-          if (Math.abs(fwdDot) < (fury ? 0.5 : 0.4) && r.reload[side] <= 0) { r.reload[side] = fury ? 3 + Math.random() * 1.5 : 5 + Math.random() * 2; broadcast('rfire', { i: raiders.indexOf(r), s: side }); }
+          if (Math.abs(fwdDot) < (fury ? 0.5 : 0.4) && r.reload[side] <= 0) { r.reload[side] = fury ? 2.2 + Math.random() * 1 : 3.5 + Math.random() * 1.5; broadcast('rfire', { i: raiders.indexOf(r), s: side }); }
         }
       } else {
         r.state = 'patrol'; r.target = null;
