@@ -2978,9 +2978,10 @@ window.__pgBoot = () => {
     }
     // helm
     const hz = S.helm.z, hy = S.helm.castle !== undefined ? tops[S.helm.castle] : F.deckY(hz);
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 16), wood); wheel.position.set(0, hy + 1.3, hz + 1); g.add(wheel);
-    for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.07), wood); sp.position.copy(wheel.position); sp.rotation.z = i * Math.PI / 4; g.add(sp); }
-    spar(g, V(0, hy, hz + 1.15), V(0, hy + 1.25, hz + 1.15), 0.12, wood);
+    const wf = S.titan ? SHIP_SCALE.galleon / SHIP_SCALE.titan : 1;   // the wheel stays a man-sized wheel, however big the ship
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.62 * wf, 0.07 * wf, 6, 16), wood); wheel.position.set(0, hy + 1.3 * wf, hz + 1); g.add(wheel);
+    for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(1.7 * wf, 0.07 * wf, 0.07 * wf), wood); sp.position.copy(wheel.position); sp.rotation.z = i * Math.PI / 4; g.add(sp); }
+    spar(g, V(0, hy, hz + 1.15), V(0, hy + 1.25 * wf, hz + 1.15), 0.12 * wf, wood);
     const K = SHIP_SCALE[key];
     g.scale.setScalar(K);
     T.L = L * K; T.B = B * K; T.H = (S.D + 3) * K; T.speed = S.speed * 3.2;
@@ -4355,6 +4356,28 @@ window.__pgBoot = () => {
       { role: 'lookout', mast: 1, job: 'scan' },
       { role: 'lookout', mast: 0, job: 'scan' },
     ],
+    titan: (() => {   // a man-o'-war's company: gun crews all down the waist, topmen on three masts, a capstan gang, marines and officers aft
+      const H = Math.PI / 2, c = [
+        { role: 'bosun', name: 'Bosun Briggs', patrol: [[3.2, -7], [3.2, 14.5]] },
+        { role: 'sailor', job: 'swab', patrol: [[-3.2, 14.5], [-3.2, -7]] }, { role: 'sailor', job: 'swab', patrol: [[1.3, -8], [1.3, 15]] }, { role: 'sailor', job: 'swab', patrol: [[-1.3, 15.5], [-1.3, 3]] },
+        { role: 'gunner', name: 'Gunner Rook', at: [6.0, -3.75], face: H, job: 'ram' },
+        { role: 'sailor', job: 'carry', patrol: [[4.4, 15], [1.6, 11.4]] }, { role: 'sailor', job: 'carry', patrol: [[-4.4, 15], [-1.6, 11.4]] }, { role: 'sailor', job: 'carry', patrol: [[5.2, -2.4], [2.2, 2.6]] },
+        { role: 'sailor', at: [2.1, 7.4], face: H, job: 'coil' }, { role: 'sailor', at: [-2.1, -4.3], face: -H, job: 'coil' },
+        { role: 'sailor', at: [-3.6, -0.3], face: -H, job: 'haul' }, { role: 'sailor', at: [3.6, 0.9], face: H, job: 'coil' },
+        { role: 'sailor', at: [0, 24], face: 0, job: 'scan' }, { role: 'sailor', at: [2.6, 20], face: H, job: 'haul' }, { role: 'sailor', at: [-2.6, 21.2], face: -H, job: 'coil' }, { role: 'sailor', at: [-1.2, 18.4], face: 0, job: 'haul' },
+        { role: 'officer', name: 'Quartermaster Nell', at: [2.8, -13.5], face: 0, job: 'glass' },
+        { role: 'officer', name: 'First Mate Hargreave', lines: 'mate', patrol: [[-2.2, -11], [-2.2, -15.5]] },
+        { role: 'officer', name: 'Master Gunner Vane', patrol: [[0.6, -7.6], [0.6, 6.5]] },
+        { role: 'sailor', name: 'Drummer', at: [1.6, -8.4], face: 0, job: 'haul' },
+        { role: 'sailor', at: [5.2, -20], face: H, job: 'scan' }, { role: 'sailor', at: [-5.2, -19], face: -H, job: 'scan' }, { role: 'sailor', at: [4.8, -15.5], face: H, job: 'scan' },
+        { role: 'sailor', at: [0, -25.5], face: Math.PI, job: 'scan' }, { role: 'sailor', at: [-3, -24], face: -H, job: 'coil' }, { role: 'sailor', at: [2.4, -27.2], face: Math.PI, job: 'scan' },
+      ];
+      for (const z of [1.65, 7.05, 14.8]) { c.push({ role: 'sailor', at: [6.0, z], face: H, job: 'ram' }); }
+      for (const z of [-3.75, 1.65, 7.05, 14.8]) c.push({ role: 'sailor', at: [-6.0, z], face: -H, job: 'ram' });
+      for (const z of [-2.4, 3.0, 13.45]) { c.push({ role: 'sailor', at: [6.1, z], face: H, job: 'haul' }); c.push({ role: 'sailor', at: [-6.1, z], face: -H, job: 'haul' }); }
+      for (const mast of [0, 1, 2]) { c.push({ role: 'sailor', job: 'climb', mast, side: -1 }); c.push({ role: 'sailor', job: 'climb', mast, side: 1 }); c.push({ role: 'lookout', mast, job: 'scan' }); }
+      for (const k of [0, 2, 4, 6]) c.push({ role: 'sailor', capstan: k, cz: 8.6, cr: 0.78 });
+      return c; })(),
     brig: [
       { role: 'bosun', name: 'Bosun Briggs', patrol: [[2, -5], [2, 8]] },
       { role: 'sailor', at: [-2.3, 4], face: -Math.PI / 2, job: 'haul' },
@@ -4369,13 +4392,13 @@ window.__pgBoot = () => {
 
   function spawnCrew() {
     ship.crew = [];
-    const plan = CREW_PLANS[ship.key] || (ship.key === 'titan' ? CREW_PLANS.galleon : null); if (!plan) return;   // the Titan is crewed like a galleon
+    const plan = CREW_PLANS[ship.key]; if (!plan) return;
     const used = [];
     plan.forEach(p => {
       const q = Object.assign({}, p);
       if (p.role === 'lookout') { const m = ship.walk.masts[p.mast]; q.at = [1.1, m.z]; q.y = m.pTop + 0.3; q.face = 0; q.name = 'Lookout'; }
       if (p.capstan !== undefined) {
-        const pts = []; for (let i = 0; i < 8; i++) { const a = (i + p.capstan) * Math.PI / 4; pts.push([Math.sin(a) * 1.05, 8.2 + Math.cos(a) * 1.05]); }
+        const pts = [], cz = p.cz ?? 8.2, cr = p.cr ?? 1.05; for (let i = 0; i < 8; i++) { const a = (i + p.capstan) * Math.PI / 4; pts.push([Math.sin(a) * cr, cz + Math.cos(a) * cr]); }
         q.patrol = pts; q.noWait = true; q.job = 'push';
       }
       if (p.job === 'climb') { // up and down the rope ladders
