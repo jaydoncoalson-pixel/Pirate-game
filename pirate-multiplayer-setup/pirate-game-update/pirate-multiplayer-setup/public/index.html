@@ -316,8 +316,10 @@ window.__pgBoot = () => {
   const saveOnExit = () => { const a = window.__pgAuth; if (!a || window.__accLock) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(STATE)); navigator.sendBeacon(a.api + '/api/save', new Blob([JSON.stringify({ token: a.token, save: STATE })], { type: 'application/json' })); } catch (e) {} };
   addEventListener('pagehide', saveOnExit); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveOnExit(); });
   if (window.__pgAuth && window.__pgAuth.fresh) setTimeout(pushSave, 500);   // a new server account: store its starting save right away
-  const lookToChar = L => ({ coat: L.coat, shirt: L.shirt, pants: L.pants, skin: L.skin, hair: L.hair, beard: L.beardOn ? L.hair : undefined, eyepatch: L.eyepatch,
-    hat: L.hat === 'none' ? undefined : L.hat, hatColor: L.hatColor, feather: L.hat === 'tricorn' ? L.feather : undefined, sword: true, belt: 0x1e140c });
+  const lookToChar = L => { const bs = L.beardStyle || (L.beardOn === false ? 'none' : 'full');
+    return { coat: L.coat, shirt: L.shirt, pants: L.pants, skin: L.skin, hair: L.hairStyle === 'bald' ? undefined : L.hair, hairStyle: L.hairStyle || 'short', longHair: L.hairStyle === 'long', beard: bs !== 'none' ? L.hair : undefined, beardStyle: bs, eyepatch: L.eyepatch,
+      hat: L.hat === 'none' ? undefined : L.hat, hatColor: L.hatColor, feather: (L.hat === 'tricorn' || L.hat === 'cavalier' || L.hat === 'bicorne') ? L.feather : undefined, sword: true, belt: L.sash || 0x1e140c, boots: L.boots,
+      earring: !!L.earring, hook: !!L.hook, scar: !!L.scar, coatTrim: !!L.coatTrim, parrot: L.parrot && L.parrot !== 'none' ? L.parrot : null }; };
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1.0, 14000);
 
   const SUN_DIR = new THREE.Vector3(-0.45, 0.32, -0.83).normalize();
@@ -1940,6 +1942,20 @@ window.__pgBoot = () => {
       tails.position.y = 0.72; tails.scale.z = 0.82; body.add(tails);
       [-1, 1].forEach(s => { for (let i = 0; i < 3; i++) sph(0.022, M(0xd4af37), s * 0.13, 1.5 - i * 0.14, 0.215); });
     }
+    if (o.coatTrim && o.coat) {   // gold braid down the coat front and gold epaulettes
+      const gold = M(0xd9b13a); [-1, 1].forEach(s2 => { const t2 = box(0.025, 0.64, 0.02, gold, s2 * 0.11, 1.36, 0.215); t2.rotation.x = -0.08;
+        const ep = sph(0.1, gold, s2 * 0.33, 1.73, 0, cur, 1, 0.35, 1); for (let k = -2; k <= 2; k++) cyl(0.008, 0.008, 0.08, gold, s2 * (0.33 + 0.08), 1.68, k * 0.03, cur, 4); });
+    }
+    if (o.parrot) {   // a parrot riding on his right shoulder
+      const P2 = { red: [0xd0281a, 0x2a60d0, 0xe8c020], green: [0x2aa040, 0xd0281a, 0xe8d020], blue: [0x2a70d8, 0xe8c020, 0x1a1a1a], white: [0xf2f2ea, 0xe8d020, 0x9a9a9a] }[o.parrot] || [0xd0281a, 0x2a60d0, 0xe8c020];
+      const pg = new THREE.Group(); pg.position.set(0.34, 1.76 - HIP, -0.02); upper.add(pg);
+      const bodyM = M(P2[0]); const pb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), bodyM); pb.scale.set(0.85, 1.25, 0.95); pb.position.y = 0.08; pg.add(pb);
+      const ph = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), bodyM); ph.position.set(0, 0.19, 0.03); pg.add(ph);
+      const bk = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.06, 6), M(0x2a2a2a)); bk.rotation.x = Math.PI / 2 + 0.6; bk.position.set(0, 0.17, 0.085); pg.add(bk);
+      [-1, 1].forEach(s2 => { const wg = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), M(P2[1])); wg.scale.set(0.35, 1.1, 0.9); wg.position.set(s2 * 0.06, 0.07, -0.01); pg.add(wg);
+        const ey = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), M(0x111111)); ey.position.set(s2 * 0.035, 0.205, 0.06); pg.add(ey); });
+      const tl = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.2, 6), M(P2[2])); tl.rotation.x = Math.PI - 0.4; tl.position.set(0, -0.04, -0.07); pg.add(tl);
+    }
     const belt = cyl(0.265, 0.265, 0.1, M(o.belt || 0x3a2416), 0, 1.0, 0); belt.scale.z = 0.74;
     box(0.11, 0.09, 0.04, M(0xc9a646), 0, 1.0, 0.2);
     // arms
@@ -1952,7 +1968,11 @@ window.__pgBoot = () => {
       sph(0.08, top, 0, 0, 0, fa);
       cyl(0.078, 0.066, 0.3, top, 0, -0.15, 0, fa);
       cyl(0.085, 0.085, 0.06, shirt, 0, -0.31, 0, fa);
-      sph(0.072, skin, 0, -0.39, 0, fa, 0.9, 1.1, 1);
+      if (o.hook && s < 0) {   // a steel hook where his left hand was
+        const steel = M(0xb8bcc4); cyl(0.07, 0.055, 0.1, M(0x3a2416), 0, -0.36, 0, fa);
+        const hk = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.016, 6, 12, Math.PI * 1.3), steel); hk.position.set(0, -0.47, 0.02); hk.rotation.set(0, Math.PI / 2, 0.6); fa.add(hk);
+        cyl(0.016, 0.016, 0.08, steel, 0, -0.42, 0, fa, 6);
+      } else sph(0.072, skin, 0, -0.39, 0, fa, 0.9, 1.1, 1);
       return g;
     });
     // head
@@ -1976,10 +1996,18 @@ window.__pgBoot = () => {
       const cap = new THREE.Mesh(new THREE.SphereGeometry(0.25, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), hairMat);
       cap.position.set(0, 0.02, -0.01); cap.rotation.x = -0.35; cap.scale.set(1, 1.05, 1.05); head.add(cap);
       if (o.longHair) { const lh = box(0.44, 0.46, 0.14, hairMat, 0, -0.14, -0.15, head); lh.rotation.x = 0.1; }
+      if (o.hairStyle === 'ponytail') { sph(0.05, M(0x3a2416), 0, -0.02, -0.24, head); const pt = cyl(0.045, 0.02, 0.42, hairMat, 0, -0.24, -0.28, head, 8); pt.rotation.x = 0.35; }
+      if (o.hairStyle === 'braids') [-1, 1].forEach(s2 => { for (let k = 0; k < 4; k++) sph(0.04 - k * 0.004, hairMat, s2 * 0.2, -0.1 - k * 0.075, -0.06, head); });
     }
+    if (o.earring) { const er = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 14), M(0xd9b13a)); er.position.set(0.235, -0.07, 0.01); er.rotation.y = Math.PI / 2; head.add(er); }
+    if (o.scar) { const sc2 = box(0.016, 0.17, 0.01, M(0x9a4a3a), 0.09, 0.02, 0.23, head); sc2.rotation.z = 0.35; }
     if (o.beard) {
       const bm = M(o.beard);
-      sph(0.19, bm, 0, -0.15, 0.08, head, 1.05, 0.95, 0.8);
+      const bs = o.beardStyle || 'full';
+      if (bs === 'goatee') sph(0.07, bm, 0, -0.2, 0.18, head, 0.8, 1.2, 0.7);
+      else { sph(0.19, bm, 0, -0.15, 0.08, head, 1.05, bs === 'long' || bs === 'braided' ? 1.35 : 0.95, 0.8);
+        if (bs === 'long') sph(0.13, bm, 0, -0.33, 0.12, head, 1, 1.2, 0.7);
+        if (bs === 'braided') [-0.06, 0.06].forEach(bx => { for (let k = 0; k < 4; k++) sph(0.035, bm, bx, -0.3 - k * 0.07, 0.14, head); sph(0.02, M(0xd9b13a), bx, -0.6, 0.14, head); }); }
       const mu = box(0.17, 0.04, 0.04, bm, 0, -0.075, 0.215, head); mu.rotation.x = 0.2;
     }
     const hatMat = M(o.hatColor || 0x1c1c1c);
@@ -2003,6 +2031,19 @@ window.__pgBoot = () => {
       cyl(0.46, 0.46, 0.03, hatMat, 0, 0.17, 0, head, 24);
       cyl(0.18, 0.22, 0.18, hatMat, 0, 0.26, 0, head, 16);
       cyl(0.225, 0.225, 0.05, M(0x7a2a1e), 0, 0.2, 0, head, 16);
+    } else if (o.hat === 'bicorne') {   // worn athwart, edged in gold, with a cockade
+      const half = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.08, 24, 1, false, 0, Math.PI), hatMat); half.rotation.set(Math.PI / 2, 0, Math.PI / 2); half.position.set(0, 0.2, 0); half.scale.set(1, 1, 0.75); head.add(half);
+      const edge = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.016, 5, 24, Math.PI), M(0xd9b13a)); edge.rotation.y = Math.PI / 2; edge.position.set(0, 0.2, 0); edge.scale.set(1, 0.75, 1); head.add(edge);
+      sph(0.2, hatMat, 0, 0.14, 0, head, 1.1, 0.6, 1.1); sph(0.045, M(0xd9b13a), 0.05, 0.3, 0.06, head, 1, 1, 0.4);
+      if (o.feather) { const f = sph(0.04, M(o.feather), 0, 0.5, -0.02, head, 0.6, 2.6, 0.6); f.rotation.z = 0.2; }
+    } else if (o.hat === 'cavalier') {   // a broad plumed hat, brim cocked up on one side
+      const br = cyl(0.5, 0.5, 0.03, hatMat, 0, 0.17, 0, head, 28); br.rotation.z = 0.18;
+      cyl(0.19, 0.23, 0.24, hatMat, 0, 0.3, 0, head, 16); cyl(0.235, 0.235, 0.05, M(0xd9b13a), 0, 0.21, 0, head, 16);
+      const plume = sph(0.09, M(o.feather || 0xf3f3f3), -0.15, 0.4, -0.05, head, 0.8, 0.7, 3.2); plume.rotation.set(-0.5, 0.4, 0.9);
+    } else if (o.hat === 'crown') {   // a pirate king's crown
+      const gold = M(0xe9bf4a); cyl(0.235, 0.235, 0.13, gold, 0, 0.2, 0, head, 18);
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, sp = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.13, 4), gold); sp.position.set(Math.sin(a) * 0.225, 0.32, Math.cos(a) * 0.225); head.add(sp); }
+      [[0, 0x2a60d0], [Math.PI / 2, 0xc8202a], [-Math.PI / 2, 0x20a050]].forEach(([a, c]) => sph(0.03, M(c), Math.sin(a) * 0.24, 0.2, Math.cos(a) * 0.24, head));
     } else if (o.hat === 'cap') {
       const c = new THREE.Mesh(new THREE.SphereGeometry(0.255, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), hatMat); c.position.y = 0.03; head.add(c);
       box(0.3, 0.025, 0.16, hatMat, 0, 0.04, 0.27, head);
@@ -2327,8 +2368,20 @@ window.__pgBoot = () => {
   }
   const texCache = {};
   const cached = (k, f) => texCache[k] || (texCache[k] = f());
-  const sailTex = col => cached('sail' + col, () => canvasTex(256, 256, (g, w, h) => {
+  const sailTex = (col, pat, em) => cached('sail' + col + (pat || '') + (em || ''), () => canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = hex(col); g.fillRect(0, 0, w, h);
+    if (pat && pat !== 'plain') {   // painted designs
+      const E = hex(em != null ? em : 0x111111); g.fillStyle = E; g.strokeStyle = E;
+      if (pat === 'stripes') for (let x = 0; x < w; x += 64) g.fillRect(x, 0, 32, h);
+      else if (pat === 'halves') g.fillRect(0, 0, w, h / 2);
+      else if (pat === 'cross') { g.fillRect(w / 2 - 22, 0, 44, h); g.fillRect(0, h / 2 - 22, w, 44); }
+      else if (pat === 'sun') { g.beginPath(); g.arc(w / 2, h / 2, 42, 0, 7); g.fill(); g.lineWidth = 10; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; g.beginPath(); g.moveTo(w / 2 + Math.cos(a) * 54, h / 2 + Math.sin(a) * 54); g.lineTo(w / 2 + Math.cos(a) * 100, h / 2 + Math.sin(a) * 100); g.stroke(); } }
+      else if (pat === 'skull') { g.beginPath(); g.arc(w / 2, h / 2 - 16, 46, 0, 7); g.fill(); g.fillRect(w / 2 - 26, h / 2 + 14, 52, 30);
+        g.lineWidth = 16; g.lineCap = 'round'; g.beginPath(); g.moveTo(w / 2 - 80, h / 2 + 60); g.lineTo(w / 2 + 80, h / 2 + 100); g.moveTo(w / 2 + 80, h / 2 + 60); g.lineTo(w / 2 - 80, h / 2 + 100); g.stroke();
+        g.fillStyle = hex(col); g.beginPath(); g.arc(w / 2 - 17, h / 2 - 18, 13, 0, 7); g.arc(w / 2 + 17, h / 2 - 18, 13, 0, 7); g.fill(); g.fillRect(w / 2 - 5, h / 2 + 2, 10, 12); }
+      else if (pat === 'serpent') { g.lineWidth = 22; g.lineCap = 'round'; g.beginPath(); for (let k = 0; k <= 40; k++) { const t = k / 40, x = 40 + t * 176, y = h / 2 + Math.sin(t * Math.PI * 2.5) * 60; k ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+        g.beginPath(); g.arc(216, h / 2 + Math.sin(Math.PI * 2.5) * 60, 22, 0, 7); g.fill(); }
+    }
     const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, 'rgba(255,255,255,0.12)'); grd.addColorStop(1, 'rgba(60,40,10,0.16)'); g.fillStyle = grd; g.fillRect(0, 0, w, h);
     g.fillStyle = 'rgba(90,65,30,0.2)'; for (let x = 14; x < w; x += 26) g.fillRect(x, 0, 2, h);
     g.fillStyle = 'rgba(90,65,30,0.12)'; for (let y = 40; y < h; y += 64) g.fillRect(0, y, w, 2);
@@ -2391,6 +2444,15 @@ window.__pgBoot = () => {
       } else if (kind === 'black') { g.fillStyle = '#111'; g.fillRect(0, 0, w, h); }
       else if (kind === 'blue') { g.fillStyle = '#2b4a7a'; g.fillRect(0, 0, w, h); g.fillStyle = '#f2ead8'; g.beginPath(); g.arc(w / 2, h / 2, 14, 0, 7); g.fill(); }
       else if (kind === 'green') { g.fillStyle = '#2e7d4f'; g.fillRect(0, 0, w, h); g.fillStyle = '#1f5a38'; g.fillRect(0, h - 14, w, 14); }
+      else if (kind === 'white') { g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h); }
+      else if (kind === 'purple') { g.fillStyle = '#5a2a7a'; g.fillRect(0, 0, w, h); g.fillStyle = '#d9b13a'; g.fillRect(0, h / 2 - 4, w, 8); }
+      else if (kind === 'skullswords' || kind === 'redskull') {
+        g.fillStyle = kind === 'redskull' ? '#8e1414' : '#111'; g.fillRect(0, 0, w, h); g.fillStyle = kind === 'redskull' ? '#111' : '#eee'; g.strokeStyle = g.fillStyle;
+        g.beginPath(); g.arc(w / 2, h / 2 - 8, 15, 0, Math.PI * 2); g.fill(); g.fillRect(w / 2 - 8, h / 2 + 2, 16, 9);
+        g.fillStyle = kind === 'redskull' ? '#8e1414' : '#111'; g.beginPath(); g.arc(w / 2 - 6, h / 2 - 8, 4.5, 0, 7); g.arc(w / 2 + 6, h / 2 - 8, 4.5, 0, 7); g.fill();
+        if (kind === 'skullswords') { g.strokeStyle = '#eee'; g.lineWidth = 4; g.beginPath(); g.moveTo(w / 2 - 34, h - 6); g.lineTo(w / 2 + 30, 10); g.moveTo(w / 2 + 34, h - 6); g.lineTo(w / 2 - 30, 10); g.stroke(); }
+      }
+      else if (kind === 'hourglass') { g.fillStyle = '#111'; g.fillRect(0, 0, w, h); g.fillStyle = '#eee'; g.beginPath(); g.moveTo(w / 2 - 16, 14); g.lineTo(w / 2 + 16, 14); g.lineTo(w / 2, h / 2); g.lineTo(w / 2 + 16, h - 14); g.lineTo(w / 2 - 16, h - 14); g.lineTo(w / 2, h / 2); g.fill(); g.fillRect(w / 2 - 20, 10, 40, 4); g.fillRect(w / 2 - 20, h - 14, 40, 4); }
       else if (kind === 'yellow') { g.fillStyle = '#e8b931'; g.beginPath(); g.moveTo(0, 8); g.lineTo(w, h / 2); g.lineTo(0, h - 8); g.fill(); }
     }));
   }
@@ -2544,12 +2606,12 @@ window.__pgBoot = () => {
     const m = 1 / SHIP_SCALE.titan, dy = z => F.deckY(z), half = z => F.pt(z / (L / 2), 1)[0] - 0.25;
     const wood = new THREE.MeshLambertMaterial({ color: 0x5a3a22 }), dwood = new THREE.MeshLambertMaterial({ color: 0x3a2516 }), rope = new THREE.MeshLambertMaterial({ color: 0xb8a27a }), canvas = new THREE.MeshLambertMaterial({ color: 0x8a8070 });
     const block = (x, z, hw, hd) => obstacles.push({ x, z, hw, hd, y: dy(z) });
-    const deckGun = (x, z, sd) => { const y = dy(z), c = new THREE.Group(); c.position.set(x, y, z); c.rotation.y = sd > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(c);
+    const deckGun = (x, z, sd, yy) => { const y = yy ?? dy(z), c = new THREE.Group(); c.position.set(x, y, z); c.rotation.y = sd > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(c);
       const car = new THREE.Mesh(new THREE.BoxGeometry(1.0 * m, 0.45 * m, 1.6 * m), wood); car.position.y = 0.32 * m; c.add(car);
       for (const wx of [-0.55, 0.55]) for (const wz of [-0.55, 0.55]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * m, 0.22 * m, 0.12 * m, 10), dwood); wh.rotation.z = Math.PI / 2; wh.position.set(wx * m, 0.22 * m, wz * m); c.add(wh); }
       const br = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * m, 0.24 * m, 2.6 * m, 10), dark); br.rotation.x = Math.PI / 2; br.position.set(0, 0.75 * m, 0.55 * m); c.add(br);
-      block(x, z, 0.8 * m, 0.8 * m); };
-    const shotPile = (x, z) => { const y = dy(z), bg = new THREE.SphereGeometry(0.11 * m, 6, 5); for (let l = 0; l < 3; l++) for (let i = 0; i < 3 - l; i++) for (let j = 0; j < 3 - l; j++) { const b = new THREE.Mesh(bg, dark); b.position.set(x + (i - (2 - l) / 2) * 0.22 * m, y + (0.11 + l * 0.18) * m, z + (j - (2 - l) / 2) * 0.22 * m); g.add(b); } };
+      obstacles.push({ x, z, hw: 0.8 * m, hd: 0.8 * m, y }); };
+    const shotPile = (x, z, yy) => { const y = yy ?? dy(z), bg = new THREE.SphereGeometry(0.11 * m, 6, 5); for (let l = 0; l < 3; l++) for (let i = 0; i < 3 - l; i++) for (let j = 0; j < 3 - l; j++) { const b = new THREE.Mesh(bg, dark); b.position.set(x + (i - (2 - l) / 2) * 0.22 * m, y + (0.11 + l * 0.18) * m, z + (j - (2 - l) / 2) * 0.22 * m); g.add(b); } };
     const keg = (x, z, y = dy(z)) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * m, 0.28 * m, 0.8 * m, 10), wood); b.position.set(x, y + 0.4 * m, z); g.add(b);
       for (const h of [0.12, 0.68]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.29 * m, 0.29 * m, 0.05 * m, 10), dark); r.position.set(x, y + h * m, z); g.add(r); } };
     const crate = (x, z, sz, y = dy(z)) => { const c = new THREE.Mesh(new THREE.BoxGeometry(sz * m, sz * m, sz * m), new THREE.MeshLambertMaterial({ color: 0x8a6538 })); c.position.set(x, y + sz * m / 2, z); c.rotation.y = Math.abs(x * 7 + z) % 0.6; g.add(c); };
@@ -2605,13 +2667,108 @@ window.__pgBoot = () => {
     // tall red war standards at the quarterdeck rail
     for (const sd of [-1, 1]) { const z = -10.1, y = F.deckY(z) + 1.7, x = sd * (F.pt(z / (L / 2), 1)[0] - 0.4), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.2, 6), dark); pole.position.set(x, y + 1.6, z); g.add(pole);
       const ban = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), new THREE.MeshLambertMaterial({ color: 0x8e1414, side: THREE.DoubleSide })); ban.position.set(x, y + 2.3, z + 0.48); ban.rotation.y = Math.PI / 2; g.add(ban); }
+    // ---- up on the castles and round the waist: the rest of a man-o'-war's furniture ----
+    const ctop = []; S.castles.forEach((c, ci) => { const u = Math.max(-1, Math.min(1, (c.z0 + c.z1) / 2 / (L / 2))); ctop[ci] = (c.on !== undefined ? ctop[c.on] : F.sheer(u) - S.bulwark) + c.h; });
+    const cw = ci => { const c = S.castles[ci], u = Math.max(-1, Math.min(1, (c.z0 + c.z1) / 2 / (L / 2))); return F.pt(u, 1)[0] * (c.wk || 0.95); };
+    const brass = new THREE.MeshLambertMaterial({ color: 0xb08a3a }), glowL = new THREE.MeshBasicMaterial({ color: 0xffc860 });
+    const swivel = (x, y, z, face) => { const sg = new THREE.Group(); sg.position.set(x, y, z); sg.rotation.y = face; g.add(sg);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * m, 0.07 * m, 1.1 * m, 6), dark); post.position.y = 0.55 * m; sg.add(post);
+      const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.3 * m, 0.08 * m, 0.08 * m), dark); yoke.position.y = 1.12 * m; sg.add(yoke);
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.07 * m, 0.1 * m, 1.3 * m, 8), brass); br.rotation.x = Math.PI / 2; br.position.set(0, 1.2 * m, 0.35 * m); sg.add(br); };
+    const lanternPost = (x, y, z) => { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * m, 0.06 * m, 2.4 * m, 6), dark); post.position.set(x, y + 1.2 * m, z); g.add(post);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * m, 0.12 * m, 0.4 * m, 6), glowL); lamp.position.set(x, y + 2.55 * m, z); g.add(lamp);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.2 * m, 0.2 * m, 6), dark); cap.position.set(x, y + 2.85 * m, z); g.add(cap); };
+    const chest = (x, y, z, rot) => { const cg = new THREE.Group(); cg.position.set(x, y, z); cg.rotation.y = rot; g.add(cg);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.1 * m, 0.6 * m, 0.7 * m), dwood); b.position.y = 0.3 * m; cg.add(b);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * m, 0.35 * m, 1.1 * m, 10, 1, false, 0, Math.PI), dwood); lid.rotation.z = Math.PI / 2; lid.position.y = 0.6 * m; cg.add(lid);
+      for (const bx of [-0.4, 0, 0.4]) { const band = new THREE.Mesh(new THREE.BoxGeometry(0.06 * m, 0.98 * m, 0.72 * m), brass); band.position.set(bx * m, 0.48 * m, 0); band.scale.y = 0.62; cg.add(band); } };
+    // quarterdeck: binnacle before the wheel, a skylight over the great cabin, chests, a chart table, swivel guns all along her rails, lanterns
+    { const qy = ctop[1], half1 = cw(1);
+      const bn = new THREE.Group(); bn.position.set(0, qy, -10.6); g.add(bn);
+      const bb = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * m, 0.36 * m, 1.1 * m, 8), dwood); bb.position.y = 0.55 * m; bn.add(bb);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.28 * m, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), brass); dome.position.y = 1.1 * m; bn.add(dome);
+      const sky = new THREE.Group(); sky.position.set(0, qy, -15.2); g.add(sky);
+      const sb = new THREE.Mesh(new THREE.BoxGeometry(2.6 * m, 0.6 * m, 1.8 * m), dwood); sb.position.y = 0.3 * m; sky.add(sb);
+      [-1, 1].forEach(sd => { const pane = new THREE.Mesh(new THREE.BoxGeometry(1.3 * m, 0.05 * m, 1.9 * m), new THREE.MeshLambertMaterial({ color: 0x6a8aa0, emissive: 0x2a2010 })); pane.position.set(sd * 0.6 * m, 0.8 * m, 0); pane.rotation.z = -sd * 0.45; sky.add(pane); });
+      obstacles.push({ x: 0, z: -15.2, hw: 1.3 * m, hd: 0.9 * m, y: qy });
+      chest(half1 - 1.2 * m, qy, -13.8, Math.PI / 2); chest(-half1 + 1.2 * m, qy, -14.2, -Math.PI / 2); chest(half1 - 1.2 * m, qy, -16.4, Math.PI / 2);
+      const tbl = new THREE.Group(); tbl.position.set(-half1 + 2.4 * m, qy, -11.4); g.add(tbl);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.6 * m, 0.08 * m, 1.0 * m), wood); top.position.y = 0.95 * m; tbl.add(top);
+      const chart = new THREE.Mesh(new THREE.BoxGeometry(1.3 * m, 0.01 * m, 0.8 * m), new THREE.MeshLambertMaterial({ color: 0xe8dcb0 })); chart.position.y = 1.0 * m; tbl.add(chart);
+      for (const [lx, lz] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08 * m, 0.95 * m, 0.08 * m), dwood); leg.position.set(lx * m, 0.47 * m, lz * m); tbl.add(leg); }
+      for (let z = -11; z >= -27.5; z -= 3.2) for (const sd of [-1, 1]) { const zz = z, hw = F.pt(zz / (L / 2), 1)[0] * (zz < -16.5 ? 0.92 : 1.0) - 0.4 * m, y = zz < -16.5 ? ctop[2] : qy; if (zz < -28.5) continue; swivel(sd * hw, y, zz, sd > 0 ? Math.PI / 2 : -Math.PI / 2); }
+      lanternPost(half1 - 0.6 * m, qy, -9.9); lanternPost(-half1 + 0.6 * m, qy, -9.9); lanternPost(0, ctop[3], -28.3); }
+    // forecastle: bow-chaser guns pointing ahead, the anchor windlass, and great anchors hung from the catheads
+    { const fy = ctop[0], zf = 22, hf = cw(0);
+      for (const sd of [-1, 1]) { const x = sd * 1.6 * m, c = new THREE.Group(); c.position.set(x, fy, 24.5); g.add(c);
+        const car = new THREE.Mesh(new THREE.BoxGeometry(1.0 * m, 0.45 * m, 1.6 * m), wood); car.position.y = 0.32 * m; c.add(car);
+        const br = new THREE.Mesh(new THREE.CylinderGeometry(0.15 * m, 0.22 * m, 2.6 * m, 10), dark); br.rotation.x = Math.PI / 2; br.position.set(0, 0.72 * m, 0.7 * m); c.add(br);
+        obstacles.push({ x, z: 24.5, hw: 0.6 * m, hd: 0.9 * m, y: fy }); }
+      const wl = new THREE.Mesh(new THREE.CylinderGeometry(0.4 * m, 0.4 * m, 3.4 * m, 10), dwood); wl.rotation.z = Math.PI / 2; wl.position.set(0, fy + 0.5 * m, zf - 1.5); g.add(wl);
+      for (const sd of [-1, 1]) { const bitt = new THREE.Mesh(new THREE.BoxGeometry(0.35 * m, 1.1 * m, 0.35 * m), dwood); bitt.position.set(sd * 1.9 * m, fy + 0.55 * m, zf - 1.5); g.add(bitt); }
+      obstacles.push({ x: 0, z: zf - 1.5, hw: 2.1 * m, hd: 0.5 * m, y: fy });
+      for (const sd of [-1, 1]) { const zA = 21.5, [x] = F.pt(zA / (L / 2), 1), cat = new THREE.Mesh(new THREE.BoxGeometry(2.2 * m, 0.3 * m, 0.3 * m), dwood); cat.position.set(sd * (x + 0.6 * m), fy + 0.2 * m, zA); g.add(cat);
+        const an = new THREE.Group(); an.position.set(sd * (x + 1.4 * m), fy - 1.6 * m, zA); g.add(an);
+        const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * m, 0.1 * m, 3.4 * m, 8), dark); an.add(shank);
+        const stock = new THREE.Mesh(new THREE.BoxGeometry(0.15 * m, 0.15 * m, 2.4 * m), dwood); stock.position.y = 1.5 * m; an.add(stock);
+        const arm = new THREE.Mesh(new THREE.TorusGeometry(0.9 * m, 0.09 * m, 6, 14, Math.PI), dark); arm.rotation.z = Math.PI; arm.position.y = -1.3 * m; an.add(arm);
+        for (const ax of [-0.9, 0.9]) { const fl = new THREE.Mesh(new THREE.ConeGeometry(0.22 * m, 0.5 * m, 3), dark); fl.position.set(ax * m, -1.2 * m, 0); an.add(fl); }
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22 * m, 0.05 * m, 6, 12), dark); ring.position.y = 1.85 * m; an.add(ring); }
+      lanternPost(hf - 0.6 * m, fy, 17.1); lanternPost(-hf + 0.6 * m, fy, 17.1); }
+    // carronades down both rails of the quarterdeck and forecastle, shot and powder by them, and stores stacked about
+    { for (let z = -11.6; z >= -16; z -= 1.5) for (const sd of [-1, 1]) { const x = sd * (cw(1) - 1.0 * m); deckGun(x, z, sd, ctop[1]); }
+      for (let z = 17.6; z <= 22.4; z += 1.6) for (const sd of [-1, 1]) { const x = sd * (F.pt(z / (L / 2), 1)[0] * 0.94 - 1.0 * m); deckGun(x, z, sd, ctop[0]); }
+      for (const sd of [-1, 1]) { shotPile(sd * (cw(1) - 2.4 * m), -12.4, ctop[1]); shotPile(sd * (cw(0) - 2.4 * m), 19.2, ctop[0]);
+        keg(sd * 1.2 * m, -17.0 + 0.4 * m, ctop[2]); keg(sd * 1.8 * m, -17.0 + 0.4 * m, ctop[2]); crate(sd * 2.6 * m, -18.4, 0.9, ctop[2]); crate(sd * 2.6 * m, -18.4, 0.6, ctop[2] + 0.9 * m);
+        keg(sd * 1.4 * m, 18.0, ctop[0]); keg(sd * 1.4 * m, 18.6, ctop[0]); crate(sd * 2.2 * m, 23.4, 1.0, ctop[0]); }
+      for (const sd of [-1, 1]) { const z = -21.8, x = sd * 2.2 * m, pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * m, 0.04 * m, 1.6 * m, 6), dark); pole.position.set(x, ctop[2] + 0.8 * m, z); g.add(pole);
+        const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * m, 0.25 * m, 0.25 * m, 10), brass); bell.position.set(x, ctop[2] + 1.6 * m, z); g.add(bell); } }
+    // the waist: spare spars lashed down along the deck, the galley chimney, a chicken coop, cannonball garlands at the hatch, lantern posts
+    { for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) { const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * m, 0.14 * m, 9 * m, 8), wood); sp.rotation.x = Math.PI / 2; sp.position.set(sd * (3.4 + k * 0.32) * m, dy(-3.5) + (0.14 + (k === 2 ? 0.25 : 0)) * m, -3.5 + (k === 2 ? 0 : k * 0.4)); if (k === 2) sp.position.x = sd * 3.55 * m; g.add(sp); }
+      for (const sd of [-1, 1]) obstacles.push({ x: sd * 3.6 * m, z: -3.5, hw: 0.5 * m, hd: 4.5 * m, y: dy(-3.5) });
+      const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * m, 0.3 * m, 1.8 * m, 8), dark); chim.position.set(-1.2 * m, dy(14.8) + 0.9 * m, 14.8); g.add(chim);
+      const chimCap = new THREE.Mesh(new THREE.ConeGeometry(0.42 * m, 0.4 * m, 8), dark); chimCap.position.set(-1.2 * m, dy(14.8) + 1.95 * m, 14.8); g.add(chimCap);
+      const coop = new THREE.Group(); coop.position.set(3.4 * m, dy(10.2), 10.2); g.add(coop);
+      const cb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * m, 0.9 * m, 0.9 * m), wood); cb.position.y = 0.45 * m; coop.add(cb);
+      for (let k = -3; k <= 3; k++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.04 * m, 0.7 * m, 0.04 * m), dwood); bar.position.set(k * 0.22 * m, 0.45 * m, 0.46 * m); coop.add(bar); }
+      for (let k = 0; k < 3; k++) { const hen = new THREE.Mesh(new THREE.SphereGeometry(0.14 * m, 8, 6), new THREE.MeshLambertMaterial({ color: k ? 0xf2ead8 : 0xa0582a })); hen.position.set((k - 1) * 0.45 * m, 0.25 * m, 0.25 * m); coop.add(hen); }
+      obstacles.push({ x: 3.4 * m, z: 10.2, hw: 0.8 * m, hd: 0.45 * m, y: dy(10.2) });
+      for (const sd of [-1, 1]) for (let k = 0; k < 8; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.11 * m, 6, 5), dark); b.position.set(sd * 1.75 * m, dy(11.5) + 0.12 * m, 11.5 + (k - 3.5) * 0.25 * m); g.add(b); }
+      for (const z of [-7, 4, 13.6]) for (const sd of [-1, 1]) lanternPost(sd * 4.6 * m, dy(z), z); }
     // braziers burning on the stern castle's top deck
-    const zb = -26.5, yb = F.deckY(zb) + 1.7 + 1.35 + 1.15, xb = F.pt(zb / (L / 2), 1)[0] * 0.62;
+    const zb = -26.5, yb = ctop[3], xb = F.pt(zb / (L / 2), 1)[0] * 0.62;
     [-1, 1].forEach(sd => { const b = new THREE.Group(); b.position.set(sd * xb, yb, zb); g.add(b);
       const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.35, 0.6, 10), iron); bowl.position.y = 1.5; b.add(bowl);
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 1.3, 6), iron); leg.position.y = 0.6; b.add(leg);
       const fl = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.6, 7), fire); fl.position.y = 2.4; fl.userData.titanFire = true; b.add(fl);
       const lt = new THREE.PointLight(0xff6a2a, 1.2, 30); lt.position.y = 2.6; b.add(lt); });
+  }
+  // figureheads ye can choose for yer ship (the Titan keeps her own iron skull)
+  function shipFigurehead(g, F, S, L) {
+    const gold = new THREE.MeshLambertMaterial({ color: 0xd9ad4a, emissive: 0x2a1c04 }), wood = new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }), M = c => new THREE.MeshLambertMaterial({ color: c });
+    const fh = new THREE.Group(); fh.position.set(0, S.D * 0.85, L / 2 + 0.15); fh.rotation.x = 0.5; fh.scale.setScalar(Math.max(0.6, S.B / 11)); g.add(fh);
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); fh.add(m); return m; };
+    if (S.fig === 'mermaid') { add(new THREE.CylinderGeometry(0.3, 0.25, 1.2, 10), wood, 0, 0.6, 0); add(new THREE.SphereGeometry(0.25, 10, 8), wood, 0, 1.45, 0.05);
+      add(new THREE.ConeGeometry(0.3, 1.3, 10), M(0x3a8a7a), 0, -0.6, 0).rotation.x = Math.PI; const hair = add(new THREE.SphereGeometry(0.28, 10, 8), gold, 0, 1.5, -0.1); hair.scale.set(1, 1.2, 1.1);
+      [-1, 1].forEach(s => { const a = add(new THREE.CylinderGeometry(0.07, 0.06, 0.8, 6), wood, s * 0.33, 0.85, 0.15); a.rotation.set(-0.6, 0, s * 0.4); }); }
+    else if (S.fig === 'dragon') { const nk = add(new THREE.CylinderGeometry(0.25, 0.4, 1.8, 10), M(0x2a6a3a), 0, 0.6, 0.2); nk.rotation.x = 0.4;
+      const hd = add(new THREE.ConeGeometry(0.32, 1.1, 8), M(0x2a6a3a), 0, 1.6, 0.75); hd.rotation.x = Math.PI / 2 + 0.3;
+      [-1, 1].forEach(s => { const hn = add(new THREE.ConeGeometry(0.07, 0.6, 6), gold, s * 0.2, 1.85, 0.4); hn.rotation.set(-0.7, 0, -s * 0.3); add(new THREE.SphereGeometry(0.06, 6, 5), M(0xffcc20), s * 0.17, 1.72, 0.85); }); }
+    else if (S.fig === 'skull') { add(new THREE.SphereGeometry(0.55, 12, 10), wood, 0, 1.0, 0.1).scale.set(1, 0.95, 1.1); add(new THREE.BoxGeometry(0.6, 0.25, 0.5), wood, 0, 0.5, 0.3);
+      [-1, 1].forEach(s => add(new THREE.SphereGeometry(0.14, 8, 6), M(0x111111), s * 0.2, 1.05, 0.55)); }
+    else if (S.fig === 'eagle') { add(new THREE.SphereGeometry(0.4, 10, 8), gold, 0, 0.8, 0).scale.set(0.9, 1.3, 1); add(new THREE.SphereGeometry(0.25, 10, 8), gold, 0, 1.45, 0.15);
+      const bk = add(new THREE.ConeGeometry(0.1, 0.35, 6), M(0xe8b020), 0, 1.4, 0.45); bk.rotation.x = Math.PI / 2 + 0.4;
+      [-1, 1].forEach(s => { const w = add(new THREE.BoxGeometry(1.4, 0.08, 0.6), gold, s * 0.75, 1.0, -0.1); w.rotation.z = s * 0.5; }); }
+    else if (S.fig === 'lion') { add(new THREE.SphereGeometry(0.45, 12, 10), gold, 0, 1.0, 0.05); const mane = add(new THREE.TorusGeometry(0.42, 0.18, 8, 16), M(0xb0782a), 0, 1.0, -0.05); mane.rotation.x = 0.1;
+      add(new THREE.BoxGeometry(0.3, 0.25, 0.3), gold, 0, 0.85, 0.42); [-1, 1].forEach(s => add(new THREE.SphereGeometry(0.06, 6, 5), M(0x111111), s * 0.15, 1.12, 0.42)); }
+  }
+  // lanterns hung along both sides of the hull, glowing warm at night
+  function shipLamps(g, F, S, L) {
+    const glow = new THREE.MeshBasicMaterial({ color: 0xffcf6a }), iron = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    [-1, 1].forEach(sd => { for (let u = -0.7; u <= 0.72; u += 0.28) { const [x, y] = F.pt(u, 0.97), lg = new THREE.Group(); lg.position.set(sd * (x + 0.25), y + 0.1, u * L / 2); g.add(lg);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.32, 6), glow); lamp.position.y = -0.2; lg.add(lamp);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.14, 6), iron); cap.position.y = -0.0; lg.add(cap);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), iron); arm.position.set(-sd * 0.15, 0.06, 0); lg.add(arm); } });
   }
   function makeShip(key, styleOverride) {
     const S = Object.assign({}, SHIP_TYPES[key]), st = styleOverride || STATE.shipStyle;
@@ -2619,6 +2776,7 @@ window.__pgBoot = () => {
     if (st.hull != null) { S.hull = st.hull; if (S.gunBand) S.portLid = st.hull; }
     if (st.trim != null) { S.wale = st.trim; if (S.gunBand) S.gunBand = st.trim; }
     if (st.flag) S.flags = S.flags.map((f, i) => i === 0 ? Object.assign({}, f, { kind: st.flag }) : f);
+    if (st.pattern) S.pattern = st.pattern; if (st.emblem != null) S.emblem = st.emblem; if (st.ports != null) S.portLid = st.ports; if (st.deck != null) S.deckCol = st.deck; if (st.fig) S.fig = st.fig; if (st.lamps) S.lamps = true;
     const F = hullFns(S), g = new THREE.Group();
     g.rotation.order = 'YXZ';
     const L = S.L, B = S.B;
@@ -2644,7 +2802,7 @@ window.__pgBoot = () => {
       const dg = new THREE.BufferGeometry();
       dg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); dg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       dg.setIndex(idx); dg.computeVertexNormals();
-      g.add(new THREE.Mesh(dg, new THREE.MeshLambertMaterial({ map: deckTex(), side: THREE.DoubleSide })));
+      g.add(new THREE.Mesh(dg, new THREE.MeshLambertMaterial({ map: deckTex(), color: S.deckCol != null ? (c => new THREE.Color(c.r / 0.655, c.g / 0.478, c.b / 0.29))(new THREE.Color(S.deckCol)) : 0xffffff, side: THREE.DoubleSide })));   // (deck planks can be stained)
       // gunwale cap
       for (const side of [1, -1]) {
         const pts = []; for (let i = 0; i <= N; i++) { const u = -1 + 2 * i / N, [x, y] = F.pt(u, 1); pts.push(new THREE.Vector3(x * side, y + 0.08, u * L / 2)); }
@@ -2838,7 +2996,7 @@ window.__pgBoot = () => {
     });
 
     // masts, sails, rigging
-    const sailMat = new THREE.MeshLambertMaterial({ map: sailTex(S.sail), side: THREE.DoubleSide });
+    const sailMat = new THREE.MeshLambertMaterial({ map: sailTex(S.sail, S.pattern, S.emblem), side: THREE.DoubleSide });
     const mastMat = lam(0x5e4028), rig = [], flags = [], furl = [], rigMat = new THREE.LineBasicMaterial({ color: 0x2a2018 });
     const addLine = (a, b) => rig.push(a.x, a.y, a.z, b.x, b.y, b.z);
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -2986,6 +3144,8 @@ window.__pgBoot = () => {
     g.scale.setScalar(K);
     T.L = L * K; T.B = B * K; T.H = (S.D + 3) * K; T.speed = S.speed * 3.2;
     if (S.titan) titanDecor(g, F, S, L, obstacles);
+    if (S.fig && S.fig !== 'none' && !S.titan) shipFigurehead(g, F, S, L);
+    if (S.lamps) shipLamps(g, F, S, L);
     return { group: g, T, K, flags, furl, capstan, helm: V(0, hy + 0.09, hz), key, walk: { L, B, F, hatch: S.hatchZ !== undefined ? { z: S.hatchZ } : null, door, stairs: walkStairs, obstacles, castles: walkCastles, masts: mastInfo.map(m => ({ z: m.z, r: m.r, pTop: m.pTop })) } };
   }
 
@@ -5156,6 +5316,11 @@ window.__pgBoot = () => {
       case 'sail': return [0xe9d7a6, 0xf4efe2, 0x2a2a2a, 0x9b2a26, 0x2b4a7a, 0x3c6b4a, 0x6c3483];
       case 'hull': return [0x5b3b22, 0x3e2716, 0x2a2421, 0x6e4a2c, 0x1f2f45, 0x2f4a35, 0x7a2a1e];
       case 'trim': return [0xc79f4a, 0xd8b45a, 0x8e1f1f, 0x2f5d8a, 0xf2ead8, 0x1c1c1c, 0x3c8d6e];
+      case 'sash': return [0x1e140c, 0x8e1f1f, 0x1f3a5f, 0x2e5a3a, 0xd9b13a, 0x6c3483, 0xf2ead8, 0x111111];
+      case 'boots': return [0x2b1d14, 0x111111, 0x5a3a22, 0x7a5a3a, 0x3a2a4a, 0x8e1f1f];
+      case 'emblem': return [0x111111, 0xf2ead8, 0x9b2a26, 0xd9b13a, 0x2b4a7a, 0x2e7d4f];
+      case 'ports': return [0x8a3322, 0x2a2421, 0x111111, 0xd8b45a, 0x2f5d8a, 0x2e5a3a, 0xf2ead8];
+      case 'deck': return [0xa77a4a, 0xc9a070, 0x6a4a2a, 0x3a2a1c, 0x8a8478];
     }
     return [];
   }
@@ -5163,19 +5328,33 @@ window.__pgBoot = () => {
     { key: 'coat', label: 'Coat', type: 'swatch', set: 'cloth' },
     { key: 'shirt', label: 'Shirt', type: 'swatch', set: 'shirt' },
     { key: 'pants', label: 'Trousers', type: 'swatch', set: 'pants' },
-    { key: 'hat', label: 'Hat', type: 'choice', choices: [['tricorn', 'Tricorn'], ['bandana', 'Bandana'], ['straw', 'Straw hat'], ['cap', 'Cap'], ['none', 'No hat']] },
+    { key: 'hat', label: 'Hat', type: 'choice', choices: [['tricorn', 'Tricorn'], ['bicorne', 'Bicorne'], ['cavalier', 'Plumed hat'], ['bandana', 'Bandana'], ['straw', 'Straw hat'], ['cap', 'Cap'], ['crown', 'Crown'], ['none', 'No hat']] },
     { key: 'hatColor', label: 'Hat colour', type: 'swatch', set: 'hat' },
     { key: 'feather', label: 'Feather', type: 'swatch', set: 'feather' },
     { key: 'hair', label: 'Hair', type: 'swatch', set: 'hair' },
-    { key: 'beardOn', label: 'Beard', type: 'toggle' },
+    { key: 'hairStyle', label: 'Hairstyle', type: 'choice', choices: [['short', 'Short'], ['long', 'Long'], ['ponytail', 'Ponytail'], ['braids', 'Braids'], ['bald', 'Bald']] },
+    { key: 'beardStyle', label: 'Beard', type: 'choice', choices: [['full', 'Full'], ['long', 'Long'], ['braided', 'Braided'], ['goatee', 'Goatee'], ['none', 'Clean-shaven']] },
     { key: 'eyepatch', label: 'Eyepatch', type: 'toggle' },
+    { key: 'scar', label: 'Scar', type: 'toggle' },
+    { key: 'earring', label: 'Gold earring', type: 'toggle' },
+    { key: 'hook', label: 'Hook hand', type: 'toggle' },
+    { key: 'coatTrim', label: 'Gold braid & epaulettes', type: 'toggle' },
+    { key: 'parrot', label: 'Parrot', type: 'choice', choices: [['none', 'None'], ['red', 'Scarlet macaw'], ['green', 'Green'], ['blue', 'Blue & gold'], ['white', 'Cockatoo']] },
+    { key: 'sash', label: 'Belt / sash', type: 'swatch', set: 'sash' },
+    { key: 'boots', label: 'Boots', type: 'swatch', set: 'boots' },
     { key: 'skin', label: 'Skin tone', type: 'swatch', set: 'skin' },
   ];
   const SHIP_OPTS = [
     { key: 'sail', label: 'Sails', type: 'swatch', set: 'sail' },
     { key: 'hull', label: 'Hull', type: 'swatch', set: 'hull' },
     { key: 'trim', label: 'Trim', type: 'swatch', set: 'trim' },
-    { key: 'flag', label: 'Flag', type: 'choice', choices: [['jolly', 'Jolly Roger'], ['red', 'Red banner'], ['black', 'Plain black'], ['green', 'Green'], ['blue', 'Blue']] },
+    { key: 'pattern', label: 'Sail design', type: 'choice', choices: [['plain', 'Plain'], ['stripes', 'Stripes'], ['skull', 'Skull'], ['cross', 'Cross'], ['halves', 'Two-tone'], ['sun', 'Sunburst'], ['serpent', 'Serpent']] },
+    { key: 'emblem', label: 'Sail design colour', type: 'swatch', set: 'emblem' },
+    { key: 'ports', label: 'Gun ports', type: 'swatch', set: 'ports' },
+    { key: 'deck', label: 'Deck planks', type: 'swatch', set: 'deck' },
+    { key: 'fig', label: 'Figurehead', type: 'choice', choices: [['none', 'Ship\'s own'], ['mermaid', 'Mermaid'], ['dragon', 'Dragon'], ['skull', 'Skull'], ['eagle', 'Eagle'], ['lion', 'Lion']] },
+    { key: 'lamps', label: 'Hull lanterns', type: 'toggle' },
+    { key: 'flag', label: 'Flag', type: 'choice', choices: [['jolly', 'Jolly Roger'], ['skullswords', 'Skull & cutlasses'], ['redskull', 'Red skull'], ['hourglass', 'Hourglass'], ['red', 'Red banner'], ['black', 'Plain black'], ['white', 'White'], ['green', 'Green'], ['blue', 'Blue'], ['purple', 'Purple']] },
   ];
   const SERP_SW = {
     scale: [0x0c1412, 0x1f6e5e, 0x0e3a2a, 0x123c6e, 0x0a2440, 0x5a0a0e, 0x2a0a3a, 0x3a3a3a, 0xd8d2c0, 0x8a6a10, 0x101010, 0x2a5a1a],
@@ -12265,7 +12444,7 @@ window.__pgBoot = () => {
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
         else if (GUEST.on && GUEST.p) st.ob = { o: GUEST.p.peer, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };   // ob: aboard a ship (whose, and where on deck)
-        if (ship && !ship.sinking) st.sh = { k: ship.key, w: isWreck() ? 1 : 0, g: ship.ghost ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
+        if (ship && !ship.sinking) st.sh = { k: ship.key, st: STATE.shipStyle, w: isWreck() ? 1 : 0, g: ship.ghost ? 1 : 0, x: r(ship.x), z: r(ship.z), h: r(ship.heading), y: r(ship.group.position.y), p: r(ship.pitch || 0), r: r(ship.roll || 0),
           a: !ship.submerged && (sailing || onShip || inInterior) ? 1 : 0, gm: r(gunMul()) };   // a: crewed, so raiders will hunt it; gm: heavy cannons
         const res = MP.room.presence(st); if (res && res.catch) res.catch(() => {});
       } catch (e) {}
@@ -12311,11 +12490,11 @@ window.__pgBoot = () => {
       // their ship
       const sh = d.sh;
       // Rebuild remote ships when either their hull type or Sword-of-the-Sea wreck form changes.
-      const remoteShipKey = sh ? sh.k + (sh.w ? ':wreck' : sh.g ? ':ghost' : '') : null;
+      const remoteShipKey = sh ? sh.k + (sh.w ? ':wreck' : sh.g ? ':ghost' : '') + JSON.stringify(sh.st || {}) : null;
       if (sh && (!p.ship || p.shipKey !== remoteShipKey)) {
         if (p.ship) scene.remove(p.ship.group);
         try {
-          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : sh.g ? GHOST_STYLE : undefined);
+          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : sh.g ? GHOST_STYLE : (sh.st && typeof sh.st === 'object' ? sh.st : {}));   // in their own paint, not ours
           if (sh.w) decorateWreck(p.ship); else if (sh.g) decorateGhost(p.ship);
           p.shipKey = remoteShipKey; scene.add(p.ship.group);
         } catch (e) { p.ship = null; p.shipKey = null; }
