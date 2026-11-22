@@ -3512,7 +3512,7 @@ window.__pgBoot = () => {
     player.root.getWorldPosition(P.pos);
     if (player.root.parent) player.root.parent.remove(player.root); scene.add(player.root); player.root.scale.setScalar(1);
     P.facing = PS.facing + S.heading; P.vy = PS.vy * S.K; P.grounded = false;
-    onShip = false; sailing = false; GUEST.on = false; GUEST.p = null; GUEST.S = null;
+    onShip = false; sailing = false; GUEST.on = false; GUEST.p = null; GUEST.S = null; GUEST.raider = null;
     hudHint.innerHTML = walkHint;
   }
   function shipWalk(dt, S = ship) {
@@ -3549,7 +3549,7 @@ window.__pgBoot = () => {
     player.root.position.copy(PL); player.root.rotation.set(0, PS.facing, 0);
     player.slashP = 1 - Math.max(0, PLAYER.slashT) / (PLAYER.slashDur || 0.35);
     player.update(dt, P.speed, !PS.grounded, false, plAction());
-    if (PLAYER.slashT > 0) player.props.blade.visible = true;
+    showWeapon();   // yer blade (or pistol) stays in hand on deck
     if (PS.grounded) stepSound(false, true);
     S.group.updateMatrixWorld(); player.root.getWorldPosition(P.pos);
   }
@@ -3588,6 +3588,7 @@ window.__pgBoot = () => {
   }
   function guestUpdate(dt) {
     const p = GUEST.p, S = GUEST.S;
+    if (GUEST.raider) { const r = GUEST.raider; if (r.state === 'sinking' || r.state === 'gone' || !r.group.parent) { guestLeave(r.state === 'sinking' ? 'She\'s goin\' down! Ye leap into the sea.' : 'Ye\'re in the water!'); return; } shipWalk(dt, S); return; }
     // her captain left, she sank, or she was swapped for another ship: ye're in the water
     if (!p || !MP.peers.has(p.peer) || p.ship !== S || !S.group.parent || !p.tgt || !p.tgt.sh) { guestLeave("The ship's gone from under ye! Ye're in the water."); return; }
     shipWalk(dt, S);
@@ -4118,7 +4119,7 @@ window.__pgBoot = () => {
     if (P.grounded && keys[' '] && !talk && !uiOpen) { P.vy = 6; P.grounded = false; }
     if (!P.grounded) { P.vy -= 22 * dt; IP.y += P.vy * dt; if (IP.y <= 0) { IP.y = 0; P.grounded = true; P.vy = 0; } }
     player.root.position.copy(IP); player.root.rotation.set(0, P.facing, 0);
-    player.update(dt, P.speed, !P.grounded, false);
+    player.update(dt, P.speed, !P.grounded, false); showWeapon();
     if (P.grounded) stepSound(false, true);
     interior.root.rotation.x = ship.pitch * 0.7; interior.root.rotation.z = ship.roll * 0.7;
     for (const l of interior.lanterns) { l.rotation.z = Math.sin(t * 1.4 + l.userData.ph) * 0.12 - ship.roll * 0.7; l.rotation.x = Math.cos(t * 1.1 + l.userData.ph) * 0.06 - ship.pitch * 0.7; }
@@ -5251,7 +5252,9 @@ window.__pgBoot = () => {
       if (nearLadder()) goUp(); else if (nearBed()) sleep(); else if (nearWardrobe()) openUI('custom', 'pirate'); else if (nearTrophies()) showTrophies(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
+    if (GUEST.on && GUEST.raider) { raiderLeave(); return; }
     if (GUEST.on) { guestLeave(); return; }
+    { const rb = nearRaiderToBoard(); if (rb && !nearWheel()) { raiderBoard(rb); return; } }
     if (nearWheel()) { takeWheel(); return; }
     if (nearHorn()) { takeHorn(); return; }
     if (nearEmptyPedestal()) { toast(`The pedestal is empty. Ye already carry a horn; Captain ${HORN.owner} holds the true one.`); return; }
@@ -5780,6 +5783,7 @@ window.__pgBoot = () => {
   const CMB = { combo: 0, comboT: 0, blocking: false, blockT: 0, riposteT: 0, shake: 0, stop: 0, lungeT: 0, lungeV: 0, nums: [], rmb: false };
   const hpFill = document.getElementById('hpFill'), hullBar = document.getElementById('hullBar'), hullFill = document.getElementById('hullFill'), gunTxt = document.getElementById('gunTxt'), hurtEl = document.getElementById('hurt');
   const weaponEls = document.querySelectorAll('#weapons [data-w]');
+  function showWeapon() { if (player.props.blade) player.props.blade.visible = PLAYER.weapon === 'cutlass' || PLAYER.slashT > 0; if (player.props.pistol) player.props.pistol.visible = PLAYER.weapon === 'pistol' && !(PLAYER.slashT > 0); }
   function setWeapon(w) { PLAYER.weapon = w; weaponEls.forEach(e => e.classList.toggle('on', e.dataset.w === w)); weaponEls[0].textContent = `1 · ${curSword().name}`; }
   weaponEls.forEach(e => e.addEventListener('click', () => setWeapon(e.dataset.w)));
   setWeapon('cutlass');
@@ -6287,6 +6291,167 @@ window.__pgBoot = () => {
       col.setX(i * 2, a * 0.85); col.setX(i * 2 + 1, a * 0.08); }
     pos.needsUpdate = true; col.needsUpdate = true;
   }
+
+  // ================= Boarding and siege =================
+  // Board: bring yer ship alongside a Blackwater raider (or swim / run up to one), step to the rail and press E to throw
+  // grapples and swing across. Her crew fight ye on her own deck; beat them all and she strikes her colours: take her
+  // plunder, then she's scuttled. Siege: some raiders close in and grapple YOUR ship instead, sending boarders across.
+  // While lashed together, neither ship can get away until the boarders are dealt with.
+  const BOARD = { r: null, cool: 0, ropes: null, scuttleT: 0 };
+  const SIEGE = { on: false, r: null, list: [], t: 0 };
+  const plFacing = () => GUEST.on && GUEST.S ? PS.facing + GUEST.S.heading : onShip && ship ? PS.facing + ship.heading : P.facing;
+  function shipLocal(S, x, z) { const dx = x - S.x, dz = z - S.z, h = S.heading; return { lx: dx * Math.cos(h) - dz * Math.sin(h), lz: dx * Math.sin(h) + dz * Math.cos(h) }; }
+  function nearRaiderToBoard() {
+    if (GUEST.on || sailing || inInterior || RIDE.on || DUN.on || STOM.on || PLAYER.hp <= 0) return null;
+    const fromDeck = onShip, inSea = krSwimming() || seaRunning(); if (!fromDeck && !inSea) return null;
+    let best = null, bd = 1e9;
+    for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || !r.group.parent || r.captured) continue;
+      const { lx, lz } = shipLocal(r, P.pos.x, P.pos.z), gap = fromDeck ? 16 : 5;
+      if (Math.abs(lx) < r.T.B / 2 + gap && Math.abs(lz) < r.T.L / 2 + 3) { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < bd) { bd = d; best = r; } } }
+    return best;
+  }
+  const crewOf = r => (r.deckCrew || []).filter(c => c.ch.root.visible && c.st !== 'dead' && c.st !== 'gone');
+  function initFighter(c, hp) { c.home = c.home || c.lp.clone(); c.hp = c.max = hp; c.st = 'fight'; c.pos = c.pos || new THREE.Vector3(); c.atkT = 0.4 + Math.random(); c.windT = 0; c.slashT = 0; c.hitAt = 0; c.stagT = 0; c.flinchT = 0; c.deadT = 0; c.strafe = 0; }
+  function raiderBoard(r) {
+    const fromDeck = onShip; if (onShip) detach();
+    r.group.updateMatrixWorld();
+    const loc = r.group.worldToLocal(P.pos.clone()), W = r.walk;
+    const lz = Math.max(-W.L * 0.36, Math.min(W.L * 0.3, loc.z)), half = W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45, lx = Math.sign(loc.x || 1) * half * 0.75;
+    if (player.root.parent) player.root.parent.remove(player.root); r.group.add(player.root); player.root.scale.setScalar(1 / r.K);
+    PL.set(lx, shipFloor(lx, lz, r) ?? W.F.deckY(lz), lz); PS.facing = lx > 0 ? -Math.PI / 2 : Math.PI / 2; PS.vy = 0; PS.grounded = true;
+    GUEST.on = true; GUEST.p = null; GUEST.S = r; GUEST.raider = r; r.boarded = true;
+    for (const c of crewOf(r)) if (c.st !== 'fight') { initFighter(c, r.galleon ? 55 : 40); c.facing = c.ch.root.rotation.y; }
+    dist = Math.min(Math.max(dist, 12), 22);
+    hudHint.innerHTML = 'WASD to move &middot; F to attack &middot; hold X or right-click to block &middot; E to swing back to yer ship (or jump over the rail)';
+    SFX.creak(); SFX.swing(); setTimeout(() => SFX.swing(), 120);
+    toast(fromDeck ? `Grapples away! Ye swing across onto the ${r.galleon ? 'galleon' : 'raider'}'s deck. Cut down her crew!` : 'Ye haul yerself up her side and onto the deck. Her crew draw steel!');
+  }
+  function raiderLeave(msg) {
+    const r = GUEST.raider; if (!r) return;
+    const back = ship && !ship.sinking && !ship.submerged && Math.hypot(ship.x - r.x, ship.z - r.z) < (ship.T.L + r.T.L) * 0.5 + 60;
+    detach(r);
+    if (back) { board(); SFX.swing(); toast(msg || 'Ye swing back across to yer own deck.'); } else if (msg) toast(msg);
+  }
+  function boardPrompt() {
+    const r = GUEST.raider, n = crewOf(r).length, nm = r.galleon ? 'galleon' : 'raider';
+    return n ? `Boarding the Blackwater ${nm} &middot; <b>${n}</b> crew left &middot; <b>E</b> Swing back` : `The ${nm} is yers! She'll be scuttled shortly &middot; <b>E</b> Swing back to yer ship`;
+  }
+  function activeFighters() {
+    const out = [];
+    if (GUEST.on && GUEST.raider) for (const c of crewOf(GUEST.raider)) if (c.st === 'fight') out.push(c);
+    if (SIEGE.on && onShip) for (const c of SIEGE.list) if (c.st === 'fight') out.push(c);
+    return out;
+  }
+  function hitFighter(c, dm, heavy) {
+    c.hp -= dm; c.flinchT = 0.3; SFX.hit(c.pos);
+    puff(c.pos.x, c.pos.y + 1.4, c.pos.z, { color: 0xb02020, size: 0.9, life: 0.4, grow: 1, op: 0.9 });
+    if (c.windT > 0 && (heavy || Math.random() < 0.5)) { c.windT = 0; c.atkT = Math.max(c.atkT, 0.7); }
+    if (c.hp <= 0) { c.st = 'dead'; c.deadT = 0; c.slashT = 0; c.windT = 0; }
+  }
+  // one deck fighter's turn: closes on ye along the deck, circles, winds up and strikes (blockable, parryable)
+  function fighterStep(c, S, dt, mine, dmg) {
+    const K = S.K, root = c.ch.root;
+    if (c.st === 'dead') { c.deadT += dt; root.rotation.x = -Math.min(Math.PI / 2, c.deadT * 3); c.ch.update(dt, 0, false, false, null); if (c.ch.props.blade) c.ch.props.blade.visible = c.deadT < 0.6;
+      if (c.deadT > 3.5) { root.visible = false; c.st = 'gone'; } root.getWorldPosition(c.pos); return; }
+    if (c.st !== 'fight') return;
+    let spd = 0, action = null;
+    const dx = PL.x - c.lp.x, dz = PL.z - c.lp.z, dm = Math.hypot(dx, dz) * K;
+    if (c.stagT > 0) c.stagT -= dt; if (c.flinchT > 0) c.flinchT -= dt;
+    const tryMove = (vx, vz) => { const nx = c.lp.x + vx, nz = c.lp.z + vz, f = shipFloor(nx, nz, S);
+      if (f !== null && Math.abs(f - c.lp.y) < 2.5 && !shipBlockedAt(nx, nz, f, S)) { c.lp.x = nx; c.lp.z = nz; c.lp.y += (f - c.lp.y) * Math.min(1, dt * 12); return true; } return false; };
+    if (mine && PLAYER.hp > 0) {
+      c.facing = angLerp(c.facing, Math.atan2(dx, dz), Math.min(1, dt * (dm > 1.8 ? 8 : 10)));
+      const busy = c.stagT > 0 || c.windT > 0 || c.slashT > 0;
+      if (dm > 1.8) { if (!busy) { spd = dm > 5 ? 4.6 : 3; const st = spd / K * dt; if (!tryMove(Math.sin(c.facing) * st, Math.cos(c.facing) * st) && !tryMove(Math.sin(c.facing) * st, 0)) tryMove(0, Math.cos(c.facing) * st); } }
+      else {
+        c.atkT -= dt;
+        if (c.stagT > 0) { /* reeling */ }
+        else if (c.windT > 0) { c.windT -= dt; if (c.windT <= 0) { SFX.swing(c.pos); c.slashT = 0.4; c.hitAt = 0.15; } }
+        else if (c.atkT <= 0 && c.slashT <= 0) { c.windT = 0.45; c.atkT = 1.3 + Math.random() * 0.8; banditGlint({ pos: c.pos, facing: c.facing + S.heading }); }
+        else if (c.slashT <= 0) { if (!c.strafe || Math.random() < dt * 0.6) c.strafe = Math.random() < 0.5 ? -1 : 1; const st = 1.3 / K * dt; if (tryMove(Math.cos(c.facing) * c.strafe * st, -Math.sin(c.facing) * c.strafe * st)) spd = 1.3; }
+      }
+    }
+    if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / 0.45); }
+    if (c.slashT > 0) { c.slashT -= dt; action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, c.slashT) / 0.4);
+      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && mine && dm < 2.7 && Math.abs(PL.y - c.lp.y) * K < 2) meleeHurt(dmg(), c); } }
+    root.position.copy(c.lp); root.rotation.set(-((c.flinchT > 0 ? Math.sin(c.flinchT / 0.3 * Math.PI) * 0.35 : 0) + (c.stagT > 0 ? 0.25 : 0)), c.facing, 0);
+    c.ch.update(dt, spd, false, false, action); if (c.ch.props.blade) c.ch.props.blade.visible = true;
+    root.getWorldPosition(c.pos);
+    if (c.stagT > 0 && Math.random() < dt * 6) puff(c.pos.x + (Math.random() - 0.5) * 0.6, c.pos.y + 2.4, c.pos.z + (Math.random() - 0.5) * 0.6, { color: 0xfff27a, size: 0.25, life: 0.5, grow: 0.3, vy: 0.4, op: 0.9 });
+  }
+  function startSiege(r) {
+    const n = Math.min(r.galleon ? 5 : 3, crewOf(r).length || (r.galleon ? 5 : 3));
+    SIEGE.on = true; SIEGE.r = r; SIEGE.t = 0; SIEGE.list = [];
+    ship.group.updateMatrixWorld(); const W = ship.walk, side = Math.sign(shipLocal(ship, r.x, r.z).lx) || 1;
+    crewOf(r).slice(0, n).forEach(c => { c.ch.root.visible = false; c.st = 'gone'; });   // they've come across
+    for (let i = 0; i < n; i++) {
+      const ch = makeCharacter(banditLook()); addProp(ch, 'blade'); ch.root.scale.setScalar(1 / ship.K); ship.group.add(ch.root);
+      let lz = 0, lx = 0, f = null; for (let k = 0; k < 20 && f === null; k++) { lz = (Math.random() - 0.5) * W.L * 0.55; lx = side * (W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45) * (0.45 + Math.random() * 0.3); f = shipFloor(lx, lz); if (f !== null && shipBlockedAt(lx, lz, f)) f = null; }
+      ch.root.position.set(lx, f ?? W.F.deckY(lz), lz);
+      const c = { ch, lp: ch.root.position, facing: side > 0 ? -Math.PI / 2 : Math.PI / 2 }; initFighter(c, r.galleon ? 50 : 38); c.atkT = 1 + Math.random(); SIEGE.list.push(c);
+    }
+    SFX.creak(); SFX.crash({ x: ship.x, z: ship.z });
+    toast(`Grapples! The Blackwater ${r.galleon ? 'galleon' : 'raider'} lashes onto yer hull and ${n} boarders swarm over the rail!${sailing ? ' Leave the wheel (E) and fight them off!' : ''}`);
+  }
+  function endSiege(won) {
+    for (const c of SIEGE.list) if (c.ch.root.parent) c.ch.root.parent.remove(c.ch.root);
+    if (won) { addGold(SIEGE.list.length * 45, 'Threw the boarders back into the sea!'); toast('The last boarder falls! Ye hack through the grapple lines and she drifts free.'); }
+    SIEGE.on = false; SIEGE.r = null; SIEGE.list = []; BOARD.cool = 75;
+  }
+  function captureRaider(r) {
+    r.captured = true; BOARD.scuttleT = 14;
+    if (r.flags) r.flags.forEach(f => f.visible = false);   // she strikes her colours
+    const gal = r.galleon;
+    addGold(gal ? 900 : 400, `Captured a Blackwater ${gal ? 'galleon' : 'raider'}! Her hold is yers`); addMat('steel', gal ? 5 : 3); addMat('pearl', gal ? 3 : 1); if (gal && Math.random() < 0.6) addMat('gem', 1);
+    toast(`Her last hand falls and the Blackwater ${gal ? 'galleon' : 'raider'} strikes her colours! Ye plunder her hold... she'll be scuttled in moments. E to swing back!`);
+    SFX.creak();
+  }
+  function updateRopes(on, A, B) {   // grapple lines strung between the two hulls
+    if (!BOARD.ropes) BOARD.ropes = [0, 1, 2].map(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(10 * 3), 3)); const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x3a2a18 })); l.frustumCulled = false; scene.add(l); return l; });
+    BOARD.ropes.forEach(l => l.visible = !!on); if (!on) return;
+    A.group.updateMatrixWorld(); B.group.updateMatrixWorld();
+    const sA = Math.sign(shipLocal(A, B.x, B.z).lx) || 1, sB = Math.sign(shipLocal(B, A.x, A.z).lx) || 1;
+    BOARD.ropes.forEach((l, i) => { const za = (i - 1) * A.walk.L * 0.25, zb = (i - 1) * B.walk.L * 0.25;
+      const pa = A.group.localToWorld(new THREE.Vector3(sA * A.walk.F.pt(za / (A.walk.L / 2), 1)[0], A.walk.F.deckY(za) + 0.9, za)), pb = B.group.localToWorld(new THREE.Vector3(sB * B.walk.F.pt(zb / (B.walk.L / 2), 1)[0], B.walk.F.deckY(zb) + 0.9, zb));
+      const pos = l.geometry.attributes.position, sag = pa.distanceTo(pb) * 0.08;
+      for (let k = 0; k < 10; k++) { const u = k / 9; pos.setXYZ(k, pa.x + (pb.x - pa.x) * u, pa.y + (pb.y - pa.y) * u - Math.sin(u * Math.PI) * sag, pa.z + (pb.z - pa.z) * u); } pos.needsUpdate = true; });
+  }
+  function updateBoarding(dt, t) {
+    BOARD.cool = Math.max(0, BOARD.cool - dt);
+    const online = !!(window.__mpOnline && window.__mpOnline());
+    if (BOARD.r && GUEST.raider !== BOARD.r) BOARD.r.boarded = false;
+    BOARD.r = GUEST.raider || null;
+    const r = BOARD.r;
+    if (r) {
+      if (PLAYER.hp <= 0) raiderLeave();
+      else {
+        const dmg = () => (r.galleon ? 11 : 9) + Math.floor(Math.random() * 5);
+        for (const c of r.deckCrew || []) if (c.st === 'fight' || c.st === 'dead') fighterStep(c, r, dt, true, dmg);
+        if (!r.captured && !crewOf(r).some(c => c.st === 'fight')) captureRaider(r);
+        if (!online) { r.speed = Math.max(0, r.speed - 30 * dt); if (ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140) ship.speed = Math.max(0, ship.speed - 20 * dt); }   // lashed together
+      }
+    }
+    if (BOARD.scuttleT > 0) { BOARD.scuttleT -= dt; const pr = raiders.find(x => x.captured); if (pr && !online) pr.speed = Math.max(0, pr.speed - 30 * dt);
+      if (pr && BOARD.scuttleT <= 0) { if (GUEST.raider === pr) raiderLeave('She\'s scuttled! Ye swing clear as she starts to go down.'); damageShip(pr, pr.hp + 9999); } }
+    if (!SIEGE.on && BOARD.cool <= 0 && !GUEST.on && ship && !ship.sinking && !ship.submerged && (onShip || sailing || inInterior) && PLAYER.hp > 0) {
+      for (const q of raiders) { if (q.state !== 'attack' || q.captured || !q.group.parent) continue;
+        const d = Math.hypot(q.x - ship.x, q.z - ship.z) - (q.T.B + ship.T.B) * 0.5;
+        if (d < 45 && (q.boarder || online) && Math.random() < dt * 0.5) { startSiege(q); break; } }
+    }
+    if (SIEGE.on) {
+      const q = SIEGE.r;
+      const gone = !ship || ship.sinking || PLAYER.hp <= 0 || !q || q.state === 'sinking' || q.state === 'gone' || Math.hypot(P.pos.x - ship.x, P.pos.z - ship.z) > 400;
+      if (gone) endSiege(false);
+      else {
+        const dmg = () => (q.galleon ? 11 : 9) + Math.floor(Math.random() * 5), mine = onShip && !inInterior;
+        for (const c of SIEGE.list) fighterStep(c, ship, dt, mine, dmg);
+        ship.speed = Math.min(ship.speed, 2); if (!online) q.speed = Math.min(q.speed, 2);
+        if (!SIEGE.list.some(c => c.st === 'fight' || c.st === 'dead')) endSiege(true);
+      }
+    }
+    const pair = SIEGE.on ? [ship, SIEGE.r] : r && ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140 ? [ship, r] : null;
+    updateRopes(!!pair, pair && pair[0], pair && pair[1]);
+  }
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -6305,7 +6470,7 @@ window.__pgBoot = () => {
   function meleeHurt(dm, src) {   // a blade or claw aimed at ye: ye can block it, or parry it with good timing
     if (CMB.blocking && PLAYER.hp > 0) {
       let facing = true;
-      if (src) { const dx = src.pos.x - P.pos.x, dz = src.pos.z - P.pos.z, d = Math.hypot(dx, dz) || 1; facing = (dx * Math.sin(P.facing) + dz * Math.cos(P.facing)) / d > 0.1; }
+      if (src) { const dx = src.pos.x - P.pos.x, dz = src.pos.z - P.pos.z, d = Math.hypot(dx, dz) || 1, PF = plFacing(); facing = (dx * Math.sin(PF) + dz * Math.cos(PF)) / d > 0.1; }
       if (facing) {
         const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const sx = wp.x + Math.sin(P.facing) * 0.7, sz = wp.z + Math.cos(P.facing) * 0.7;
         if (CMB.blockT < 0.3) {   // parried!
@@ -6327,8 +6492,8 @@ window.__pgBoot = () => {
     const want = (keys['x'] || CMB.rmb) && PLAYER.weapon === 'cutlass' && PLAYER.hp > 0 && PLAYER.slashT <= 0 && !RIDE.on && !sailing && !uiOpen && !talk;
     if (want && !CMB.blocking) { CMB.blocking = true; CMB.blockT = 0; }
     if (!want) CMB.blocking = false;
-    if (CMB.blocking) { CMB.blockT += dt; P.facing = yaw + Math.PI; }   // guard faces where ye're looking
-    if (CMB.lungeT > 0 && !onShip && !sailing && !inInterior && !RIDE.on) { CMB.lungeT -= dt; moveWithCollision(P.pos, Math.sin(P.facing) * CMB.lungeV * dt, Math.cos(P.facing) * CMB.lungeV * dt, 0.4, []); }
+    if (CMB.blocking) { CMB.blockT += dt; P.facing = yaw + Math.PI; const DS = GUEST.on ? GUEST.S : onShip ? ship : null; if (DS) PS.facing = yaw + Math.PI - DS.heading; }   // guard faces where ye're looking
+    if (CMB.lungeT > 0 && !onShip && !GUEST.on && !sailing && !inInterior && !RIDE.on) { CMB.lungeT -= dt; moveWithCollision(P.pos, Math.sin(P.facing) * CMB.lungeV * dt, Math.cos(P.facing) * CMB.lungeV * dt, 0.4, []); }
     for (let i = CMB.nums.length - 1; i >= 0; i--) { const n = CMB.nums[i]; n.t += dt;
       if (n.t > 0.95) { n.el.remove(); CMB.nums.splice(i, 1); continue; }
       tmp2.set(n.x + n.vx * n.t, n.y + n.t * 1.6 - n.t * n.t * 0.6, n.z).project(camera);
@@ -6365,9 +6530,9 @@ window.__pgBoot = () => {
     }, 900);
   }
   function playerAttack() {
-    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer || (onShip && serpFighting());
+    const krDeckFight = (onShip && KR.lock === ship) || KR.heldPlayer || (onShip && serpFighting()) || (GUEST.on && GUEST.raider) || (onShip && !sailing && SIEGE.on);
     if ((!playerTargetable() && !STOM.on && !krDeckFight) || PLAYER.cool > 0 || PLAYER.hp <= 0) return;
-    if (!STOM.on && !onShip && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
+    if (!STOM.on && !onShip && !GUEST.on && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (CMB.blocking) return; if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword();
       CMB.combo = CMB.comboT > 0 ? (CMB.combo + 1) % 3 : 0; const fin = CMB.combo === 2; PLAYER.swingKind = CMB.combo;   // chain swings: slash, backhand, then a heavy overhead
       const SEA = STATE.sword === 'seasword', KF = SEA ? SWING_KF.sea[CMB.combo] : SWING_KF[CMB.combo];
@@ -6497,6 +6662,7 @@ window.__pgBoot = () => {
     if (tg === ship) { if (tg.hp <= 0) sinkPlayerShip(); }
     else if (tg.hp <= 0 && tg.state !== 'sinking') {
       tg.state = 'sinking'; tg.sinkT = 0; SFX.crash(tg);
+      if (tg.captured) { tg.captured = false; questEvent('raider', tg.galleon ? 'galleon' : 'brig'); return; }   // a prize ye took and scuttled: the plunder's already yers
       if (!(KR.lock === tg && KR.ally <= 0)) questEvent('raider', tg.galleon ? 'galleon' : 'brig');   // sunk by ye (or yer kraken)
       if (KR.lock === tg && KR.ally > 0) { addGold(tg.galleon ? 600 : 250, `Yer kraken sank a Blackwater ${tg.galleon ? 'galleon' : 'raider'}!`); addMat('steel', tg.galleon ? 4 : 2); }
       else if (KR.lock === tg) { if (Math.hypot(tg.x - P.pos.x, tg.z - P.pos.z) < 700) toast('The kraken drags the raider ship down to the depths!'); }
@@ -6550,7 +6716,7 @@ window.__pgBoot = () => {
     for (let i = 0; i < 60 && !ok; i++) { if (i % 2) { r.x = (Math.random() - 0.5) * 9000; r.z = (Math.random() - 0.5) * 9000; } else { const a = Math.random() * 6.28, d = 1400 + Math.random() * 3200; r.x = P.pos.x + Math.sin(a) * d; r.z = P.pos.z + Math.cos(a) * d; } ok = raidSea(r.x, r.z) && Math.hypot(r.x - P.pos.x, r.z - P.pos.z) > 1000 && !blockedAt(r, r.x, r.z, 0); }
     if (!ok) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28; r.x = r.home.x + Math.cos(a) * 350; r.z = r.home.z + Math.sin(a) * 350; if (!blockedAt(r, r.x, r.z, 0)) break; }
     raiderWaypoint(r);
-    if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; });
+    if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; c.st = null; c.ch.root.rotation.x = 0; if (c.home) c.lp.copy(c.home); }); r.captured = false; r.boarded = false; if (r.flags) r.flags.forEach(f => f.visible = true);
     r.heading = Math.random() * 6.28; r.speed = 10; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0; r.pitch = 0; r.roll = 0;
     r.group.rotation.set(0, r.heading, 0); scene.add(r.group);
   }
@@ -6598,11 +6764,13 @@ window.__pgBoot = () => {
       if (!net) {
       let desired = r.heading, want = 14;
       const tdx = target ? target.x - r.x : 0, tdz = target ? target.z - r.z : 0, td = Math.hypot(tdx, tdz);
-      if (target && td < 1000) {
+      if (target && td < 1000 && !r.captured && !r.boarded) {   // (a crew fighting off boarders, or a prize that's struck, isn't working the guns)
         if (r.state !== 'attack' && !warned) { warned = true; toast('Blackwater raiders! At the wheel, press Space to fire the guns on the side ye\'re lookin\'.'); }
+        if (r.state !== 'attack') r.boarder = target === ship && Math.random() < (r.galleon ? 0.55 : 0.35);   // some mean to grapple and board rather than trade broadsides
         r.state = 'attack';
         const b = Math.atan2(tdx, tdz);
-        if (td > 260) { desired = b; want = 30; }
+        if (r.boarder && target === ship && !SIEGE.on && BOARD.cool <= 0 && td > 42) { desired = b; want = td > 260 ? 30 : 20; }
+        else if (td > 260) { desired = b; want = 30; }
         else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(r.heading, a1)) < Math.abs(angDiff(r.heading, a2)) ? a1 : a2; want = 22; }
         if (td < 240) {
           const fwdDot = (tdx * Math.sin(r.heading) + tdz * Math.cos(r.heading)) / td;
@@ -6643,7 +6811,7 @@ window.__pgBoot = () => {
     if (PLAYER.hitPending > 0) {
       PLAYER.hitPending -= dt;
       if (PLAYER.hitPending <= 0) {
-        const fx = Math.sin(P.facing), fz = Math.cos(P.facing); let hits = 0, critHit = false;
+        const PF = plFacing(), fx = Math.sin(PF), fz = Math.cos(PF); let hits = 0, critHit = false;
         for (const b of bandits) {
           if (b.state === 'dead' || b.state === 'gone') continue;
           const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
@@ -6652,6 +6820,13 @@ window.__pgBoot = () => {
             const crit = CMB.riposteT > 0 || Math.random() < 0.12, dm = Math.round(sw.dmg * (fin ? 1.6 : 1) * (crit ? 1.8 : 1) * (b.stagT > 0 ? 1.3 : 1));
             hitBandit(b, dm); dmgNum(b.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : ''); banditFlinch(b, fin, fx, fz); hits++; if (crit) critHit = true;
             if (STATE.sword === 'ghost') ghostDrain(b.pos); if (STATE.sword === 'seasword') seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); }
+        }
+        for (const c of activeFighters()) {   // deck fights: a boarded raider's crew, or boarders on yer own deck
+          const dx = c.pos.x - P.pos.x, dz = c.pos.z - P.pos.z, d = Math.hypot(dx, dz), sw = curSword(), fin = PLAYER.swingKind === 2, reach = Math.min(sw.reach, 4.5) * (fin ? 1.15 : 1), arc = fin ? Math.min(sw.arc, -0.25) : sw.arc;
+          if (d < reach && Math.abs(c.pos.y - P.pos.y) < 2.5 && (dx * fx + dz * fz) / Math.max(d, 0.01) > arc) {
+            const crit = CMB.riposteT > 0 || Math.random() < 0.12, dm = Math.round(sw.dmg * (fin ? 1.6 : 1) * (crit ? 1.8 : 1) * (c.stagT > 0 ? 1.3 : 1));
+            hitFighter(c, dm, fin); dmgNum(c.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : ''); hits++; if (crit) critHit = true;
+            if (STATE.sword === 'ghost') ghostDrain(c.pos); if (STATE.sword === 'seasword') seaImpact(c.pos.x, c.pos.y + 1.2, c.pos.z); }
         }
         if (hits) { const fin = PLAYER.swingKind === 2; CMB.shake = Math.max(CMB.shake, (fin ? 0.45 : 0.22) + (critHit ? 0.2 : 0)); CMB.stop = fin || critHit ? 0.09 : 0.05; if (critHit) CMB.riposteT = 0; if (fin) SFX.hit(); }
         krSwordHit(curSword());
@@ -6662,7 +6837,7 @@ window.__pgBoot = () => {
     PLAYER.hurtT += dt;
     if (PLAYER.hurtT > 6 && PLAYER.hp > 0) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 5 * dt);
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
-    updateBandits(dt); updateRaiders(dt, t);
+    updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
       autoFireT -= dt;
       const hostile = raiders.filter(r => (r.state === 'attack' || r.state === 'patrol') && Math.hypot(r.x - ship.x, r.z - ship.z) < 520)
@@ -11733,7 +11908,7 @@ window.__pgBoot = () => {
         }
         if (r.state === 'gone' || r.state === 'sinking') {   // respawned on the server
           r.x = n.x; r.z = n.z; r.heading = n.h; r.pitch = 0; r.roll = 0; r.sinkT = 0;
-          if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; });
+          if (r.deckCrew) r.deckCrew.forEach(c => { c.ch.root.visible = true; c.krLost = false; c.krGrab = null; c.st = null; c.ch.root.rotation.x = 0; if (c.home) c.lp.copy(c.home); }); r.captured = false; r.boarded = false; if (r.flags) r.flags.forEach(f => f.visible = true);
           r.group.rotation.set(0, r.heading, 0); scene.add(r.group);
         }
         if (n.st === 'attack' && n.tg === MP.me && !warned) { warned = true; toast('Blackwater raiders! At the wheel, press Space to fire the guns on the side ye\'re lookin\'.'); }
@@ -11961,7 +12136,7 @@ window.__pgBoot = () => {
     } else if (sailing) {
       ship.group.updateMatrixWorld();
       player.root.getWorldPosition(P.pos);
-      player.update(dt, 0, false, false);
+      player.update(dt, 0, false, false); showWeapon();
     } else if (inInterior) {
       interiorWalk(dt, t);
     } else if (GUEST.on) {
@@ -12093,6 +12268,8 @@ window.__pgBoot = () => {
     else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearDunDoor()) promptHtml = STATE.dunFound ? '<b>E</b> Descend into the Blackwater Vaults' : '<b>E</b> Search the rock beneath the skull\'s jaw'; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
     if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
+    if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if (!nearWheel() && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
+      if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight'; }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
 
