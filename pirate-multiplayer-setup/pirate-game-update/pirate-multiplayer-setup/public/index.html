@@ -11187,7 +11187,7 @@ window.__pgBoot = () => {
       if (el[17] && el[17] === MP.me) stalker = { el, p };
       if (p.tgt.esr === MP.me && ELD.on && !ELD.leaving && ELD.mode === 'attack' && !(ELD.pick && ELD.pick.kind === 'rserp') && p.elder && Math.hypot(p.elder.x - ELD.x, p.elder.z - ELD.z) < ELD.K.approachR * 2.2) {
         ELD.pickPrev = ELD.pick; ELD.pick = { kind: 'rserp', peer: p.peer }; if (ELD.st !== 'strike') ELD.st = 'swim'; ELD.strikeT = Math.min(ELD.strikeT, 0.3); elderRoar(0.9);   // cut off by their guard: he turns on it
-        etoast(`${p.name || 'A rival captain'}'s ${el[7] ? 'Elder Serpent' : 'serpent'} cuts across yer serpent's path! ${mountName().replace(/^./, c => c.toUpperCase())} turns to fight it!`);
+        toast(`${p.name || 'A rival captain'}'s ${el[7] ? 'Elder Serpent' : 'serpent'} cuts across yer serpent's path! ${mountName().replace(/^./, c => c.toUpperCase())} turns to fight it!`);
       }
       if (p.tgt.eat === MP.me && ELD.on && !ELD.leaving && (el[4] ?? 1) > 0.05) {   // their serpent's been sent after us: ours moves to meet it before it ever bites
         const fresh = !ELD.threats.has(p.peer) || clock.elapsedTime - ELD.threats.get(p.peer) > 25; ELD.threats.set(p.peer, clock.elapsedTime);
@@ -11853,7 +11853,7 @@ window.__pgBoot = () => {
           if (ELD.mode === 'attack' && !(ELD.pick && ELD.pick.kind === 'rserp' && ELD.pick.peer === m.peer)) {   // on the attack and a guarding serpent bites him: he turns on it, then goes back to his prey
             if (!ELD.pick || ELD.pick.kind !== 'rserp') ELD.pickPrev = ELD.pick;
             ELD.pick = { kind: 'rserp', peer: m.peer }; if (ELD.st !== 'strike') ELD.st = 'swim'; elderRoar(0.9);
-            etoast(`${mountName().replace(/^./, c => c.toUpperCase())} breaks off and turns on ${MP.peers.get(m.peer)?.name || 'a rival captain'}'s ${d.big ? 'Elder Serpent' : 'serpent'}!`); }
+            toast(`${mountName().replace(/^./, c => c.toUpperCase())} breaks off and turns on ${MP.peers.get(m.peer)?.name || 'a rival captain'}'s ${d.big ? 'Elder Serpent' : 'serpent'}!`); }
         } catch (e) {} });
       window.__mpElderDevour = peer => { MP.room.emit('ebite', { to: peer, kill: 1, dmg: 1, devour: 1 }).catch(() => {}); };
       window.__mpRaiderHoldEl = (i, on) => { if (!online() || i < 0) return; MP.room.emit('rhold', { i, on: on ? 1 : 0 }).catch(() => {}); };
