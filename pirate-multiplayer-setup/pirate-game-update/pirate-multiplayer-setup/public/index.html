@@ -10943,7 +10943,11 @@ window.__pgBoot = () => {
     const K = ELD.K;
     if (T.kind === 'kraken' && !ELD.clash && !((ELD.clashCd || 0) > 0) && d < K.approachR * 3 && (KR.st === 'roam' || KR.st === 'hunt')) { startClash(); return; }   // the two monsters lock together
     if (K.elder && isShipT(T) && d > K.approachR * 1.3 && !((ELD.devourCd || 0) > 0)) { startDevour(T, e, false); return; }   // a ship: jaws wide, straight through her
+    if (d > K.approachR && T.kind === 'rserp' && ELD.mode === 'guard' && !(window.__mpPeerEngaging && window.__mpPeerEngaging(T.peer))) {   // a guard heads it off: cut in between it and the ship it's coming for, rather than chasing its tail
+      const H = elderHome(), hx = H.x - e.x, hz = H.z - e.z, hl = Math.hypot(hx, hz) || 1, lead = Math.min(hl * 0.5, d * 0.6);
+      elderSteer(e.x + hx / hl * lead, e.z + hz / hl * lead, K.max, dt, 1.8); return; }
     if (d > K.approachR) { elderSteer(e.x, e.z, Math.min(K.max, K.max * 0.3 + d * 0.5), dt, 1.6); return; }
+    if (T.kind === 'rserp' && d < K.strikeR && ELD.strikeT > 0.2) ELD.strikeT = 0.2;   // a rival serpent in reach: no circling, straight at it
     ELD.ang = (ELD.ang ?? Math.atan2(ELD.x - e.x, ELD.z - e.z)) + dt * 0.5 * ELD.side;
     elderSteer(e.x + Math.sin(ELD.ang) * K.circle, e.z + Math.cos(ELD.ang) * K.circle, K.max * 0.45, dt, 2.2);
     ELD.strikeT -= dt; if (ELD.strikeT <= 0) { ELD.st = 'strike'; ELD.sk = 0; ELD.hit = false; elderRoar(0.5); }
@@ -11181,6 +11185,15 @@ window.__pgBoot = () => {
       const el = p.tgt && Array.isArray(p.tgt.el) ? p.tgt.el : null;
       if (!el) { if (p.elder) p.elder.m.g.visible = false; continue; }
       if (el[17] && el[17] === MP.me) stalker = { el, p };
+      if (p.tgt.esr === MP.me && ELD.on && !ELD.leaving && ELD.mode === 'attack' && !(ELD.pick && ELD.pick.kind === 'rserp') && p.elder && Math.hypot(p.elder.x - ELD.x, p.elder.z - ELD.z) < ELD.K.approachR * 2.2) {
+        ELD.pickPrev = ELD.pick; ELD.pick = { kind: 'rserp', peer: p.peer }; if (ELD.st !== 'strike') ELD.st = 'swim'; ELD.strikeT = Math.min(ELD.strikeT, 0.3); elderRoar(0.9);   // cut off by their guard: he turns on it
+        etoast(`${p.name || 'A rival captain'}'s ${el[7] ? 'Elder Serpent' : 'serpent'} cuts across yer serpent's path! ${mountName().replace(/^./, c => c.toUpperCase())} turns to fight it!`);
+      }
+      if (p.tgt.eat === MP.me && ELD.on && !ELD.leaving && (el[4] ?? 1) > 0.05) {   // their serpent's been sent after us: ours moves to meet it before it ever bites
+        const fresh = !ELD.threats.has(p.peer) || clock.elapsedTime - ELD.threats.get(p.peer) > 25; ELD.threats.set(p.peer, clock.elapsedTime);
+        if (ELD.mode === 'guard' && (!ELD.tg || ELD.tg.kind !== 'rserp')) { ELD.tg = { kind: 'rserp', peer: p.peer }; ELD.st = ELD.st === 'strike' ? ELD.st : 'swim'; }
+        if (fresh && ELD.mode === 'guard') { elderRoar(0.9); toast(`${p.name || 'A rival captain'} has sent ${el[7] ? 'the Elder Serpent' : 'their serpent'} after ye! ${mountName().replace(/^./, c => c.toUpperCase())} surges out to meet it!`); }
+      }
       const K = el[7] === 0 ? ELD_KINDS.common : ELD_KINDS.elder;
       if (p.elder && p.elder.m.K !== K) { scene.remove(p.elder.m.g); p.elder = null; }
       { const sl = JSON.stringify(p.tgt.sl || null); if (p.elder && p.elder.sl !== sl) { scene.remove(p.elder.m.g); p.elder = null; } }   // they've repainted their serpent
@@ -11829,6 +11842,7 @@ window.__pgBoot = () => {
       window.__mpElderBite = (peer, big, grab) => { MP.room.emit('ebite', big ? { to: peer, kill: 1, dmg: 1, grab: grab ? 1 : 0 } : { to: peer, dmg: 45 }).catch(() => {}); };
       window.__mpPeerSerpent = peer => { const p = MP.peers.get(peer), E = p && p.elder, el = p && p.tgt && p.tgt.el;   // out and up, wherever it is: not just when it's close enough to be drawn on our screen
         return E && Array.isArray(el) && (el[4] ?? 1) > 0.05 && el[11] !== 1 ? E : null; };
+      window.__mpPeerEngaging = peer => { const q = MP.peers.get(peer); return !!(q && q.tgt && q.tgt.esr === MP.me); };   // their serpent has turned on ours
       window.__mpSerpBite = (peer, big) => { MP.room.emit('sbite', { to: peer, big: big ? 1 : 0 }).catch(() => {}); };
       MP.room.on('sbite', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me) return;   // their serpent bit ours: ours fights back
         try { if (!ELD.on || ELD.leaving) return; ELD.threats.set(m.peer, clock.elapsedTime);
@@ -12024,7 +12038,7 @@ window.__pgBoot = () => {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         if (DUN.on) { const d = dunDoor(); _mpV.set(d.x, heightAt(d.x, d.z) - 30, d.z); }   // down in the vaults: out of sight under the skull
         const r = v => Math.round(v * 100) / 100;
-        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null,   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
+        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null, eat: ELD.on && !ELD.leaving && ELD.mode === 'attack' && ELD.pick && (ELD.pick.kind === 'player' || ELD.pick.kind === 'person') ? ELD.pick.peer : null, esr: ELD.on && !ELD.leaving ? (() => { const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg; return T && T.kind === 'rserp' ? T.peer : null; })() : null,   /* eat: whose ship or self his serpent's been sent after; esr: whose serpent he's going for */   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           sl: ELD.on && STATE.serpLook && Object.keys(STATE.serpLook).length ? STATE.serpLook : null,   // yer serpent's colours, so others see him as ye've painted him
           swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
