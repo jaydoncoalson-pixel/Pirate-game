@@ -1877,6 +1877,19 @@ window.__pgBoot = () => {
   }
 
   // ---------- Characters ----------
+  // sword swing keyframes (see the 'slash' pose): ready guard, the wind-up extreme, and the end of the strike
+  const SWING_KF = {
+    ready: { shR: -0.95, elR: -0.95, shRz: 0.18, shL: -0.45, elL: -0.95, shLz: -0.28, twist: 0.05, yaw: 0, lean: 0.1, bob: -0.03, headY: 0, headX: 0.04, wrX: -0.15, wrY: 0 },
+    0: { w: 0.3, s: 0.56, dep: 1,   // forehand: high on the right, cutting down across to the low left
+      wind: { shR: -2.75, elR: -1.35, shRz: 0.8, shL: -0.75, elL: -1.15, shLz: -0.55, twist: 0.7, yaw: 0.28, lean: -0.04, bob: 0.0, headY: -0.3, headX: 0, wrX: -0.75, wrY: 0.15 },
+      hit:  { shR: -0.55, elR: -0.12, shRz: -0.8, shL: 0.15, elL: -0.55, shLz: -0.12, twist: -0.8, yaw: -0.32, lean: 0.34, bob: -0.08, headY: 0.25, headX: 0.12, wrX: 0.45, wrY: -0.2 } },
+    1: { w: 0.26, s: 0.54, dep: 0.8,   // backhand: drawn across the body, then a flat sweep out to the right
+      wind: { shR: -1.55, elR: -1.75, shRz: -1.0, shL: -0.3, elL: -0.85, shLz: -0.15, twist: -0.85, yaw: -0.32, lean: 0.06, bob: -0.01, headY: 0.32, headX: 0.04, wrX: 0.9, wrY: 0.5 },
+      hit:  { shR: -1.5, elR: -0.1, shRz: 0.9, shL: -0.65, elL: -1.05, shLz: -0.5, twist: 0.75, yaw: 0.32, lean: 0.22, bob: -0.07, headY: -0.22, headX: 0.06, wrX: 1.2, wrY: 0 } },
+    2: { w: 0.36, s: 0.6, dep: 1.4,   // overhead finisher: both hands high behind the head, then brought down with the whole body
+      wind: { shR: -3.05, elR: -1.15, shRz: 0.12, shL: -3.0, elL: -1.15, shLz: -0.08, twist: 0.18, yaw: 0.05, lean: -0.3, bob: 0.03, headY: 0, headX: -0.18, wrX: -0.95, wrY: 0 },
+      hit:  { shR: -0.38, elR: -0.08, shRz: -0.06, shL: -0.5, elL: -0.3, shLz: 0.18, twist: -0.12, yaw: -0.05, lean: 0.62, bob: -0.16, headY: 0, headX: 0.28, wrX: 0.55, wrY: 0 } },
+  };
   function makeCharacter(o) {
     const root = new THREE.Group(), body = new THREE.Group(), upper = new THREE.Group(), HIP = 0.95;
     root.add(body); root.scale.setScalar(o.scale || 1);
@@ -2012,7 +2025,7 @@ window.__pgBoot = () => {
     }
     const ch = { root, body, upper, legs, knees, arms, forearms, head, phase: Math.random() * 6, props: {}, at: 0, seed: Math.random() * 10 };
     const REST = { hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, shL: 0.04, shR: 0.04, shLz: -0.08, shRz: 0.08, elL: -0.18, elR: -0.18,
-      lean: 0, pitch: 0, roll: 0, sway: 0, twist: 0, headY: 0, headX: 0, bob: 0 };
+      lean: 0, pitch: 0, roll: 0, sway: 0, twist: 0, headY: 0, headX: 0, bob: 0, yaw: 0, wrX: 0, wrY: 0 };
     const pose = Object.assign({}, REST);
     ch.update = (dt, speed, airborne, swim, action) => {
       ch.at += dt;
@@ -2123,16 +2136,23 @@ window.__pgBoot = () => {
             if (ch.props.crate) ch.props.crate.visible = true; break;
           case 'stir': { const q = T * 2.5; t.shR = -0.9 + Math.sin(q) * 0.2; t.elR = -0.8 + Math.cos(q) * 0.3; t.shRz = -0.3; t.shL = -0.4; t.elL = -0.9; t.lean = 0.2; t.headX = 0.3; t.headY = 0; break; }
           case 'write': t.shR = -0.7; t.elR = -1.0 + Math.sin(T * 7) * 0.08; t.shRz = -0.15 + Math.sin(T * 2.3) * 0.08; t.shL = -0.6; t.elL = -1.1; t.lean = 0.35; t.headX = 0.35; t.headY = 0; break;
-          case 'slash': { const q = ch.slashP || 0, kd = ch.slashKind || 0;
-            if (kd === 1) {   // backhand: the blade sweeps back the other way
-              t.shR = -1.5 + Math.sin(q * Math.PI) * 0.2; t.elR = -0.25; t.shRz = -0.8 + q * 1.6; t.twist = -0.6 + q * 1.2; t.lean = 0.15 + q * 0.1;
-              t.shL = -0.5; t.elL = -1.0; t.shLz = -0.4; t.headY = -t.twist * 0.4; }
-            else if (kd === 2) {   // overhead finisher: raised high, then brought down hard
-              const qq = Math.min(1, q * 1.25); t.shR = -3.1 + qq * 2.8; t.elR = -0.7 + qq * 0.7; t.shRz = 0.15; t.twist = 0.15 - qq * 0.2; t.lean = -0.15 + qq * 0.65;
-              t.shL = -3.0 + qq * 2.4; t.elL = -0.8 + qq * 0.4; t.shLz = 0.1; t.headY = 0; t.headX = -0.1 + qq * 0.3; }
-            else { t.shR = -2.8 + q * 2.6; t.elR = -0.9 + q * 0.8; t.shRz = 0.5 - q * 1.1; t.twist = 0.5 - q * 1.0; t.lean = 0.1 + q * 0.18;
-              t.shL = -0.6; t.elL = -1.0; t.shLz = -0.3; t.headY = -t.twist * 0.5; }
-            stance(); rate = 30; break; }
+          case 'slash': { const q = Math.min(1, Math.max(0, ch.slashP || 0)), kd = ch.slashKind || 0;
+            // keyframed swing: a gathering wind-up, a fast whipping strike that decelerates through the target, then a
+            // follow-through and an unhurried recovery to guard. The hips and torso lead, the arm follows, the wrist snaps last,
+            // the off arm counterbalances and the feet step into it.
+            const F = SWING_KF[kd] || SWING_KF[0], R = SWING_KF.ready;
+            const eIO = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2, eOut = x => 1 - Math.pow(1 - x, 3.2), eIn = x => x * x * x;
+            const wA = F.w, wB = F.s;   // where the wind-up ends and the strike ends
+            let A, B, u;
+            if (q < wA) { A = R; B = F.wind; u = eIO(q / wA); }
+            else if (q < wB) { A = F.wind; B = F.hit; const x = (q - wA) / (wB - wA); u = eOut(eIn(Math.min(1, x * 1.15)) * 0.35 + x * 0.65); }   // accelerate hard, then bleed off speed past the target
+            else { A = F.hit; B = R; u = eIO((q - wB) / (1 - wB)) * 0.92; }   // follow-through settling back toward guard
+            for (const key in B) t[key] = A[key] + (B[key] - A[key]) * u;
+            const step = q < wA ? 0 : q < wB ? eOut((q - wA) / (wB - wA)) : 1 - eIO((q - wB) / (1 - wB)) * 0.6, dep = F.dep || 1;   // step into the blow
+            if (still) { t.hipL = -0.3 - 0.32 * step * dep; t.kneeL = 0.35 + 0.3 * step * dep; t.hipR = 0.22 + 0.25 * step * dep; t.kneeR = 0.12 + 0.22 * step * dep; }
+            else { t.hipL -= 0.15 * step; t.kneeL += 0.15 * step; }
+            t.bob -= 0.05 * step * dep;
+            rate = 45; break; }
           case 'block': t.shR = -1.45; t.elR = -1.35; t.shRz = 0.95; t.shL = -1.1; t.elL = -1.25; t.shLz = 0.35; t.twist = -0.15; t.lean = 0.12; t.headY = 0; t.headX = 0.05; stance(); rate = 26; break;   // blade held crossways in front
           case 'aim': t.shR = -1.55; t.elR = 0; t.shRz = -0.1; t.shL = -0.2; t.elL = -0.7; t.twist = -0.25; t.headY = 0.2; t.headX = 0; stance(); rate = 24; break;
         }
@@ -2148,6 +2168,8 @@ window.__pgBoot = () => {
       body.rotation.x = c.pitch; body.rotation.z = c.roll + c.sway; body.position.y = c.bob;   // (swimming: low in the water when treading, riding the surface when stroking)
       upper.rotation.x = c.lean; upper.rotation.y = c.twist; upper.rotation.z = -c.sway * 1.6;
       head.rotation.y = c.headY; head.rotation.x = c.headX;
+      body.rotation.y = c.yaw;
+      if (ch.props.blade) { ch.props.blade.rotation.x = c.wrX; ch.props.blade.rotation.y = c.wrY; }   // the wrist: cocked back on the wind-up, snapping through on the strike
     };
     return ch;
   }
@@ -6155,9 +6177,9 @@ window.__pgBoot = () => {
       }
       if (b.stagT > 0) b.stagT -= dt;
       if (b.kbT > 0) { b.kbT -= dt; moveWithCollision(b.pos, b.kbX * dt, b.kbZ * dt, 0.45, []); }   // knocked back by a heavy blow
-      if (b.windT > 0) { action = 'slash'; b.ch.slashKind = 0; b.ch.slashP = 0; }   // blade raised, about to strike
+      if (b.windT > 0) { action = 'slash'; b.ch.slashKind = 0; b.ch.slashP = SWING_KF[0].w * (1 - b.windT / 0.45); }   // gathering the blade back, about to strike
       if (b.slashT > 0) {
-        b.slashT -= dt; action = 'slash'; b.ch.slashKind = 0; b.ch.slashP = 1 - Math.max(0, b.slashT) / 0.4;
+        b.slashT -= dt; action = 'slash'; b.ch.slashKind = 0; b.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, b.slashT) / 0.4);
         if (b.hitAt > 0) { b.hitAt -= dt; if (b.hitAt <= 0 && can && Math.hypot(tg.x - b.pos.x, tg.z - b.pos.z) < 2.6) { const dm = 9 + Math.floor(crand() * 5); if (tg.remote) window.__mpBanditHit(tg.remote, dm); else meleeHurt(dm, b); } }
       }
       b.pos.y = groundAt(b.pos.x, b.pos.z);
@@ -6217,6 +6239,40 @@ window.__pgBoot = () => {
     const wp = new THREE.Vector3(); p.ch.root.getWorldPosition(wp);
     poseSeaAura(p.aura, wp.x, wp.y, wp.z, clock.elapsedTime, dt, (p.sp || 0) > 1);
   }
+  // a fading streak behind the blade tip while it's moving fast, so a swing reads as one smooth arc
+  const TRAIL = { pts: [], mesh: null, N: 26 };
+  function bladeLen(ch) {
+    const g = ch.props.blade; if (!g) return 0.9; if (g.userData.len) return g.userData.len;
+    let mx = 0.6; g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), v = new THREE.Vector3();
+    g.traverse(o => { if (!o.isMesh) return; const pa = o.geometry.attributes.position; for (let i = 0; i < pa.count; i += 2) { v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv); if (v.z > mx) mx = v.z; } });
+    return (g.userData.len = mx);
+  }
+  function updateBladeTrail(dt) {
+    if (!TRAIL.mesh) {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL.N * 2 * 3), 3)); geo.setAttribute('alpha', new THREE.BufferAttribute(new Float32Array(TRAIL.N * 2), 1));
+      const idx = []; for (let i = 0; i < TRAIL.N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } geo.setIndex(idx);
+      TRAIL.mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({ uniforms: { tint: { value: new THREE.Color(0xffffff) } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        vertexShader: 'attribute float alpha; varying float vA; void main() { vA = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform vec3 tint; varying float vA; void main() { gl_FragColor = vec4(tint, vA); }' }));
+      TRAIL.mesh.frustumCulled = false; scene.add(TRAIL.mesh);
+    }
+    const kd = PLAYER.swingKind || 0, F = SWING_KF[kd] || SWING_KF[0], q = PLAYER.slashT > 0 ? 1 - PLAYER.slashT / (PLAYER.slashDur || 0.35) : 1;
+    const g = player.props && player.props.blade, live = g && g.visible && PLAYER.slashT > 0 && q > F.w - 0.04 && q < F.s + 0.12 && STATE.sword !== 'seasword';
+    for (const p of TRAIL.pts) p.age += dt;
+    while (TRAIL.pts.length && TRAIL.pts[0].age > 0.14) TRAIL.pts.shift();
+    if (live) { const L = bladeLen(player), tip = new THREE.Vector3(0, 0, L).applyMatrix4(g.matrixWorld), base = new THREE.Vector3(0, 0, L * 0.4).applyMatrix4(g.matrixWorld);
+      const last = TRAIL.pts[TRAIL.pts.length - 1];
+      if (last) for (let k = 1; k <= 2; k++) { const f = k / 3; TRAIL.pts.push({ tip: last.tip.clone().lerp(tip, f), base: last.base.clone().lerp(base, f), age: last.age * (1 - f) }); }   // fill in between frames so the arc stays smooth
+      TRAIL.pts.push({ tip, base, age: 0 }); while (TRAIL.pts.length > TRAIL.N) TRAIL.pts.shift(); }
+    const pos = TRAIL.mesh.geometry.attributes.position, col = TRAIL.mesh.geometry.attributes.alpha, n = TRAIL.pts.length;
+    TRAIL.mesh.visible = n > 1;
+    if (n < 2) return;
+    TRAIL.mesh.material.uniforms.tint.value.setHex(STATE.sword === 'flame' ? 0xffb070 : STATE.sword === 'ghost' ? 0xaaffd8 : 0xf2f6ff);
+    for (let i = 0; i < TRAIL.N; i++) { const p = TRAIL.pts[Math.min(n - 1, Math.max(0, i - (TRAIL.N - n)))], a = Math.max(0, 1 - p.age / 0.14) * (i >= TRAIL.N - n ? (i - (TRAIL.N - n)) / Math.max(1, n - 1) : 0);
+      pos.setXYZ(i * 2, p.tip.x, p.tip.y, p.tip.z); pos.setXYZ(i * 2 + 1, p.base.x, p.base.y, p.base.z);
+      col.setX(i * 2, a * 0.85); col.setX(i * 2 + 1, a * 0.08); }
+    pos.needsUpdate = true; col.needsUpdate = true;
+  }
   function plAction() { player.slashKind = PLAYER.swingKind || 0; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -6266,6 +6322,7 @@ window.__pgBoot = () => {
       const pop = n.t < 0.12 ? 1.5 - n.t / 0.12 * 0.5 : 1;
       n.el.style.opacity = Math.min(1, (0.95 - n.t) / 0.3); n.el.style.transform = `translate(-50%,-50%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px, ${(-tmp2.y * 0.5 + 0.5) * innerHeight}px) scale(${pop})`; }
     updateSeaAura(dt, t);
+    try { updateBladeTrail(dt); } catch (e) {}
   }
   function hitBandit(b, dmg) {
     if (window.__mpBanditDmg && window.__mpBanditDmg(b, dmg)) return;
@@ -6299,7 +6356,7 @@ window.__pgBoot = () => {
     if (!STOM.on && !onShip && !KR.heldPlayer && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (CMB.blocking) return; if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword();
       CMB.combo = CMB.comboT > 0 ? (CMB.combo + 1) % 3 : 0; const fin = CMB.combo === 2; PLAYER.swingKind = CMB.combo;   // chain swings: slash, backhand, then a heavy overhead
-      PLAYER.slashDur = Math.max(0.22, Math.min(0.45, sw.cool * 0.75)) * (fin ? 1.3 : 1); PLAYER.slashT = PLAYER.slashDur; PLAYER.cool = sw.cool * (fin ? 1.5 : 0.85); PLAYER.hitPending = PLAYER.slashDur * (fin ? 0.55 : 0.45);
+      PLAYER.slashDur = Math.max(0.34, Math.min(0.62, sw.cool * 1.05)) * (fin ? 1.3 : 1); PLAYER.slashT = PLAYER.slashDur; PLAYER.cool = Math.max(sw.cool * (fin ? 1.5 : 0.85), PLAYER.slashDur * 0.62); PLAYER.hitPending = PLAYER.slashDur * (SWING_KF[CMB.combo].w + (SWING_KF[CMB.combo].s - SWING_KF[CMB.combo].w) * 0.55);
       CMB.comboT = PLAYER.cool + 0.6; CMB.lungeT = fin ? 0.16 : 0.1; CMB.lungeV = fin ? 7 : 4; SFX.swing(); if (fin) setTimeout(() => SFX.swing(), 60); if (window.__mpSlash) window.__mpSlash(PLAYER.slashDur * 0.45); return; }
     if (PLAYER.reload > 0) { toast('Reloadin\' the pistol...'); return; }
     P.facing = yaw + Math.PI;                       // aim where the camera is looking
