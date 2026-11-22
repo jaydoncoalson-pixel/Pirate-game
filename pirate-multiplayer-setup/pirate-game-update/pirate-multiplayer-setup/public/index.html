@@ -2613,13 +2613,13 @@ window.__pgBoot = () => {
     const spike = new THREE.Mesh(new THREE.ConeGeometry(1.4, 8, 4), iron); spike.rotation.x = Math.PI / 2; spike.rotation.y = Math.PI / 4; spike.position.z = 3.6; spike.scale.set(1, 1, 0.6); ram.add(spike);
     [-1, 1].forEach(sd => { const bl = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4.5, 3), iron); bl.rotation.set(Math.PI / 2, 0, 0); bl.position.set(sd * 1.1, 0.3, 2.2); bl.rotation.z = sd * 0.5; ram.add(bl); });
     for (const dy of [-0.8, 0.8]) { const band = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 0.3), red); band.position.set(0, dy, 0.6); ram.add(band); }
-    // figurehead: a horned iron skull with burning eyes, jutting under the bowsprit
-    const fh = new THREE.Group(); fh.position.set(0, S.D * 0.9, L / 2 + 0.2); g.add(fh);
+    // figurehead: a horned iron skull with burning eyes, jutting under the bowsprit (unless her captain chose another)
+    if (!(S.fig && S.fig !== 'none')) { const fh = new THREE.Group(); fh.position.set(0, S.D * 0.9, L / 2 + 0.2); g.add(fh);
     const skull = new THREE.Mesh(new THREE.SphereGeometry(1.25, 14, 10), iron); skull.scale.set(1, 0.9, 1.15); fh.add(skull);
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.55, 1.2), iron); jaw.position.set(0, -0.95, 0.55); fh.add(jaw);
     for (let k = -2; k <= 2; k++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), rivet); t.rotation.x = Math.PI; t.position.set(k * 0.27, -0.55, 1.15); fh.add(t); }
     [-1, 1].forEach(sd => { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), glow); eye.position.set(sd * 0.45, 0.15, 1.1); eye.scale.z = 0.5; fh.add(eye);
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.35, 3, 7), dark); horn.position.set(sd * 1.3, 1.0, -0.2); horn.rotation.set(-0.5, 0, -sd * 0.9); fh.add(horn); });
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.35, 3, 7), dark); horn.position.set(sd * 1.3, 1.0, -0.2); horn.rotation.set(-0.5, 0, -sd * 0.9); fh.add(horn); }); }
     // ---- her main deck, dressed at person scale (1 m = 1/K): guns, shot, powder, a longboat, the capstan, racks of arms ----
     const m = 1 / SHIP_SCALE.titan, dy = z => F.deckY(z), half = z => F.pt(z / (L / 2), 1)[0] - 0.25;
     const wood = new THREE.MeshLambertMaterial({ color: 0x5a3a22 }), dwood = new THREE.MeshLambertMaterial({ color: 0x3a2516 }), rope = new THREE.MeshLambertMaterial({ color: 0xb8a27a }), canvas = new THREE.MeshLambertMaterial({ color: 0x8a8070 });
@@ -3162,7 +3162,7 @@ window.__pgBoot = () => {
     g.scale.setScalar(K);
     T.L = L * K; T.B = B * K; T.H = (S.D + 3) * K; T.speed = S.speed * 3.2;
     if (S.titan) titanDecor(g, F, S, L, obstacles);
-    if (S.fig && S.fig !== 'none' && !S.titan) shipFigurehead(g, F, S, L);
+    if (S.fig && S.fig !== 'none') shipFigurehead(g, F, S, L);   // (on the Titan it replaces her iron skull)
     if (S.lamps) shipLamps(g, F, S, L);
     return { group: g, T, K, flags, furl, capstan, helm: V(0, hy + 0.09, hz), key, walk: { L, B, F, hatch: S.hatchZ !== undefined ? { z: S.hatchZ } : null, door, stairs: walkStairs, obstacles, castles: walkCastles, masts: mastInfo.map(m => ({ z: m.z, r: m.r, pTop: m.pTop })) } };
   }
@@ -3427,7 +3427,7 @@ window.__pgBoot = () => {
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
-    const wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? WRECK_STYLE : gh ? GHOST_STYLE : undefined);   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
+    const fig = (STATE.shipStyle || {}).fig, wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? Object.assign({}, WRECK_STYLE, { fig }) : gh ? Object.assign({}, GHOST_STYLE, { fig }) : undefined);   // (the sea and the dead keep yer figurehead)   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
     if (wr) { decorateWreck(m); m.T.speed = SHIP_TYPES.galleon.speed * 3.2 * 2; m.T.turn *= 1.3; }   // (the sea drives every wreck at the same fierce pace)
     if (gh) { decorateGhost(m); m.T.speed *= 1.2; }
     m.T.speed *= speedMul(key); m.T.turn *= turnMul(key);   // racing sails
@@ -12525,7 +12525,7 @@ window.__pgBoot = () => {
       if (sh && (!p.ship || p.shipKey !== remoteShipKey)) {
         if (p.ship) scene.remove(p.ship.group);
         try {
-          p.ship = makeShip(sh.k, sh.w ? WRECK_STYLE : sh.g ? GHOST_STYLE : (sh.st && typeof sh.st === 'object' ? sh.st : {}));   // in their own paint, not ours
+          const rst = sh.st && typeof sh.st === 'object' ? sh.st : {}; p.ship = makeShip(sh.k, sh.w ? Object.assign({}, WRECK_STYLE, { fig: rst.fig }) : sh.g ? Object.assign({}, GHOST_STYLE, { fig: rst.fig }) : rst);   // in their own paint, not ours
           if (sh.w) decorateWreck(p.ship); else if (sh.g) decorateGhost(p.ship);
           p.shipKey = remoteShipKey; scene.add(p.ship.group);
         } catch (e) { p.ship = null; p.shipKey = null; }
