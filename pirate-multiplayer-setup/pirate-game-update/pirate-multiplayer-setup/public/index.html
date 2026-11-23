@@ -3251,7 +3251,7 @@ window.__pgBoot = () => {
 
   // the Sword of the Sea's ship: whatever ship ye sail, claimed by the sea and raised again, green with weed and crusted with barnacles,
   // coral growing from her hull. She sails twice as fast as any galleon.
-  const WRECK_STYLE = { sail: 0x8a9a7a, hull: 0x3a5a40, trim: 0x5a7a5a, flag: 'jolly' };
+  const WRECK_STYLE = { sail: 0x161e21, hull: 0x111719, trim: 0x1c3a40, flag: 'jolly', pattern: 'skull', emblem: 0x2fc8d8, ports: 0x0a0e10, deck: 0x2a2a26 };   // the Drowned Tyrant's colours: black sail marked with a glowing skull
   const isWreck = () => STATE.sword === 'seasword';
   // ---- the ghost ship (Hollowell's Ghost Blade): yer own ship, turned spectral. A dark rotted hull ye can half see
   // through, tattered grey-green sails glowing faintly, green ghost-lanterns at bow, stern and mastheads, and a
@@ -3443,50 +3443,51 @@ window.__pgBoot = () => {
     // and the topsails on the broken masts hang crooked
     m.furl.forEach((f, i) => { if (f.kind === 'sq' && Math.random() < 0.45) f.pv.rotation.z = (Math.random() - 0.5) * 0.5; });
   }
-  function decorateWreck(m) {
+  function decorateWreck(m) {   // the Drowned Tyrant's ship: whatever ship he sails, as the deep remade it
     wreckHull(m); wreckRigging(m);
-    // Local vector helper: makeShip's V helper is scoped to makeShip only.
-    const V = (x, y, z) => new THREE.Vector3(x, y, z);
-    const g = m.group, F = m.walk.F, L = m.walk.L, green = new THREE.Color(0x4f7a4a), seen = new Set();
-    g.traverse(o => { const mt = o.material; if (!mt || !mt.color || seen.has(mt) || o.isSprite) return; seen.add(mt); mt.color.lerp(green, 0.35); });
+    const g = m.group, F = m.walk.F, L = m.walk.L, S = m.T, seen = new Set(), sc = Math.max(0.8, S.B / 8);
+    const abyss = new THREE.Color(0x0c171a);
+    g.traverse(o => { const mt = o.material; if (!mt || !mt.color || seen.has(mt) || o.isSprite || mt.isMeshBasicMaterial) return; seen.add(mt); mt.color.lerp(abyss, 0.45); });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x3ff2ff }), glowD = new THREE.MeshBasicMaterial({ color: 0x1aa8b8 });
+    const coralB = new THREE.MeshLambertMaterial({ color: 0x0e1517 }), bone = new THREE.MeshLambertMaterial({ color: 0xcfc4a8 }), iron = new THREE.MeshLambertMaterial({ color: 0x161c1f });
+    const tentM = new THREE.MeshLambertMaterial({ color: 0x24393b, emissive: 0x030e10 }), suckM = new THREE.MeshLambertMaterial({ color: 0x55706a });
     const bump = new THREE.SphereGeometry(1, 6, 4), dummy = new THREE.Object3D();
-    // barnacles crusting the hull around the waterline
-    const barn = new THREE.InstancedMesh(bump, new THREE.MeshLambertMaterial({ color: 0xd8d4c8 }), 260);
-    for (let i = 0; i < 260; i++) {
-      const u = -0.92 + Math.random() * 1.84, lev = 0.15 + Math.random() * 0.55, [x, y] = F.pt(u, lev), sd = i % 2 ? 1 : -1, r = 0.06 + Math.random() * 0.1;
-      dummy.position.set(sd * (x + 0.02), y, u * L / 2); dummy.scale.set(r, r * 0.6, r); dummy.rotation.set(0, 0, sd * Math.PI / 2); dummy.updateMatrix(); barn.setMatrixAt(i, dummy.matrix);
-    }
+    // barnacles crusting the waterline
+    const barn = new THREE.InstancedMesh(bump, new THREE.MeshLambertMaterial({ color: 0x6a7276 }), 260);
+    for (let i = 0; i < 260; i++) { const u = -0.92 + Math.random() * 1.84, lev = 0.15 + Math.random() * 0.55, [x, y] = F.pt(u, lev), sd = i % 2 ? 1 : -1, r = (0.06 + Math.random() * 0.1) * sc;
+      dummy.position.set(sd * (x + 0.02), y, u * L / 2); dummy.scale.set(r, r * 0.6, r); dummy.rotation.set(0, 0, sd * Math.PI / 2); dummy.updateMatrix(); barn.setMatrixAt(i, dummy.matrix); }
     g.add(barn);
-    // seaweed hanging over the rails and trailing down the sides
+    // glowing cracks split along her planking, as if something burns in the hold
+    [-1, 1].forEach(sd => { for (const lev of [0.55, 0.72, 0.88]) for (let u = -0.85; u < 0.85; u += 0.12 + Math.random() * 0.16) {
+      if (Math.random() < 0.35) continue; const len = 0.06 + Math.random() * 0.12, [x1, y1] = F.pt(u, lev + (Math.random() - 0.5) * 0.05), [x2, y2] = F.pt(u + len, lev + (Math.random() - 0.5) * 0.06);
+      const a = new THREE.Vector3(sd * (x1 + 0.04), y1, u * L / 2), b = new THREE.Vector3(sd * (x2 + 0.04), y2, (u + len) * L / 2), d = b.clone().sub(a);
+      const cr = new THREE.Mesh(new THREE.BoxGeometry(0.05 * sc, 0.05 * sc, d.length()), Math.random() < 0.5 ? glow : glowD); cr.position.copy(a).addScaledVector(d, 0.5); cr.lookAt(b); g.add(cr); } });
+    // black kelp hanging over the rails, and chains trailing into the sea
     const weedGeo = new THREE.BoxGeometry(1, 1, 1); weedGeo.translate(0, -0.5, 0);
-    const weed = new THREE.InstancedMesh(weedGeo, new THREE.MeshLambertMaterial({ color: 0x2f7a32 }), 70);
-    for (let i = 0; i < 70; i++) {
-      const u = -0.88 + Math.random() * 1.76, [x, y] = F.pt(u, 1), sd = i % 2 ? 1 : -1, len = 0.8 + Math.random() * 2.2;
-      dummy.position.set(sd * (x + 0.05), y + 0.15, u * L / 2); dummy.scale.set(0.09, len, 0.03); dummy.rotation.set((Math.random() - 0.5) * 0.3, 0, sd * (0.08 + Math.random() * 0.15)); dummy.updateMatrix(); weed.setMatrixAt(i, dummy.matrix);
-    }
+    const weed = new THREE.InstancedMesh(weedGeo, new THREE.MeshLambertMaterial({ color: 0x0f2a24 }), 60);
+    for (let i = 0; i < 60; i++) { const u = -0.88 + Math.random() * 1.76, [x, y] = F.pt(u, 1), sd = i % 2 ? 1 : -1, len = (0.8 + Math.random() * 2.2) * sc;
+      dummy.position.set(sd * (x + 0.05), y + 0.15, u * L / 2); dummy.scale.set(0.09 * sc, len, 0.03 * sc); dummy.rotation.set((Math.random() - 0.5) * 0.3, 0, sd * (0.08 + Math.random() * 0.15)); dummy.updateMatrix(); weed.setMatrixAt(i, dummy.matrix); }
     g.add(weed);
-    // coral and anemones growing from the hull and along the deck edges
-    const coralCols = [0xff7a8a, 0xff9a4a, 0xc060d0, 0x5fd0c0];
-    for (let c = 0; c < 18; c++) {
-      const u = -0.85 + Math.random() * 1.7, onDeck = c % 3 === 0, sd = c % 2 ? 1 : -1, [x, y] = F.pt(u, onDeck ? 1 : 0.4 + Math.random() * 0.4);
-      const cl = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ color: coralCols[c % 4] });
-      cl.position.set(sd * (onDeck ? x * 0.82 : x + 0.05), onDeck ? F.deckY(u * L / 2) : y, u * L / 2);
-      for (let k = 0; k < 6; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, 0.4 + Math.random() * 0.5, 5), mat); b.position.y = 0.2; b.rotation.set((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2 + (onDeck ? 0 : sd * 1.3)); cl.add(b); }
-      g.add(cl);
-    }
-    // starfish clinging to the hull
-    const starM = new THREE.MeshLambertMaterial({ color: 0xf08a3a });
-    for (let k = 0; k < 10; k++) {
-      const u = -0.8 + Math.random() * 1.6, sd = k % 2 ? 1 : -1, [x, y] = F.pt(u, 0.5 + Math.random() * 0.35), st = new THREE.Group();
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, arm = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 4), starM); arm.position.set(Math.sin(a) * 0.12, Math.cos(a) * 0.12, 0); arm.rotation.z = -a; st.add(arm); }
-      st.position.set(sd * (x + 0.06), y, u * L / 2); st.rotation.y = sd * Math.PI / 2; g.add(st);
-    }
-    // eerie green lanterns at the rails
-    for (let k = 0; k < 4; k++) {
-      const u = [-0.7, -0.25, 0.25, 0.7][k], sd = k % 2 ? 1 : -1, [x, y] = F.pt(u, 1);
-      const lan = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0x7affa0 })); lan.position.set(sd * x * 0.92, y + 0.7, u * L / 2); g.add(lan);
-      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x5aff8a, transparent: true, opacity: 0.5, depthWrite: false })); gl.scale.set(2.2, 2.2, 1); gl.position.copy(lan.position); g.add(gl);
-    }
+    const link = new THREE.TorusGeometry(0.09 * sc, 0.025 * sc, 4, 8);
+    for (const [u, sd] of [[0.6, 1], [-0.5, -1], [0.1, -1]]) { const [x, y] = F.pt(u, 1); for (let k = 0; k < 14; k++) { const l = new THREE.Mesh(link, iron); l.position.set(sd * (x + 0.12 + k * 0.03), y - k * 0.15 * sc, u * L / 2); l.rotation.y = k % 2 ? Math.PI / 2 : 0; g.add(l); } }
+    // black coral and bone spikes along the rails
+    [-1, 1].forEach(sd => { for (let u = -0.85; u <= 0.85; u += 0.09) { const [x, y] = F.pt(u, 1), bn = Math.random() < 0.3, h = (bn ? 0.7 : 0.5 + Math.random() * 0.8) * sc;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.07 * sc, h, 5), bn ? bone : coralB); sp.position.set(sd * (x + 0.05), y + h / 2, u * L / 2); sp.rotation.z = -sd * (0.25 + Math.random() * 0.3); g.add(sp);
+      if (!bn && Math.random() < 0.5) { const br = new THREE.Mesh(new THREE.ConeGeometry(0.035 * sc, h * 0.45, 4), coralB); br.position.set(sd * (x + 0.12), y + h * 0.45, u * L / 2 + 0.1); br.rotation.set(0.6, 0, -sd * 0.9); g.add(br); } } });
+    // kraken tentacles rising from the sea and curling up over her rails
+    const tentacle = (u, sd, len) => { const [x, y] = F.pt(u, 1), [xw, yw] = F.pt(u, 0.2), z = u * L / 2, R = 0.38 * sc;
+      const pts = [new THREE.Vector3(sd * (xw + 2.2 * sc), yw - 2 * sc, z), new THREE.Vector3(sd * (xw + 1.4 * sc), yw + 0.5 * sc, z + 0.4), new THREE.Vector3(sd * (x + 0.7 * sc), y - 0.3 * sc, z - 0.3),
+        new THREE.Vector3(sd * (x + 0.1), y + 0.9 * sc * len, z), new THREE.Vector3(sd * (x - 1.0 * sc), y + 0.8 * sc * len, z + 0.5), new THREE.Vector3(sd * (x - 1.4 * sc), y + 0.15 * sc, z + 1.1 * sc), new THREE.Vector3(sd * (x - 1.05 * sc), y + 0.35 * sc, z + 1.5 * sc)];
+      const curve = new THREE.CatmullRomCurve3(pts), SEG = 48, RAD = 8, tg = new THREE.TubeGeometry(curve, SEG, R, RAD, false), tp = tg.attributes.position;
+      for (let i = 0; i <= SEG; i++) { const c = curve.getPointAt(i / SEG), k = 1 - (i / SEG) * 0.9; for (let j = 0; j <= RAD; j++) { const vi = i * (RAD + 1) + j; tp.setXYZ(vi, c.x + (tp.getX(vi) - c.x) * k, c.y + (tp.getY(vi) - c.y) * k, c.z + (tp.getZ(vi) - c.z) * k); } }   // taper to a point
+      tg.computeVertexNormals(); g.add(new THREE.Mesh(tg, tentM));
+      for (let i = 4; i < SEG - 2; i += 3) { const t2 = i / SEG, c = curve.getPointAt(t2), tn = curve.getTangentAt(t2), out = new THREE.Vector3(0, -1, 0).cross(tn).normalize().multiplyScalar(-sd), su = new THREE.Mesh(new THREE.SphereGeometry(R * (1 - t2 * 0.9) * 0.45, 6, 5), suckM);
+        su.position.copy(c).addScaledVector(new THREE.Vector3(0, -1, 0), R * (1 - t2 * 0.9) * 0.75); su.scale.y = 0.5; g.add(su); } };
+    tentacle(0.45, 1, 1.0); tentacle(-0.35, -1, 1.2); tentacle(-0.6, 1, 0.9); tentacle(0.2, -1, 1.05);
+    // lanterns burning abyssal cyan at the rails
+    for (let k = 0; k < 4; k++) { const u = [-0.7, -0.25, 0.25, 0.7][k], sd = k % 2 ? 1 : -1, [x, y] = F.pt(u, 1);
+      const lan = new THREE.Mesh(new THREE.SphereGeometry(0.22 * sc, 8, 6), glow); lan.position.set(sd * x * 0.92, y + 0.7 * sc, u * L / 2); g.add(lan);
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x3ff2ff, transparent: true, opacity: 0.5, depthWrite: false })); gl.scale.set(2.2 * sc, 2.2 * sc, 1); gl.position.copy(lan.position); g.add(gl); }
     m.wraith = true;
   }
   const SHIP_HP = { sloop: 70, brig: 130, galleon: 240, titan: 3000 };   // the Titan: over twelve galleons' worth of hull
@@ -3509,7 +3510,7 @@ window.__pgBoot = () => {
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
-    const fig = (STATE.shipStyle || {}).fig, wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? Object.assign({}, WRECK_STYLE, { fig }) : gh ? Object.assign({}, GHOST_STYLE, { fig }) : undefined);   // (the sea and the dead keep yer figurehead)   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
+    const fig = (STATE.shipStyle || {}).fig, wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? Object.assign({}, WRECK_STYLE, { fig: fig && fig !== 'none' ? fig : 'skull' }) : gh ? Object.assign({}, GHOST_STYLE, { fig }) : undefined);   // (the sea and the dead keep yer figurehead)   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
     if (wr) { decorateWreck(m); m.T.speed = SHIP_TYPES.galleon.speed * 3.2 * 2; m.T.turn *= 1.3; }   // (the sea drives every wreck at the same fierce pace)
     if (gh) { decorateGhost(m); m.T.speed *= 1.2; }
     m.T.speed *= speedMul(key); m.T.turn *= turnMul(key);   // racing sails
@@ -12607,7 +12608,7 @@ window.__pgBoot = () => {
       if (sh && (!p.ship || p.shipKey !== remoteShipKey)) {
         if (p.ship) scene.remove(p.ship.group);
         try {
-          const rst = sh.st && typeof sh.st === 'object' ? sh.st : {}; p.ship = makeShip(sh.k, sh.w ? Object.assign({}, WRECK_STYLE, { fig: rst.fig }) : sh.g ? Object.assign({}, GHOST_STYLE, { fig: rst.fig }) : rst);   // in their own paint, not ours
+          const rst = sh.st && typeof sh.st === 'object' ? sh.st : {}; p.ship = makeShip(sh.k, sh.w ? Object.assign({}, WRECK_STYLE, { fig: rst.fig && rst.fig !== 'none' ? rst.fig : 'skull' }) : sh.g ? Object.assign({}, GHOST_STYLE, { fig: rst.fig }) : rst);   // in their own paint, not ours
           if (sh.w) decorateWreck(p.ship); else if (sh.g) decorateGhost(p.ship);
           p.shipKey = remoteShipKey; scene.add(p.ship.group);
         } catch (e) { p.ship = null; p.shipKey = null; }
