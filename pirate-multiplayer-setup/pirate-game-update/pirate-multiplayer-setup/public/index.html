@@ -2101,11 +2101,17 @@ window.__pgBoot = () => {
         const big = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.36, 6), bone); big.position.set(sd * 0.04, 0.2, 0); big.rotation.z = -sd * 0.35; pg.add(big);
         for (let k = 0; k < 5; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), k % 2 ? barn : barnD); b.position.set(Math.cos(k * 1.3) * 0.16, 0.03, Math.sin(k * 1.3) * 0.17); b.scale.y = 0.6; pg.add(b); }
       });
-      // ragged cloak of dark water, torn at the hem (animated below)
-      const cg = new THREE.PlaneGeometry(0.82, 1.45, 8, 16), cpa = cg.attributes.position;
-      for (let i = 0; i < cpa.count; i++) if (cpa.getY(i) < -0.6) cpa.setY(i, cpa.getY(i) + ((i * 7919) % 13) / 13 * 0.25);   // tattered hem
-      const cloakM = new THREE.MeshPhongMaterial({ color: 0x08262e, emissive: 0x021014, specular: 0x3ff2ff, shininess: 60, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
-      const cloak = new THREE.Mesh(cg, cloakM); cloak.position.set(0, 1.74 - 0.72, -0.26); up2.add(cloak);
+      // a long cloak of black sailcloth soaked through, wrapped round the shoulders and flaring to a hem torn into ragged
+      // strips; dark as deep water outside, a faint drowned glow in its lining and along its torn edges (animated below)
+      const CW = 1.05, CH = 1.62, NX = 14, NY = 22, cg = new THREE.PlaneGeometry(CW, CH, NX, NY), cpa = cg.attributes.position, cols = [];
+      const cut = []; for (let c = 0; c <= NX; c++) cut[c] = ((c * 7919 + 13) % 17) / 17;   // how deep each strip of the hem is torn
+      for (let i = 0; i < cpa.count; i++) { const c = i % (NX + 1), y = cpa.getY(i), d = (CH / 2 - y) / CH;
+        if (d > 0.62) cpa.setY(i, y + (d - 0.62) * cut[c] * (c % 2 ? 0.75 : 0.45));   // ragged strips
+        const edge = Math.max(Math.abs(cpa.getX(i)) / (CW / 2) > 0.9 ? 1 : 0, d > 0.8 ? (d - 0.8) * 5 : 0), sh = 0.03 + 0.05 * d;
+        cols.push(sh * 0.5 + edge * 0.05, sh + edge * 0.35, sh * 1.1 + edge * 0.4); }
+      cg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      const cloakM = new THREE.MeshPhongMaterial({ vertexColors: true, emissive: 0x020a0c, specular: 0x2fd8e8, shininess: 50, side: THREE.DoubleSide });
+      const cloak = new THREE.Mesh(cg, cloakM); cloak.position.set(0, 1.75 - CH / 2, -0.02); up2.add(cloak);
       const cb = cg.attributes.position.array.slice();
       [-1, 1].forEach(sd => { const sk = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), bone); sk.position.set(sd * 0.24, 1.74, -0.19); up2.add(sk); const e = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), glow); e.position.set(sd * 0.24, 1.75, -0.15); up2.add(e); });   // skull clasps
       // belt: a horned skull buckle with burning eyes, chains and bones hanging
@@ -2113,9 +2119,26 @@ window.__pgBoot = () => {
         const lk = new THREE.TorusGeometry(0.018, 0.005, 4, 8);
         for (const [x, n] of [[-0.18, 7], [0.16, 6], [0.04, 5]]) for (let k = 0; k < n; k++) { const l = new THREE.Mesh(lk, ironD); l.position.set(x + Math.sin(k) * 0.006, 0.94 - k * 0.03, 0.19 - Math.abs(x) * 0.2); l.rotation.y = k % 2 ? Math.PI / 2 : 0; body.add(l); }
         for (const x of [-0.1, 0.1]) { const b = cyl(0.01, 0.01, 0.16, bone, x, 0.8, 0.17, body, 5); b.rotation.z = x * 2; } }
-      // hood of black sailcloth, open at the face
-      { const hd = new THREE.Mesh(new THREE.SphereGeometry(0.29, 16, 12, Math.PI / 2 + 0.85, Math.PI * 2 - 1.7, 0, Math.PI * 0.72), cloth); hd.material = new THREE.MeshLambertMaterial({ color: 0x0b1214, side: THREE.DoubleSide }); hd.scale.set(0.98, 1.12, 1.05); hd.position.y = 0.02; head.add(hd);
-        const drape = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.3, 14, 1, true, Math.PI / 2 + 0.9, Math.PI * 2 - 1.8), hd.material); drape.position.y = -0.3; head.add(drape); }
+      // a deep cowl of black sailcloth: rolled back from a face left in shadow, falling to a drooping point behind,
+      // over a ragged mantle that hangs across the shoulders
+      { const hm = new THREE.MeshLambertMaterial({ color: 0x0b1214, side: THREE.DoubleSide }), hm2 = new THREE.MeshLambertMaterial({ color: 0x070c0e, side: THREE.DoubleSide });
+        const hg = new THREE.SphereGeometry(0.3, 22, 16, Math.PI / 2 + 0.78, Math.PI * 2 - 1.56, 0, Math.PI * 0.78), hp = hg.attributes.position;
+        for (let i = 0; i < hp.count; i++) { let x = hp.getX(i), y = hp.getY(i), z = hp.getZ(i);
+          const back = Math.max(0, -z / 0.3), up = Math.max(0, y / 0.3);
+          z -= back * up * up * 0.24; y += back * up * 0.1 - back * back * 0.05;   // drawn back into a peak that droops behind
+          x *= 1 + Math.sin(Math.atan2(z, x) * 7) * 0.025;   // soft folds
+          hp.setXYZ(i, x, y, z); }
+        hg.computeVertexNormals();
+        const hd = new THREE.Mesh(hg, hm); hd.scale.set(1.0, 1.1, 1.08); hd.position.set(0, 0.03, -0.01); head.add(hd);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 10), hm); tip.position.set(0, -0.12, -0.33); tip.rotation.x = -2.78; tip.scale.set(0.85, 1, 0.6); head.add(tip);   // the cowl's long point, drooping down his back
+        // rolled edge round the face opening
+        const pts = []; for (let k = 0; k <= 24; k++) { const a = -Math.PI * 0.95 + k / 24 * Math.PI * 1.9; pts.push(new THREE.Vector3(Math.sin(a) * 0.235, Math.cos(a) * 0.29 + 0.03, 0.2 - (1 - Math.cos(a)) * 0.07)); }
+        const rim = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.028, 6, false), hm2); head.add(rim);
+        // ragged mantle over the shoulders, open at the throat
+        const mg = new THREE.CylinderGeometry(0.17, 0.46, 0.42, 26, 4, true, Math.PI / 2 + 0.55, Math.PI * 2 - 1.1), mp = mg.attributes.position;
+        for (let i = 0; i < mp.count; i++) if (mp.getY(i) < -0.15) mp.setY(i, mp.getY(i) + ((i * 104729) % 11) / 11 * 0.14);   // torn edge
+        mg.computeVertexNormals();
+        const mantle = new THREE.Mesh(mg, hm); mantle.position.set(0, 1.62, -0.01); mantle.scale.z = 0.82; up2.add(mantle); }
       // crown of jagged black coral and bone horns, a burning gem at the brow
       { const cr = new THREE.Group(); cr.position.set(0, 0.24, 0); head.add(cr);
         for (let k = 0; k < 9; k++) { const a = (k - 4) * 0.36, h2 = 0.18 + (4 - Math.abs(k - 4)) * 0.06, sp = new THREE.Mesh(new THREE.ConeGeometry(0.026, h2, 5), coralB); sp.position.set(Math.sin(a) * 0.23, h2 / 2, Math.cos(a) * 0.23 - 0.02); sp.rotation.set(Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.35); cr.add(sp);
@@ -2135,8 +2158,12 @@ window.__pgBoot = () => {
           segs.push(sg2); par = sg2; }
         tents.push({ segs, ph: k * 0.9, sd: Math.sign(a) }); }
       seaFx = (t, sp) => { const pa = cg.attributes.position;
-        for (let i = 0; i < pa.count; i++) { const x = cb[i * 3], y = cb[i * 3 + 1], d = (0.72 - y) / 1.45;
-          pa.setZ(i, -d * d * (0.1 + Math.min(0.5, sp * 0.065)) + Math.sin(t * 2.6 + y * 5 + x * 6) * 0.04 * d); pa.setX(i, x * (1 + d * 0.3) + Math.sin(t * 2 + y * 4) * 0.025 * d); }
+        const run = Math.min(1, sp / 7);
+        for (let i = 0; i < pa.count; i++) { const x = cb[i * 3], y = cb[i * 3 + 1], d = Math.max(0, (CH / 2 - y) / CH);
+          const R = 0.3 + d * 0.2, ang = x / 0.3 * (0.95 - d * 0.25);   // wrapped round the shoulders, flaring toward the hem
+          const fl = Math.sin(t * 2.4 + y * 5 + x * 6) * (0.03 + run * 0.05) * d + Math.sin(t * 5.1 + x * 9 + y * 3) * run * 0.025 * d;
+          const stream = d * d * (0.06 + run * 0.55), lift = d * d * run * 0.35;
+          pa.setXYZ(i, Math.sin(ang) * (R + fl), y + lift, -Math.cos(ang) * (R + fl) - stream); }
         pa.needsUpdate = true; cloak.geometry.computeVertexNormals();
         for (const T of tents) T.segs.forEach((s2, i) => { s2.rotation.x = 0.12 + Math.sin(t * 2.2 + T.ph + i * 0.7) * 0.14; s2.rotation.z = Math.sin(t * 1.7 + T.ph * 1.3 + i * 0.6) * 0.12 + T.sd * 0.03; });
         const pu = 0.7 + 0.3 * Math.sin(t * 4.1) * Math.sin(t * 1.3); glow.color.setRGB(0.25 * pu, 0.95 * pu, 1 * pu); seam.color.setRGB(0.12 * pu, 0.72 * pu, 0.78 * pu); };
