@@ -2119,32 +2119,33 @@ window.__pgBoot = () => {
         const lk = new THREE.TorusGeometry(0.018, 0.005, 4, 8);
         for (const [x, n] of [[-0.18, 7], [0.16, 6], [0.04, 5]]) for (let k = 0; k < n; k++) { const l = new THREE.Mesh(lk, ironD); l.position.set(x + Math.sin(k) * 0.006, 0.94 - k * 0.03, 0.19 - Math.abs(x) * 0.2); l.rotation.y = k % 2 ? Math.PI / 2 : 0; body.add(l); }
         for (const x of [-0.1, 0.1]) { const b = cyl(0.01, 0.01, 0.16, bone, x, 0.8, 0.17, body, 5); b.rotation.z = x * 2; } }
-      // a deep cowl of black sailcloth: rolled back from a face left in shadow, falling to a drooping point behind,
-      // over a ragged mantle that hangs across the shoulders
-      { const hm = new THREE.MeshLambertMaterial({ color: 0x0b1214, side: THREE.DoubleSide }), hm2 = new THREE.MeshLambertMaterial({ color: 0x070c0e, side: THREE.DoubleSide });
-        const hg = new THREE.SphereGeometry(0.3, 22, 16, Math.PI / 2 + 0.78, Math.PI * 2 - 1.56, 0, Math.PI * 0.78), hp = hg.attributes.position;
-        for (let i = 0; i < hp.count; i++) { let x = hp.getX(i), y = hp.getY(i), z = hp.getZ(i);
-          const back = Math.max(0, -z / 0.3), up = Math.max(0, y / 0.3);
-          z -= back * up * up * 0.24; y += back * up * 0.1 - back * back * 0.05;   // drawn back into a peak that droops behind
-          x *= 1 + Math.sin(Math.atan2(z, x) * 7) * 0.025;   // soft folds
-          hp.setXYZ(i, x, y, z); }
+      // the cowl: one drape of black sailcloth, close round the head, drawn up to a soft point behind and falling in folds
+      // onto the shoulders; its opening framed by a rolled edge, the face inside left in shadow
+      { const hm = new THREE.MeshLambertMaterial({ color: 0x0b1214, side: THREE.DoubleSide }), hm2 = new THREE.MeshLambertMaterial({ color: 0x060a0c });
+        const prof = [[0.001, 0.33], [0.12, 0.315], [0.21, 0.26], [0.265, 0.16], [0.285, 0.04], [0.28, -0.08], [0.26, -0.19], [0.27, -0.3], [0.33, -0.4], [0.42, -0.5]].map(([r, y]) => new THREE.Vector2(r, y));
+        const GAP = 0.78, hg = new THREE.LatheGeometry(prof, 28, GAP, Math.PI * 2 - GAP * 2), hp = hg.attributes.position;
+        const shape = (x, y, z) => { const back = Math.max(0, -z / 0.28), up = Math.max(0, (y - 0.05) / 0.28);
+          z -= back * up * up * 0.14; y += back * up * 0.05;   // drawn up and back to a soft point
+          const a = Math.atan2(x, z), r = Math.hypot(x, z), fold = y < -0.15 ? Math.sin(a * 9) * 0.018 * Math.min(1, (-0.15 - y) / 0.2) : 0;   // folds where it falls onto the shoulders
+          const k = (r + fold) / (r || 1); return [x * k, y, z * k]; };
+        for (let i = 0; i < hp.count; i++) { const v = shape(hp.getX(i), hp.getY(i), hp.getZ(i)); hp.setXYZ(i, v[0], v[1], v[2]); }
         hg.computeVertexNormals();
-        const hd = new THREE.Mesh(hg, hm); hd.scale.set(1.0, 1.1, 1.08); hd.position.set(0, 0.03, -0.01); head.add(hd);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 10), hm); tip.position.set(0, -0.12, -0.33); tip.rotation.x = -2.78; tip.scale.set(0.85, 1, 0.6); head.add(tip);   // the cowl's long point, drooping down his back
-        // rolled edge round the face opening
-        const pts = []; for (let k = 0; k <= 24; k++) { const a = -Math.PI * 0.95 + k / 24 * Math.PI * 1.9; pts.push(new THREE.Vector3(Math.sin(a) * 0.235, Math.cos(a) * 0.29 + 0.03, 0.2 - (1 - Math.cos(a)) * 0.07)); }
-        const rim = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.028, 6, false), hm2); head.add(rim);
-        // ragged mantle over the shoulders, open at the throat
-        const mg = new THREE.CylinderGeometry(0.17, 0.46, 0.42, 26, 4, true, Math.PI / 2 + 0.55, Math.PI * 2 - 1.1), mp = mg.attributes.position;
-        for (let i = 0; i < mp.count; i++) if (mp.getY(i) < -0.15) mp.setY(i, mp.getY(i) + ((i * 104729) % 11) / 11 * 0.14);   // torn edge
-        mg.computeVertexNormals();
-        const mantle = new THREE.Mesh(mg, hm); mantle.position.set(0, 1.62, -0.01); mantle.scale.z = 0.82; up2.add(mantle); }
-      // crown of jagged black coral and bone horns, a burning gem at the brow
-      { const cr = new THREE.Group(); cr.position.set(0, 0.24, 0); head.add(cr);
-        for (let k = 0; k < 9; k++) { const a = (k - 4) * 0.36, h2 = 0.18 + (4 - Math.abs(k - 4)) * 0.06, sp = new THREE.Mesh(new THREE.ConeGeometry(0.026, h2, 5), coralB); sp.position.set(Math.sin(a) * 0.23, h2 / 2, Math.cos(a) * 0.23 - 0.02); sp.rotation.set(Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.35); cr.add(sp);
-          if (k % 2 === 0) { const br = new THREE.Mesh(new THREE.ConeGeometry(0.012, h2 * 0.45, 4), coralB); br.position.set(Math.sin(a) * 0.25 + Math.sin(a) * 0.03, h2 * 0.45, Math.cos(a) * 0.25); br.rotation.set(0.3, 0, -Math.sin(a) * 1.1 - 0.4); cr.add(br); } }
-        [-1, 1].forEach(sd => { const hn = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.42, 7), bone); hn.position.set(sd * 0.2, 0.12, -0.08); hn.rotation.set(-0.55, 0, -sd * 0.75); cr.add(hn); });
-        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), glow); gem.position.set(0, 0.04, 0.245); gem.scale.y = 1.5; cr.add(gem); }
+        const hd = new THREE.Mesh(hg, hm); hd.position.set(0, 0.0, -0.01); head.add(hd);
+        const pts = [];   // rolled edge round the opening: up one side of the face, over the brow, down the other
+        for (let k = prof.length - 3; k >= 1; k--) { const pr = prof[k]; pts.push(new THREE.Vector3(...shape(Math.sin(GAP) * pr.x, pr.y, Math.cos(GAP) * pr.x))); }
+        pts.push(new THREE.Vector3(0, 0.3, 0.13));
+        for (let k = 1; k <= prof.length - 3; k++) { const pr = prof[k]; pts.push(new THREE.Vector3(...shape(-Math.sin(GAP) * pr.x, pr.y, Math.cos(GAP) * pr.x))); }
+        const rim = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.026, 6, false), hm2); rim.position.z = -0.01; head.add(rim); }
+      // crown: a circlet of black iron round the cowl at the brow, jagged black coral rising from it
+      // (tallest over the brow, falling away at the sides), a burning sea-gem set at the front
+      { const cr = new THREE.Group(); cr.position.set(0, 0.17, -0.02); cr.rotation.x = -0.12; head.add(cr);
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.278, 0.29, 0.055, 26, 1, true), new THREE.MeshLambertMaterial({ color: 0x1a2124, side: THREE.DoubleSide })); cr.add(band);
+        const lip = new THREE.Mesh(new THREE.TorusGeometry(0.279, 0.009, 5, 28), M(0x2a3438)); lip.rotation.x = Math.PI / 2; lip.position.y = 0.028; cr.add(lip);
+        for (let k = -4; k <= 4; k++) { const a = k * 0.33, h2 = 0.26 - Math.abs(k) * 0.045 + (k % 2 ? -0.03 : 0.02), x = Math.sin(a) * 0.282, z = Math.cos(a) * 0.282;
+          const sp = new THREE.Mesh(new THREE.ConeGeometry(0.024 - Math.abs(k) * 0.0015, h2, 5), coralB); sp.position.set(x, 0.02 + h2 / 2, z); sp.rotation.set(Math.cos(a) * 0.12, 0, -Math.sin(a) * 0.16); cr.add(sp);
+          if (k !== 0 && Math.abs(k) < 4) { const br = new THREE.Mesh(new THREE.ConeGeometry(0.011, h2 * 0.4, 4), coralB); br.position.set(x + Math.sign(k) * 0.03 * Math.cos(a), 0.03 + h2 * 0.42, z - Math.sign(k) * 0.03 * Math.sin(a)); br.rotation.set(0, 0, -Math.sign(k) * 0.7); cr.add(br); } }
+        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.032), glow); gem.position.set(0, 0.01, 0.295); gem.scale.y = 1.45; cr.add(gem);
+        const set = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.008, 5, 12), M(0x2a3438)); set.position.set(0, 0.01, 0.29); cr.add(set); }
       // burning eyes, a glow behind them, and the face shadowed by the hood
       [-1, 1].forEach(sd => { sph(0.026, glow, sd * 0.083, 0.035, 0.222, head); const halo = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: 0x3ff2ff, transparent: true, opacity: 0.22, depthWrite: false })); halo.position.set(sd * 0.083, 0.035, 0.21); head.add(halo); });
       const shade = new THREE.Mesh(new THREE.SphereGeometry(0.245, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.35), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })); shade.position.y = 0.01; head.add(shade);
