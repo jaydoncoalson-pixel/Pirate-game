@@ -2177,6 +2177,7 @@ window.__pgBoot = () => {
     }
     const ch = { root, body, upper, legs, knees, arms, forearms, head, phase: Math.random() * 6, props: {}, at: 0, seed: Math.random() * 10 };
     ch.seaFx = seaFx;
+    if (o.tyrant) body.scale.setScalar(TYRANT.size);   // the Drowned Tyrant towers over other men
     const REST = { hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, shL: 0.04, shR: 0.04, shLz: -0.08, shRz: 0.08, elL: -0.18, elR: -0.18,
       lean: 0, pitch: 0, roll: 0, sway: 0, twist: 0, headY: 0, headX: 0, bob: 0, yaw: 0, wrX: 0, wrY: 0 };
     const pose = Object.assign({}, REST);
@@ -2357,6 +2358,8 @@ window.__pgBoot = () => {
 
   // ---------- Player ----------
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
+  // the Sword of the Sea makes its holder the Drowned Tyrant: taller, faster, far harder to kill
+  const TYRANT = { size: 1.4, speed: 1.6, hp: 400, dmgTaken: 0.4 }, tyrantSpd = () => STATE.sword === 'seasword' ? TYRANT.speed : 1;
   const MARINE_LOOK = { coat: 0x0a1418, shirt: 0x101c1e, pants: 0x080e10, hat: 'none', eyepatch: false, coatTrim: false, sash: 0x0a1012, boots: 0x060a0c, parrot: 'none', skin: 0x4c6264, beardStyle: 'none', beardOn: false, hairStyle: 'bald', earring: false, scar: false, tattoo: false, freckles: false, brows: 'angry' };   // (drowned: grey-green skin, hooded, his beard become tentacles)
   // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
   // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
@@ -2368,7 +2371,7 @@ window.__pgBoot = () => {
     const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.35 })); aura.scale.set(3.2, 4.4, 1); aura.position.y = 1.4; ch.root.add(aura);
     ch.ghost = true; return ch;
   }
-  const playerLook = () => { if (STATE.sword !== 'seasword') return lookToChar(STATE.look); const c = lookToChar(Object.assign({}, STATE.look, MARINE_LOOK)); c.marine = true; return c; };
+  const playerLook = () => { if (STATE.sword !== 'seasword') return lookToChar(STATE.look); const c = lookToChar(Object.assign({}, STATE.look, MARINE_LOOK)); c.marine = true; c.tyrant = true; return c; };
   let player = makeCharacter(playerLook()); if (STATE.sword === 'ghost') ghostify(player, 0.45);
   scene.add(player.root);
   const startP = dockWorld(0, DOCK_LEN - 6);
@@ -3920,7 +3923,7 @@ window.__pgBoot = () => {
     }
     let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side;
     const ml = Math.hypot(mx, mz);
-    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 9 : 5) : 0) - P.speed) * Math.min(1, dt * 10);
+    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 9 : 5) * tyrantSpd() : 0) - P.speed) * Math.min(1, dt * 10);
     const h = S.heading, ch = Math.cos(h), sh = Math.sin(h);
     if (ml > 0) { mx /= ml; mz /= ml; PS.facing = angLerp(PS.facing, Math.atan2(mx * ch - mz * sh, mx * sh + mz * ch), Math.min(1, dt * 12)); }
     if (P.speed > 0.05) {
@@ -4507,7 +4510,7 @@ window.__pgBoot = () => {
     }
     let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side;
     const ml = Math.hypot(mx, mz);
-    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 8 : 4.5) : 0) - P.speed) * Math.min(1, dt * 10);
+    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 8 : 4.5) * tyrantSpd() : 0) - P.speed) * Math.min(1, dt * 10);
     if (ml > 0 && !CMB.blocking) P.facing = angLerp(P.facing, Math.atan2(mx / ml, mz / ml), Math.min(1, dt * 12));
     IP.x += Math.sin(P.facing) * P.speed * dt; IP.z += Math.cos(P.facing) * P.speed * dt;
     resolveList(IP, 0.4, interior.cols);
@@ -7018,6 +7021,7 @@ window.__pgBoot = () => {
     if (window.__god || PLAYER.hp <= 0 || STOM.on || STOM.done || MERM.held) return;
     if (RIDE.on && ELD.on && !ELD.leaving && ELD.hp > 0) { elderHurt(n * 3); return; }   // riding: yer serpent takes the blow for ye (until he falls and ye're thrown off)
     if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
+    if (STATE.sword === 'seasword') n *= TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
     if (PLAYER.hp <= 0) playerDefeated();
   }
@@ -7313,6 +7317,7 @@ window.__pgBoot = () => {
 
   function updateCombat(dt, t) {
     for (const k of ['slashT', 'aimT', 'cool', 'reload']) PLAYER[k] = Math.max(0, PLAYER[k] - dt);
+    { const want = STATE.sword === 'seasword' ? TYRANT.hp : 100; if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
     updateCombatFeel(dt, t);
     if (PLAYER.hitPending > 0) {
       PLAYER.hitPending -= dt;
@@ -8893,7 +8898,7 @@ window.__pgBoot = () => {
     let fwd = 0, side = 0;
     if (!talk && !uiOpen) { fwd = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0); side = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0); }
     let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side; const ml = Math.hypot(mx, mz);
-    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 9 : 5) : 0) - P.speed) * Math.min(1, dt * 10);
+    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 9 : 5) * tyrantSpd() : 0) - P.speed) * Math.min(1, dt * 10);
     if (ml > 0 && !CMB.blocking) P.facing = angLerp(P.facing, Math.atan2(mx / ml, mz / ml), Math.min(1, dt * 12));
     const l = dunLocal(), dx = Math.sin(P.facing) * P.speed * dt, dz = Math.cos(P.facing) * P.speed * dt;
     if (dunIn(l.x + dx, l.z + dz)) { l.x += dx; l.z += dz; } else if (dunIn(l.x + dx, l.z)) l.x += dx; else if (dunIn(l.x, l.z + dz)) l.z += dz;
@@ -8979,7 +8984,7 @@ window.__pgBoot = () => {
     let fwd = 0, side = 0;
     if (!talk && !uiOpen) { fwd = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0); side = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0); }
     let mx = -Math.sin(yaw) * fwd + Math.cos(yaw) * side, mz = -Math.cos(yaw) * fwd - Math.sin(yaw) * side; const ml = Math.hypot(mx, mz);
-    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 8 : 4.5) : 0) - P.speed) * Math.min(1, dt * 10);
+    P.speed += ((ml > 0 && !CMB.blocking ? (keys['shift'] ? 8 : 4.5) * tyrantSpd() : 0) - P.speed) * Math.min(1, dt * 10);
     if (ml > 0 && !CMB.blocking) { mx /= ml; mz /= ml; P.facing = angLerp(P.facing, Math.atan2(mx, mz), Math.min(1, dt * 12)); }
     P.pos.x += Math.sin(P.facing) * P.speed * dt; P.pos.z += Math.cos(P.facing) * P.speed * dt;
     // the folds of her stomach sway ye about a little
@@ -12296,7 +12301,7 @@ window.__pgBoot = () => {
     } catch (e) {}
   }
   // Build a remote pirate's look exactly the way playerLook() builds yours (Sword of the Sea wearers get the marine outfit).
-  const remoteLook = d => { const L = Object.assign({}, DEFAULT_LOOK, d.look || {}); if (d.sw !== 'seasword') return lookToChar(L); const c = lookToChar(Object.assign(L, MARINE_LOOK)); c.marine = true; return c; };
+  const remoteLook = d => { const L = Object.assign({}, DEFAULT_LOOK, d.look || {}); if (d.sw !== 'seasword') return lookToChar(L); const c = lookToChar(Object.assign(L, MARINE_LOOK)); c.marine = true; c.tyrant = true; return c; };
   function mpAdd(peer, by, d) {
     const ch = makeCharacter(remoteLook(d)); if (d.sw === 'ghost') ghostify(ch, 0.45);
     const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = 'Pirate ' + peer.slice(0, 3); tagLayer.appendChild(tag);
@@ -12703,7 +12708,7 @@ window.__pgBoot = () => {
     // the Sword of the Sea: the sea holds up whoever carries it; they run across the waves as if on solid ground
     const waterWalk = STATE.sword === 'seasword' && PLAYER.hp > 0, onWaves = waterWalk && !onDock(P.pos.x, P.pos.z) && g < swimY + 0.3;
     const swimming = !waterWalk && !onDock(P.pos.x, P.pos.z) && g < swimY - 0.85;
-    const want = ml > 0 && !(CMB.blocking && !swimming) ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : 1) : onWaves ? (keys['shift'] ? 16 : 8) : (keys['shift'] ? 11 : 5.5)) : 0;   // Tidecaller: mermaid's grace; the Sword of the Sea: running on the waves, faster than on land
+    const want = ml > 0 && !(CMB.blocking && !swimming) ? (swimming ? (keys['shift'] ? 7.5 : 4.5) * (STATE.sword === 'tidecaller' ? 1.6 : 1) : (onWaves ? (keys['shift'] ? 16 : 8) : (keys['shift'] ? 11 : 5.5)) * tyrantSpd()) : 0;   /* the Tyrant strides 60% faster on land and wave alike */   // Tidecaller: mermaid's grace; the Sword of the Sea: running on the waves, faster than on land
     P.speed += (want - P.speed) * Math.min(1, dt * 10);
     if (ml > 0 && !CMB.blocking) { mx /= ml; mz /= ml; P.facing = angLerp(P.facing, Math.atan2(mx, mz), Math.min(1, dt * 12)); }   // (standing yer guard: ye hold yer ground facing the foe)
     const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
