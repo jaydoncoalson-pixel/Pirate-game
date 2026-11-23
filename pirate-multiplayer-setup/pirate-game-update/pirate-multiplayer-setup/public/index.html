@@ -2075,33 +2075,68 @@ window.__pgBoot = () => {
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.04; root.add(blob);
 
+    let seaFx = null, ch_gem = null;
     if (o.marine) {
-      // the sea has claimed this outfit: shell pauldrons, barnacles, trailing seaweed, a starfish brooch, a coral crown
-      const shellM = M(0xf2d6b8), ribM = M(0xd8b48e), barnM = M(0xd8d4c8), barnD = M(0x8a8678), weedM = M(0x3f8a3a), weedD = M(0x2a6a2e), coralM = M(0xff7a8a), coral2 = M(0xff9a4a), starM = M(0xf08a3a), pearlM = M(0xf6f2ea);
+      const up2 = new THREE.Group(); up2.position.y = -HIP; upper.add(up2);   // (the upper body pivots at the hips: place things in standing height)
+      // the Lord of the Sea's regalia: a coat of deep-ocean blue edged in glowing aquamarine, a breastplate of overlapping
+      // fish scales, nautilus-shell pauldrons crusted with coral, a cloak of living water that ripples behind, a tidal crown
+      // of gold, pearl and coral with a glowing sea-gem, kelp tassels at the belt, and eyes that glow like deep water
+      const gold = M(0xd9b13a), pearl = M(0xf6f0e6), shellM = M(0xf2dcc4), shellR = M(0xc9a27e), coralM = M(0xff6a7a), coral2 = M(0xff9a4a), kelp = M(0x2e7d4f), kelpD = M(0x1e5a3a);
+      const glow = new THREE.MeshBasicMaterial({ color: 0x5ff0ff }), glow2 = new THREE.MeshBasicMaterial({ color: 0x3ad0e0 });
+      const scaleM = new THREE.MeshLambertMaterial({ color: 0x1a5f6e, emissive: 0x031418 }), scaleM2 = new THREE.MeshLambertMaterial({ color: 0x24788a, emissive: 0x041a20 });
+      // breastplate of fish scales over the chest
+      { const sg = new THREE.SphereGeometry(0.034, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2); let row = 0;
+        for (let y = 1.66; y >= 1.2; y -= 0.045, row++) for (let a = -1.15 + (row % 2) * 0.09; a <= 1.15; a += 0.18) {
+          const w = y > 1.55 ? 0.27 : 0.255, sc = new THREE.Mesh(sg, row % 2 ? scaleM : scaleM2); sc.position.set(Math.sin(a) * w, y, Math.cos(a) * w * 0.78 + 0.012); sc.rotation.set(Math.PI / 2 - 0.35, a, 0); sc.scale.set(1, 1, 0.5); up2.add(sc); } }
+      // glowing aquamarine edging down the coat front and a trident emblem on the breast
+      [-1, 1].forEach(sd => { const e = box(0.018, 0.66, 0.012, glow2, sd * 0.125, 1.36, 0.225); e.rotation.x = -0.08; });
+      { const tg = new THREE.Group(); tg.position.set(0, 1.47, 0.235); up2.add(tg); const add = (mm, x, y, r = 0) => { mm.position.set(x, y, 0); mm.rotation.z = r; tg.add(mm); };
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.17, 0.01), gold), 0, 0); [-1, 0, 1].forEach(k => add(new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05, 4), gold), k * 0.035, 0.1));
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.012, 0.01), gold), 0, 0.065); add(new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), glow), 0, 0.025); }
+      // nautilus pauldrons with gold rims, coral growing from them
       [-1, 1].forEach(sd => {
-        const pd = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), shellM); pd.scale.set(1, 0.55, 1.1); at(pd, sd * 0.37, 1.7, 0, upper); pd.rotation.z = -sd * 0.35;
-        for (let r = -2; r <= 2; r++) { const rib = box(0.012, 0.012, 0.3, ribM, sd * (0.37 + r * 0.05), 1.75, 0, upper); rib.rotation.z = -sd * 0.35; }
-        for (let k = 0; k < 4; k++) { const st = box(0.045, 0.4 + k * 0.06, 0.012, k % 2 ? weedM : weedD, sd * (0.22 + k * 0.03), 1.4 - k * 0.03, k < 2 ? 0.2 : -0.19, upper); st.rotation.set(0.05 * sd, 0, sd * (0.15 + k * 0.06)); }
-        for (let k = 0; k < 5; k++) sph(0.022 + (k % 2) * 0.008, k % 3 ? barnM : barnD, sd * (0.3 - k * 0.05), 1.55 - (k % 3) * 0.12, -0.17 - (k % 2) * 0.02, upper, 1, 0.6, 1);
+        const pg = new THREE.Group(); pg.position.set(sd * 0.36, 1.72, 0); pg.rotation.z = -sd * 0.4; up2.add(pg);
+        const sh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), shellM); sh.scale.set(1, 0.6, 1.15); pg.add(sh);
+        for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.TorusGeometry(0.12 - k * 0.028, 0.012, 5, 16, Math.PI * 1.6), shellR); sp.rotation.x = Math.PI / 2; sp.rotation.z = k * 0.6; sp.position.y = 0.035 + k * 0.022; pg.add(sp); }
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.012, 6, 20), gold); rim.rotation.x = Math.PI / 2; rim.scale.set(1, 1.15, 1); pg.add(rim);
+        for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.018, 0.13 + k * 0.03, 6), k % 2 ? coral2 : coralM); c.position.set(sd * 0.05 - sd * k * 0.04, 0.12, -0.04 + k * 0.04); c.rotation.set(k * 0.3 - 0.3, 0, -sd * (0.2 + k * 0.2)); pg.add(c); }
+        for (let k = 0; k < 3; k++) { const p = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), pearl); p.position.set(Math.cos(k * 2.1) * 0.15, 0.01, Math.sin(k * 2.1) * 0.17); pg.add(p); }
       });
-      for (let k = 0; k < 6; k++) { const st = box(0.05, 0.32 + (k % 3) * 0.08, 0.012, k % 2 ? weedM : weedD, -0.22 + k * 0.09, 0.82, 0.19 - (k % 2) * 0.38, body); st.rotation.x = (k % 2 ? -1 : 1) * 0.08; }   // weed hanging from the belt
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, arm = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.08, 4), starM); arm.rotation.set(Math.PI / 2, 0, 0); const g2 = new THREE.Group(); g2.rotation.z = a; g2.add(arm); arm.position.set(0, 0.035, 0); at(g2, -0.1, 1.5, 0.23, upper); }
-      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; sph(0.022, i % 3 ? pearlM : shellM, Math.sin(a) * 0.17, 1.76 - Math.max(0, Math.cos(a)) * 0.06, Math.cos(a) * 0.14 + 0.02, upper); }
-      // coral growing from the right shoulder
-      for (let k = 0; k < 4; k++) { const c = cyl(0.012, 0.02, 0.16 + k * 0.03, k % 2 ? coral2 : coralM, 0.42 + k * 0.02, 1.85, -0.05 + k * 0.03, upper, 6); c.rotation.set(k * 0.3 - 0.4, 0, -0.4 - k * 0.15); }
-      // coral crown and dangling weed on the head
-      for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; const c = cyl(0.014, 0.022, 0.14 + (k % 3) * 0.05, k % 2 ? coral2 : coralM, Math.sin(a) * 0.15, 0.36, Math.cos(a) * 0.15, head, 6); c.rotation.set(Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.4); }
-      for (let k = 0; k < 4; k++) { const st = box(0.04, 0.3, 0.01, weedM, -0.23 + (k % 2) * 0.46, -0.05, -0.12 + k * 0.05, head); st.rotation.z = (k % 2 ? 1 : -1) * 0.1; }
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, arm = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.07, 4), starM); arm.rotation.set(Math.PI / 2, 0, 0); const g2 = new THREE.Group(); g2.rotation.z = a; g2.add(arm); arm.position.set(0, 0.03, 0); at(g2, 0, 0.28, 0.2, head); }
-      for (let k = 0; k < 6; k++) sph(0.018, k % 2 ? barnM : barnD, (k - 2.5) * 0.06, 0.22 + (k % 2) * 0.04, -0.2, head, 1, 0.6, 1);
+      // a cloak of living water hanging from the shoulders, rippling as he moves (animated below)
+      const cg = new THREE.PlaneGeometry(0.72, 1.32, 6, 14), cloakM = new THREE.MeshPhongMaterial({ color: 0x1f8fb8, emissive: 0x06384a, specular: 0x9ff6ff, shininess: 80, transparent: true, opacity: 0.62, side: THREE.DoubleSide, depthWrite: false });
+      const cloak = new THREE.Mesh(cg, cloakM); cloak.position.set(0, 1.72 - 0.66, -0.25); up2.add(cloak);
+      const cb = cg.attributes.position.array.slice(), dots = [];
+      for (let k = 0; k < 10; k++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), glow); d.position.set((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 1.1, 0.01); cloak.add(d); dots.push(d); }   // glimmers in the water
+      const clasp = sph(0.04, glow, 0, 1.72, -0.2, up2); [-1, 1].forEach(sd => sph(0.03, gold, sd * 0.24, 1.73, -0.2, up2));
+      // belt: a glowing sea-gem buckle, kelp tassels hung with gold beads
+      sph(0.035, glow, 0, 1.0, 0.205, body); cyl(0.045, 0.045, 0.02, gold, 0, 1.0, 0.2, body, 12).rotation.x = Math.PI / 2;
+      for (let k = 0; k < 7; k++) { const x = -0.21 + k * 0.07, z = 0.17 - Math.abs(x) * 0.25; const st = box(0.04, 0.3 + (k % 3) * 0.07, 0.01, k % 2 ? kelp : kelpD, x, 0.8, z, body); st.rotation.x = 0.08; sph(0.016, gold, x, 0.65 - (k % 3) * 0.07, z + 0.01, body); }
+      // tidal crown: a gold band set with pearls, coral spires, a cresting wave and a glowing sea-gem at the brow
+      { const cr = new THREE.Group(); cr.position.set(0, 0.2, 0); head.add(cr);
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.07, 20, 1, true), new THREE.MeshLambertMaterial({ color: 0xd9b13a, side: THREE.DoubleSide })); cr.add(band);
+        for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2, p = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), pearl); p.position.set(Math.sin(a) * 0.245, -0.02, Math.cos(a) * 0.245); cr.add(p); }
+        for (let k = 0; k < 7; k++) { const a = (k - 3) * 0.42 + Math.PI, c = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.02, 0.12 + (k % 3) * 0.06, 6), k % 2 ? coral2 : coralM); c.position.set(Math.sin(a) * 0.22, 0.09, Math.cos(a) * 0.22); c.rotation.set(Math.cos(a) * -0.3, 0, Math.sin(a) * 0.3); cr.add(c); }
+        for (let k = -2; k <= 2; k++) { const w = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12 - Math.abs(k) * 0.02, 5), gold); const a = k * 0.32; w.position.set(Math.sin(a) * 0.235, 0.09 - Math.abs(k) * 0.01, Math.cos(a) * 0.235); w.rotation.set(0.3, 0, -k * 0.25); cr.add(w); }
+        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), glow); gem.position.set(0, 0.01, 0.25); gem.scale.y = 1.4; cr.add(gem); ch_gem = gem; }
+      // eyes that glow like deep water
+      [-1, 1].forEach(sd => sph(0.02, glow, sd * 0.083, 0.03, 0.222, head));
+      // living parts: the cloak ripples, the glimmers and the sea-gems pulse
+      seaFx = (t, sp) => { const pa = cg.attributes.position;
+        for (let i = 0; i < pa.count; i++) { const x = cb[i * 3], y = cb[i * 3 + 1], d = (0.66 - y) / 1.32;   // 0 at the shoulders, 1 at the hem
+          pa.setZ(i, -d * d * (0.08 + Math.min(0.45, sp * 0.06)) + Math.sin(t * 3.2 + y * 6 + x * 5) * 0.035 * d); pa.setX(i, x * (1 + d * 0.25) + Math.sin(t * 2.4 + y * 4) * 0.02 * d); }
+        pa.needsUpdate = true; cloak.geometry.computeVertexNormals();
+        const pu = 0.75 + 0.25 * Math.sin(t * 3); glow.color.setRGB(0.37 * pu, 0.94 * pu, 1 * pu); cloakM.opacity = 0.56 + 0.08 * Math.sin(t * 1.7);
+        dots.forEach((d, k) => { d.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(t * 2 + k * 1.3))); }); };
     }
     const ch = { root, body, upper, legs, knees, arms, forearms, head, phase: Math.random() * 6, props: {}, at: 0, seed: Math.random() * 10 };
+    ch.seaFx = seaFx;
     const REST = { hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, shL: 0.04, shR: 0.04, shLz: -0.08, shRz: 0.08, elL: -0.18, elR: -0.18,
       lean: 0, pitch: 0, roll: 0, sway: 0, twist: 0, headY: 0, headX: 0, bob: 0, yaw: 0, wrX: 0, wrY: 0 };
     const pose = Object.assign({}, REST);
     ch.update = (dt, speed, airborne, swim, action) => {
       ch.at += dt;
       const T = ch.at, t = Object.assign({}, REST);
+      if (ch.seaFx) ch.seaFx(T, speed || 0);
       // how fast are we turning? lean into the turn
       const ry = root.rotation.y; let dy = ry - (ch.lastRy ?? ry); dy = Math.atan2(Math.sin(dy), Math.cos(dy)); ch.lastRy = ry;
       ch.turn = (ch.turn || 0) + ((dt > 0 ? dy / dt : 0) - (ch.turn || 0)) * Math.min(1, dt * 6);
@@ -2275,7 +2310,7 @@ window.__pgBoot = () => {
 
   // ---------- Player ----------
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
-  const MARINE_LOOK = { coat: 0x2f6b4f, shirt: 0xcfe6d6, pants: 0x1f3a3a, hat: 'tricorn', hatColor: 0x1f4a3a, feather: 0x3f8a3a, eyepatch: false };
+  const MARINE_LOOK = { coat: 0x0f3a5a, shirt: 0xd8f2f0, pants: 0x0c2a3a, hat: 'none', eyepatch: false, coatTrim: false, sash: 0x0c2a3a, boots: 0x0a1c28, parrot: 'none' };   // (the tidal crown replaces any hat)
   // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
   // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
   function ghostify(ch, tint = 0.55) {
