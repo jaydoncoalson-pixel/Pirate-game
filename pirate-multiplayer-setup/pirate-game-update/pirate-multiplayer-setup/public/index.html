@@ -2621,7 +2621,7 @@ window.__pgBoot = () => {
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
   // the Sword of the Sea makes its holder the Drowned Tyrant: taller, faster, far harder to kill
   const TYRANT = { size: 1.4, speed: 1.6, hp: 400, dmgTaken: 0.4 }, tyrantSpd = () => STATE.sword === 'seasword' ? (SEAF.intro > 0 ? 0 : TYRANT.speed * (SEAF.on ? 2.4 : 1)) : 1;
-  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0, SIZE: 5, DMG: 4, REACH: 4 };   // Kraken Form (the Sword of the Sea's transformation)
+  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0, SIZE: 9, DMG: 5, REACH: 6 };   // the Elder Kraken (the Sword of the Sea's transformation)
   const MARINE_LOOK = { coat: 0x0a1418, shirt: 0x101c1e, pants: 0x080e10, hat: 'none', eyepatch: false, coatTrim: false, sash: 0x0a1012, boots: 0x060a0c, parrot: 'none', skin: 0x4c6264, beardStyle: 'none', beardOn: false, hairStyle: 'bald', earring: false, scar: false, tattoo: false, freckles: false, brows: 'angry' };   // (drowned: grey-green skin, hooded, his beard become tentacles)
   // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
   // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
@@ -5651,7 +5651,7 @@ window.__pgBoot = () => {
     btn(c, STATE.swords.includes('seasword') ? 'Equip the Sword of the Sea' : 'Give me the Sword of the Sea', () => {
       if (!STATE.swords.includes('seasword')) STATE.swords.push('seasword');
       STATE.sword = 'seasword'; save(); refreshBlade(); setWeapon('cutlass'); onSwordChanged();
-      toast('The Sword of the Sea is yers. The sea itself obeys ye: Z Tsunami, G Maelstrom, T Tempest, H Sea Wall. R calls the kraken. V: KRAKEN FORM.'); SFX.mermaid();
+      toast('The Sword of the Sea is yers. The sea itself obeys ye: Z Tsunami, G Maelstrom, T Tempest, H Sea Wall. R calls the kraken. V: become the ELDER KRAKEN.'); SFX.mermaid();
     }, STATE.sword === 'seasword');
     c = sec('Health');
     btn(c, 'Heal me', () => { PLAYER.hp = PLAYER.max; });
@@ -6068,7 +6068,7 @@ window.__pgBoot = () => {
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V Kraken Form (30s, ye become a colossal grey kraken 30 paces tall: 4x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (30s, ye become a colossal scarred grey kraken, near 55 paces tall, an anchor and a giant cutlass in its arms: 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
@@ -6091,7 +6091,7 @@ window.__pgBoot = () => {
     if (id === 'rusty' && PLAYER.hp < PLAYER.max * 0.4) m *= 1.25;
     if (id === 'saber') m *= 1 + 0.1 * Math.min(4, SWP.chain);
     if (id === 'admiral') m *= 1 + 0.08 * SWP.cmdN;
-    if (id === 'seasword' && SEAF.on) m *= SEAF.DMG;   // Kraken Form
+    if (id === 'seasword' && SEAF.on) m *= SEAF.DMG;   // the Elder Kraken
     return m;
   }
   function swordOnHit(tg, dm, crit, pos) {
@@ -8483,7 +8483,7 @@ window.__pgBoot = () => {
     if (RIDE.on && ELD.on && !ELD.leaving && ELD.hp > 0) { elderHurt(n * 3); return; }   // riding: yer serpent takes the blow for ye (until he falls and ye're thrown off)
     if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
     if (STATE.sword === 'seasword' && SEAF.intro > 0) return;   // nothing touches ye inside the rising column
-    if (STATE.sword === 'seasword' && SEAF.on) n *= 0.08;   // Kraken Form
+    if (STATE.sword === 'seasword' && SEAF.on) n *= 0.08;   // the Elder Kraken
     if (STATE.sword === 'seasword') n *= TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
     n *= gearDR();   // legendary armour
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
@@ -13732,7 +13732,7 @@ window.__pgBoot = () => {
     window.__seaSky = SEACTL.sky || 0; try { updateSeaForm(dt, t); } catch (e) { console.error(e); } seaBladeFx(dt, t); updateSeaCast(dt); updateSlashes(dt); updateRipples(dt, t); SEACTL.shake = Math.max(0, SEACTL.shake - dt * 1.6);
     for (const k of ['fCd', 'gCd', 'tCd', 'vCd']) SEACTL[k] = Math.max(0, SEACTL[k] - dt);
     const cd = v => v > 0 ? `(${Math.ceil(v)}s)` : '&middot; ready';
-    const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}<br><b>V</b> ${SEAF.on ? '<span style="color:#9ff6ff;font-weight:bold">KRAKEN FORM &middot; ' + Math.ceil(SEAF.t) + 's</span>' : SEAF.intro > 0 ? '<span style="color:#9ff6ff">The deep rises...</span>' : 'Kraken Form ' + cd(SEAF.cd)}` : '';
+    const hud = seaOn() && !inInterior && !DUN.on ? `<span style="color:#7fe6ff;letter-spacing:1px">SEA CONTROL</span><br><b>Z</b> Tsunami ${cd(SEACTL.fCd)} &nbsp; <b>G</b> Maelstrom ${cd(SEACTL.gCd)}<br><b>T</b> Tempest ${SEACTL.stormT > 0 ? '&middot; raging ' + Math.ceil(SEACTL.stormT) + 's' : cd(SEACTL.tCd)} &nbsp; <b>H</b> Sea Wall ${SEACTL.wallT > 0 ? '&middot; up ' + Math.ceil(SEACTL.wallT) + 's' : cd(SEACTL.vCd)}<br><b>V</b> ${SEAF.on ? '<span style="color:#9ff6ff;font-weight:bold">ELDER KRAKEN &middot; ' + Math.ceil(SEAF.t) + 's</span>' : SEAF.intro > 0 ? '<span style="color:#9ff6ff">The deep rises...</span>' : 'Elder Kraken ' + cd(SEAF.cd)}` : '';
     if (seaHud.innerHTML !== hud) seaHud.innerHTML = hud;
     if (!seaOn()) { SEACTL.stormT = 0; SEACTL.wallT = 0; }
     // a swimmer the sea loves: healed quickly in the water
@@ -13769,7 +13769,7 @@ window.__pgBoot = () => {
       } else { W.visible = false; if (SEACTL.wall2) SEACTL.wall2.visible = false; SEACTL.crest.visible = false; SEACTL.wallT = 0; }
     }
   }
-  // ---- Kraken Form: the Sword of the Sea's transformation (V) ----
+  // ---- the Elder Kraken: the Sword of the Sea's transformation (V) ----
   // the sea rises round ye in a spinning column, lightning strikes it, and a giant grey kraken bursts out of it in a cloud
   // of ink. For 30 seconds ye hit far harder and further, every strike throws three crescents, tentacles burst out of the
   // ground under whatever's near, and the sky strikes ships.
@@ -13820,6 +13820,58 @@ window.__pgBoot = () => {
       const T = krTentacle(arm ? 15 : 12, arm ? 8.5 : 6.5, arm ? 0.42 : 0.46); T.root.position.z = 0.75; base.add(T.root);
       legs.push({ T, a, arm, ph: i * 1.3 + Math.random() });
     }
+    // ---- the Elder Kraken's history: scars from a thousand fights, and the wreckage of the ships it took ----
+    const scarM = new THREE.MeshPhongMaterial({ color: 0xcdb6a8, shininess: 10 }), scarD = new THREE.MeshPhongMaterial({ color: 0x5a3c3c, shininess: 10 });
+    const rust = new THREE.MeshPhongMaterial({ color: 0x5e4636, shininess: 15 }), iron = new THREE.MeshPhongMaterial({ color: 0x2c2f33, shininess: 50, specular: 0x555a60 }), steel = new THREE.MeshPhongMaterial({ color: 0xc4cad0, shininess: 90, specular: 0xffffff }),
+      gold = new THREE.MeshPhongMaterial({ color: 0xc9a646, shininess: 70 }), wood = new THREE.MeshLambertMaterial({ color: 0x5a3e26 }), rope = new THREE.MeshLambertMaterial({ color: 0x9a8560 });
+    const scarGeo = new THREE.BoxGeometry(1, 1, 1);
+    // a raised scar on an ellipsoid (radii a,b,c, centred at cy): th = angle from the top, ph = round the side, rot = its slant
+    const scar = (par, a, b, c, cy, th, ph, len, w, rot, stitch) => {
+      const p = new THREE.Vector3(Math.sin(th) * Math.cos(ph) * a, cy + Math.cos(th) * b, Math.sin(th) * Math.sin(ph) * c), n = new THREE.Vector3(p.x / (a * a), (p.y - cy) / (b * b), p.z / (c * c)).normalize();
+      const m = new THREE.Mesh(scarGeo, scarM); m.scale.set(w, len, 0.06); m.position.copy(p).addScaledVector(n, 0.01); m.lookAt(m.position.clone().add(n)); m.rotateZ(rot); par.add(m);
+      const d = new THREE.Mesh(scarGeo, scarD); d.scale.set(w * 0.35, len * 0.92, 0.07); d.position.copy(m.position); d.quaternion.copy(m.quaternion); par.add(d);
+      if (stitch) for (let i = -2; i <= 2; i++) { const s2 = new THREE.Mesh(scarGeo, iron); s2.scale.set(w * 3.2, 0.03, 0.08); s2.position.copy(m.position); s2.quaternion.copy(m.quaternion); s2.translateY(i * len * 0.18); par.add(s2); }   // crude stitches
+    };
+    // the mantle: long slashes, one stitched shut, and a ragged bite taken out near the top
+    scar(mantle, 1.45, 2.68, 1.52, 1.9, 0.9, 1.3, 1.6, 0.09, 0.5, true); scar(mantle, 1.45, 2.68, 1.52, 1.9, 1.3, 1.9, 1.9, 0.08, -0.35, false);
+    scar(mantle, 1.45, 2.68, 1.52, 1.9, 1.0, -1.1, 1.3, 0.07, 0.9, false); scar(mantle, 1.45, 2.68, 1.52, 1.9, 1.6, 0.4, 1.1, 0.07, -0.8, true); scar(mantle, 1.45, 2.68, 1.52, 1.9, 0.6, 2.9, 1.0, 0.08, 0.2, false);
+    { const bite = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), scarD); bite.scale.set(1, 0.6, 0.35); bite.position.set(-1.0, 3.6, 0.55); mantle.add(bite); }
+    // three claw marks raked across the head, right over the left eye
+    for (let i = 0; i < 3; i++) scar(bd, 1.8, 1.275, 1.725, 0, 1.2 + i * 0.16, 0.25, 1.4, 0.07, 0.35, false);
+    { const eg = bd.children.find(c => c.isGroup && c.position.x > 1); if (eg) { eg.children[0].material = new THREE.MeshPhongMaterial({ color: 0xd6d6c8, emissive: 0x202018, shininess: 90 }); eg.children[1].material = new THREE.MeshBasicMaterial({ color: 0x8a8a80 }); } }   // the clawed eye: blind and milky white
+    // harpoons and a broken spear still stuck in it, with their ropes trailing
+    for (const [x, y, z, rx, rz] of [[0.9, 2.8, -0.6, -0.5, -0.6], [-0.7, 1.8, -1.2, -0.9, 0.5], [0.3, 3.3, 0.9, 0.5, -0.2]]) {
+      const h = new THREE.Group(); h.position.set(x, y, z); h.rotation.set(rx, 0, rz); mantle.add(h);
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), wood); sh.position.y = 0.9; h.add(sh);
+      const bar = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.35, 6), iron); bar.position.y = -0.1; bar.rotation.x = Math.PI; h.add(bar);
+      const rp = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.025, 4, 14, 3.5), rope); rp.position.set(0.3, 1.9, 0); h.add(rp); }
+    const leg = i => F0.legs[i].T.segs;
+    const F0 = { legs };
+    // arm 1: a great anchor, rusted, its chain wound round the arm
+    { const s = leg(0)[legs[0].T.segs.length - 3], A = new THREE.Group(); A.position.set(0, 0.2, 0.3); A.rotation.set(0.4, 0, Math.PI / 2); A.scale.setScalar(2.3); s.add(A);
+      const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 3.2, 8), rust); shank.position.y = -0.6; A.add(shank);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.07, 6, 14), iron); ring.position.y = 1.1; A.add(ring);
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.14, 0.14), wood); stock.position.y = 0.75; stock.rotation.y = Math.PI / 2; A.add(stock);
+      const crown = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.12, 6, 16, Math.PI), rust); crown.position.y = -1.5; crown.rotation.z = Math.PI; A.add(crown);
+      for (const sd of [-1, 1]) { const fl = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 4), rust); fl.position.set(sd * 0.9, -1.3, 0); fl.rotation.z = sd * 0.5; fl.scale.z = 0.35; A.add(fl); }
+      for (let j = 2; j < legs[0].T.segs.length - 3; j += 1) { const lk = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.04, 5, 10), iron); lk.position.set(0, 0.3, 0); lk.rotation.set(Math.PI / 2, j * 0.9, 0); lk.scale.setScalar(2.4 - j * 0.1); leg(0)[j].add(lk); } }
+    // arm 2: a giant's cutlass, notched and dark with old blood
+    { const s = leg(1)[legs[1].T.segs.length - 3], C = new THREE.Group(); C.position.set(0, 0.25, 0.25); C.rotation.set(-0.3, 0, -Math.PI / 2); C.scale.setScalar(2.3); s.add(C);
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 8), new THREE.MeshLambertMaterial({ color: 0x2a1a10 })); C.add(grip);
+      const guard = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.05, 6, 14, Math.PI * 1.2), gold); guard.position.y = 0.5; guard.rotation.x = Math.PI / 2; C.add(guard);
+      const pom = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), gold); pom.position.y = -0.5; C.add(pom);
+      const bl = new THREE.Group(); bl.position.y = 0.55; C.add(bl);
+      for (let j = 0; j < 7; j++) { const seg = new THREE.Mesh(new THREE.BoxGeometry(0.42 - j * 0.03, 0.62, 0.06), j === 3 ? scarD : steel); seg.position.set(Math.pow(j / 6, 2) * 0.55, 0.3 + j * 0.58, 0); seg.rotation.z = -j * 0.05; bl.add(seg); }
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.7, 4), steel); tip.scale.z = 0.25; tip.position.set(0.62, 4.6, 0); tip.rotation.z = -0.35; bl.add(tip); }
+    // a leg wrapped in a ship's chain, another with a broken boarding spear through it
+    for (const L2 of [2, 5]) for (let j = 1; j < 7; j++) { const lk = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 5, 10), iron); lk.position.y = 0.25; lk.rotation.set(Math.PI / 2 + (j % 2) * 0.6, j * 0.8, 0); lk.scale.setScalar(2.6 - j * 0.2); leg(L2)[j].add(lk); }
+    { const sp = new THREE.Group(); sp.position.set(0, 0.3, 0); sp.rotation.z = Math.PI / 2 - 0.3; leg(4)[4].add(sp);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 6), wood); sp.add(shaft);
+      const hd = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.5, 6), iron); hd.position.y = 1.2; sp.add(hd); }
+    // scarred bands round the legs, and one leg that lost its tip long ago
+    for (const [L2, j] of [[2, 3], [3, 5], [4, 7], [6, 2], [7, 6], [3, 8]]) { const sg = leg(L2)[j], r = 0.46 * (1 - j / 12 * 0.88) * 1.02; const b = new THREE.Mesh(new THREE.TorusGeometry(r, 0.04, 5, 14), scarM); b.rotation.x = Math.PI / 2; b.position.y = 0.27; sg.add(b); }
+    { const s7 = leg(7); s7[s7.length - 3].visible = false; const st = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), scarM); st.scale.y = 0.5; st.position.y = 0.54; s7[s7.length - 4].add(st); }
+    mergeStatic(mantle, mantle.children.filter(c => c !== mm && c !== fin));   // (the scars and harpoons never move on the mantle: bake them)
     const disc = new THREE.Mesh(new THREE.CircleGeometry(7, 40), new THREE.MeshBasicMaterial({ map: swirlTex, color: 0x1a6a90, transparent: true, opacity: 0, depthWrite: false })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.05; g.add(disc);
     const L = new THREE.PointLight(0x9fe0ff, 0, 18, 2); L.position.set(0, 4, 3); g.add(L);
     return { g, bd, mantle, legs, disc, L, bub: 0 };
@@ -13874,7 +13926,7 @@ window.__pgBoot = () => {
       const L = new THREE.PointLight(0x5fe8ff, 0, 40, 2); L.position.y = 6; c.add(L);
       SFORM.col = { g: c, m1, m2, L }; }
     SFX.roar(); SFX.splash({ x: P.pos.x, z: P.pos.z }, true); SEACTL.shake = Math.max(SEACTL.shake, 0.5);
-    toast('Ye drive the Sword of the Sea into the water... and the deep takes ye!');
+    toast('Ye drive the Sword of the Sea into the water... and the Elder Kraken wakes!');
   }
   function seaFormBurst() {
     SEAF.burst = true; SEAF.on = true; SEAF.t = SEAF.DUR; SEAF.cd = SEAF.CD; SEAF.spearT = 1; SEAF.boltT = 1.5;
@@ -13884,10 +13936,10 @@ window.__pgBoot = () => {
     for (let k = 0; k < 40; k++) { const a = k / 40 * 6.28, e = Math.random() * 1.1; puff(x, y + 2 + Math.random() * 6, z, { color: k % 3 ? 0x9ff6ff : 0xffffff, size: 1.5 + Math.random() * 2, life: 1.1, grow: 2, vx: Math.cos(a) * Math.cos(e) * 22, vz: Math.sin(a) * Math.cos(e) * 22, vy: Math.sin(e) * 14 + 4, op: 0.9 }); }
     // the shockwave: everything close is thrown back and hurt, ships nearby are battered
     for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone') continue; const dx = b.pos.x - x, dz = b.pos.z - z, d = Math.hypot(dx, dz);
-      if (d < 80 && Math.abs(b.pos.y - y) < 30) { const dm = Math.round(1200 * (1 - d / 120)); hitBandit(b, dm); dmgNum(b.pos, `${dm}!`, 'crit'); banditFlinch(b, true, dx / Math.max(d, 0.1) * 2.5, dz / Math.max(d, 0.1) * 2.5); } }
+      if (d < 120 && Math.abs(b.pos.y - y) < 40) { const dm = Math.round(1500 * (1 - d / 180)); hitBandit(b, dm); dmgNum(b.pos, `${dm}!`, 'crit'); banditFlinch(b, true, dx / Math.max(d, 0.1) * 2.5, dz / Math.max(d, 0.1) * 2.5); } }
     for (const c of activeFighters()) { const d = Math.hypot(c.pos.x - x, c.pos.z - z); if (d < 40) { const dm = Math.round(900 * (1 - d / 60)); hitFighter(c, dm, true); dmgNum(c.pos, `${dm}!`, 'crit'); if (c.st === 'dead') swordOnKill(); } }
     for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 400) T2.hit(T2.ship ? 250 : 400);
-    toast('KRAKEN FORM! Ye burst out of the sea as the kraken itself. (30s · V to change back)');
+    toast('THE ELDER KRAKEN! Ye burst out of the sea as the oldest thing in it. (30s · V to change back)');
   }
   function seaFormEnd(quiet) {
     if (!SEAF.on && !(SEAF.intro > 0)) return;
@@ -13895,14 +13947,14 @@ window.__pgBoot = () => {
     SEAF.on = false; SEAF.intro = 0; SEAF.t = 0;
     if (!quiet) { const x = P.pos.x, y = P.pos.y, z = P.pos.z; SFX.splash({ x, z }, true);
       for (let k = 0; k < 24; k++) { const a = Math.random() * 6.28; puff(x, y + 1 + Math.random() * 3, z, { color: 0xbff8ff, size: 1 + Math.random() * 1.5, life: 1, grow: 2, vx: Math.cos(a) * 8, vz: Math.sin(a) * 8, vy: -2 - Math.random() * 3, op: 0.8 }); }   // the water falls away from ye
-      toast('The kraken sinks away into sea water, and ye\'re yerself again.'); }
+      toast('The Elder Kraken sinks back into the deep, and ye\'re yerself again.'); }
   }
   // three crescents instead of one, and bigger
   function seaFormSlashes() {
-    for (const a of [-0.7, -0.35, 0, 0.35, 0.7]) seaSlash(a, a ? 4 : 5);   // five huge crescents
+    for (const a of [-0.7, -0.35, 0, 0.35, 0.7]) seaSlash(a, a ? 6 : 7.5);   // five huge crescents
     // the arms come down: everything at sea within reach is smashed
-    const x = P.pos.x + Math.sin(P.facing) * 25, z = P.pos.z + Math.cos(P.facing) * 25;
-    for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 90) { T2.hit(T2.ship ? 150 : 250); seaImpact(T2.e.x, 4, T2.e.z); }
+    const x = P.pos.x + Math.sin(P.facing) * 45, z = P.pos.z + Math.cos(P.facing) * 45;
+    for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 140) { T2.hit(T2.ship ? 150 : 250); seaImpact(T2.e.x, 4, T2.e.z); }
     if (LEV.on && Math.hypot(LEV.head.x - x, LEV.head.z - z) < 160) levHurt(300);
     for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28; puff(x + Math.cos(a) * 6, P.pos.y + 1, z + Math.sin(a) * 6, { color: k % 2 ? 0xe8e0d0 : 0xd8f4ff, size: 6 + Math.random() * 6, life: 1, grow: 1.8, vx: Math.cos(a) * 18, vz: Math.sin(a) * 18, vy: 6 + Math.random() * 8, op: 0.8 }); }
     SEACTL.shake = Math.max(SEACTL.shake, 1.1);
@@ -13921,7 +13973,7 @@ window.__pgBoot = () => {
     }
     if (SFORM.col) { const C = SFORM.col, show = SEAF.intro > 0 ? Math.min(1, SEAF.introT / 0.4) : 0, hgt = 3 + Math.min(1, SEAF.introT / 1.2) * 16;
       C.g.visible = show > 0.01 || C.m1.material.opacity > 0.01;
-      if (C.g.visible) { C.g.position.set(P.pos.x, P.pos.y - 0.5, P.pos.z); const r = (3.6 + Math.min(1, SEAF.introT / SEAF.INTRO) * 8); C.g.scale.set(r, hgt * 3, r);
+      if (C.g.visible) { C.g.position.set(P.pos.x, P.pos.y - 0.5, P.pos.z); const r = (3.6 + Math.min(1, SEAF.introT / SEAF.INTRO) * 16); C.g.scale.set(r, hgt * 5, r);
         C.m1.material.opacity += (0.75 * show - C.m1.material.opacity) * Math.min(1, dt * 10); C.m2.material.opacity = C.m1.material.opacity * 0.6;
         C.m1.rotation.y += dt * 3; C.m2.rotation.y -= dt * 4.5; columnTex.offset.y -= dt * 2.2; C.L.intensity = 3 * C.m1.material.opacity; } }
     // grow into the form, and shrink back out of it
@@ -13946,7 +13998,7 @@ window.__pgBoot = () => {
       for (const T2 of near.sort(() => Math.random() - 0.5).slice(0, 2)) { strikeAt(T2.e.x, T2.e.z); T2.hit(T2.ship ? 100 : 150); }
       if (LEV.on && Math.hypot(LEV.head.x - P.pos.x, LEV.head.z - P.pos.z) < 900) { strikeAt(LEV.head.x, LEV.head.z); levHurt(200); } }
   }
-  // other captains in Kraken Form
+  // other captains as the Elder Kraken
   function seaFormRemote(p, d, dt) {
     const want = d && d.sw === 'seasword' && d.tf && !(d.rid >= 1) ? 1 : 0;
     if (want && !p.tfOn) { const wp = p.ch.root.getWorldPosition(new THREE.Vector3()); if (Math.hypot(wp.x - P.pos.x, wp.z - P.pos.z) < 400) { strikeAt(wp.x, wp.z); SFX.roar(); SFX.splash({ x: wp.x, z: wp.z }, true); } }
@@ -14820,9 +14872,9 @@ window.__pgBoot = () => {
     } else if (RIDE.on) {
       camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 8, P.pos.z), Math.min(1, dt * 6));
       if (!drag && performance.now() > userOrbitUntil && ELD.speed > 3) yaw = angLerp(yaw, ELD.h + Math.PI, Math.min(1, dt * 0.6));
-    } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7 + SEAF.k * 16, P.pos.z), Math.min(1, dt * 8));
+    } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7 + SEAF.k * 3.2 * SEAF.SIZE, P.pos.z), Math.min(1, dt * 8));
     if (snapCam) { camTarget.set(P.pos.x, P.pos.y + 1.7, P.pos.z); snapCam = false; }
-    { const dd = dist * (sailing || RIDE.on ? 1 : 1 + SEAF.k * 5.5);   // pull back so the kraken fits on screen
+    { const dd = dist * (sailing || RIDE.on ? 1 : 1 + SEAF.k * 1.1 * SEAF.SIZE);   // pull back so the Elder Kraken fits on screen
     camera.position.set(
       camTarget.x + Math.sin(yaw) * Math.cos(pitch) * dd,
       camTarget.y + Math.sin(pitch) * dd,
