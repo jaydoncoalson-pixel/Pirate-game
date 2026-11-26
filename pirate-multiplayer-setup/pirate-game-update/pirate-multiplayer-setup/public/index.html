@@ -5738,7 +5738,7 @@ window.__pgBoot = () => {
     }
     if (RIDE.on) { elderDismount(); return; }
     if (canMount()) { elderMount(); return; }
-    if (sailing) { leaveWheel(); return; }
+    if (sailing) { const rb = nearRaiderToBoard(); if (rb) { raiderBoard(rb); return; } leaveWheel(); return; }
     if (inInterior) { if (deskSeated) { if (uiOpen === 'map') closeUI(); else openCaptainChart(); return; }
       if (Math.hypot(IP.x, IP.z + 4.7) < 1.7) { openCaptainChart(); return; }
       if (nearLadder()) goUp(); else if (nearBed()) sleep(); else if (nearWardrobe()) openUI('custom', 'pirate'); else if (nearTrophies()) showTrophies(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
@@ -6796,18 +6796,23 @@ window.__pgBoot = () => {
   const SIEGE = { on: false, r: null, list: [], t: 0 };
   const plFacing = () => GUEST.on && GUEST.S ? PS.facing + GUEST.S.heading : onShip && ship ? PS.facing + ship.heading : P.facing;
   function shipLocal(S, x, z) { const dx = x - S.x, dz = z - S.z, h = S.heading; return { lx: dx * Math.cos(h) - dz * Math.sin(h), lz: dx * Math.sin(h) + dz * Math.cos(h) }; }
+  // grapple range: from yer own ship (on deck or at the wheel) any raider whose hull is within ~50 m of yers; from the water, a short swim
+  const GRAPPLE = 50;
   function nearRaiderToBoard() {
-    if (GUEST.on || sailing || inInterior || RIDE.on || DUN.on || STOM.on || PLAYER.hp <= 0) return null;
-    const fromDeck = onShip, inSea = krSwimming() || seaRunning(); if (!fromDeck && !inSea) return null;
+    if (GUEST.on || inInterior || RIDE.on || DUN.on || STOM.on || PLAYER.hp <= 0 || SIEGE.on) return null;
+    const fromShip = (onShip || sailing) && ship && !ship.sinking && !ship.submerged, inSea = !fromShip && (krSwimming() || seaRunning()); if (!fromShip && !inSea) return null;
     let best = null, bd = 1e9;
     for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || !r.group.parent || r.captured) continue;
-      const { lx, lz } = shipLocal(r, P.pos.x, P.pos.z), gap = fromDeck ? 16 : 5;
-      if (Math.abs(lx) < r.T.B / 2 + gap && Math.abs(lz) < r.T.L / 2 + 3) { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < bd) { bd = d; best = r; } } }
+      let ok;
+      if (fromShip) { const { lx, lz } = shipLocal(r, ship.x, ship.z); ok = Math.abs(lx) < (r.T.B + ship.T.B) / 2 + GRAPPLE && Math.abs(lz) < r.T.L / 2 + ship.T.L * 0.3 + 20; }
+      else { const { lx, lz } = shipLocal(r, P.pos.x, P.pos.z); ok = Math.abs(lx) < r.T.B / 2 + 14 && Math.abs(lz) < r.T.L / 2 + 8; }
+      if (ok) { const d = Math.hypot(r.x - P.pos.x, r.z - P.pos.z); if (d < bd) { bd = d; best = r; } } }
     return best;
   }
   const crewOf = r => (r.deckCrew || []).filter(c => c.ch.root.visible && c.st !== 'dead' && c.st !== 'gone');
   function initFighter(c, hp) { c.home = c.home || c.lp.clone(); c.hp = c.max = hp; c.st = 'fight'; c.pos = c.pos || new THREE.Vector3(); c.atkT = 0.4 + Math.random(); c.windT = 0; c.slashT = 0; c.hitAt = 0; c.stagT = 0; c.flinchT = 0; c.deadT = 0; c.strafe = 0; }
   function raiderBoard(r) {
+    if (sailing) leaveWheel();   // straight from the wheel: grapples away
     const fromDeck = onShip; if (onShip) detach();
     r.group.updateMatrixWorld();
     const loc = r.group.worldToLocal(P.pos.clone()), W = r.walk;
@@ -13079,7 +13084,7 @@ window.__pgBoot = () => {
     else if (nearEmptyPedestal()) promptHtml = `An empty pedestal. Captain ${HORN.owner.replace(/[<>&]/g, '')} holds the true Serpent Horn.`;
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearDunDoor()) promptHtml = STATE.dunFound ? '<b>E</b> Descend into the Blackwater Vaults' : '<b>E</b> Search the rock beneath the skull\'s jaw'; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
     if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
-    if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if (!nearWheel() && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
+    if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if ((sailing || !nearWheel()) && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip || sailing ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.admiral ? 'Admiral\'s flagship' : rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
       if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight';
       if (!GUEST.raider && !SIEGE.on) { const tp = nearTradePost(); if (tp) promptHtml = (promptHtml ? promptHtml + ' &middot; ' : '') + `<b>U</b> Trade at the ${tp.isl} post`; } }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
