@@ -126,6 +126,27 @@ function sbiteOk(me, d) {
   return d.big ? hornOwns(me) : true;
 }
 
+// ---------- player bounties: sink another captain's ship and a price goes on yer head ----------
+// The sunk captain's game reports who sank them; the server checks both ships were close together, pays out any bounty
+// on the victim to the sinker, and raises the sinker's own bounty. Bounties live as long as the server does.
+const BOUNTIES = new Map();          // captain name -> gold
+const psunkSeen = new Map();         // "sinker|victim" -> time, so one sinking can't be reported over and over
+const bountyList = () => [...BOUNTIES].sort((a, b) => b[1] - a[1]).slice(0, 20);
+function onPsunk(id, me, d) {
+  const by = d && typeof d.by === 'string' ? d.by : '', sq = players.get(by);
+  if (!sq || by === id || !me.lastSh || !sq.lastSh) return;
+  const now = Date.now(), A = me.lastSh, B = sq.lastSh;
+  if (now - A.t > 30000 || now - B.t > 30000 || Math.hypot(A.x - B.x, A.z - B.z) > 2500) return;   // they must really have been close
+  const key = sq.name + '|' + me.name; if (now - (psunkSeen.get(key) || 0) < 60000) return; psunkSeen.set(key, now);
+  const onVictim = BOUNTIES.get(me.name) || 0;
+  if (onVictim > 0) { BOUNTIES.delete(me.name); send(sq.ws, serverEmit('bclaim', { gold: onVictim, name: me.name })); }
+  const nb = Math.min(50000, (BOUNTIES.get(sq.name) || 0) + 750); BOUNTIES.set(sq.name, nb);
+  send(sq.ws, serverEmit('wanted', { gold: nb, name: me.name }));
+  broadcastRaw(serverEmit('bounties', { list: bountyList() }));
+  console.log(`${sq.name} sank ${me.name}${onVictim ? ` (claimed ${onVictim})` : ''}: bounty now ${nb}`);
+}
+setInterval(() => { const now = Date.now(); for (const [k, t] of psunkSeen) if (now - t > 120000) psunkSeen.delete(k); }, 60000);
+
 const env = createEnv();
 
 const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
@@ -150,6 +171,7 @@ wss.on('connection', ws => {
       for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap', 'bwsnap', 'raid']) send(ws, serverEmit(k === 'raid' ? 'raidsnap' : k, snap[k]));
       send(ws, serverEmit('env', env.snapshot()));
       send(ws, hornMsg(players.get(id)));
+      send(ws, serverEmit('bounties', { list: bountyList() }));
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
       return;
@@ -159,6 +181,7 @@ wss.on('connection', ws => {
     if (m.t === 'pres') {
       if (!m.p || typeof m.p !== 'object') return;
       me.p = m.p;
+      if (m.p.sh && typeof m.p.sh.x === 'number' && typeof m.p.sh.z === 'number') me.lastSh = { x: m.p.sh.x, z: m.p.sh.z, t: Date.now() };
       broadcastRaw({ t: 'pres', id, p: m.p }, id);
     } else if (m.t === 'emit' && typeof m.topic === 'string') {
       if (m.topic === 'admin_env') {                                    // admin: change time/weather for everyone
@@ -168,6 +191,7 @@ wss.on('connection', ws => {
         return;
       }
       if (m.topic === 'hclaim') { hornClaim(me); return; }
+      if (m.topic === 'psunk') { onPsunk(id, me, m.data); return; }
       if (m.topic === 'gift_ack') {                                     // a player's game confirms a gift arrived
         const g = giftsPending.get(String((m.data || {}).id || '')); if (!g) return;
         clearTimeout(g.timer); giftsPending.delete(String(m.data.id));

@@ -5325,6 +5325,9 @@ window.__pgBoot = () => {
     let c = sec('Resources');
     btn(c, '+1,000 gold', () => addGold(1000, 'Admin gift'));
     btn(c, '+10 of every material', () => Object.keys(MATS).forEach(k => addMat(k, 10)));
+    c = sec('Blackwater Admiral');
+    btn(c, ADM.r ? 'The Admiral is already at sea' : 'Summon the Admiral', () => { if (!ADM.r && !admiralArrive('admin')) toast('Put to sea first: the Admiral needs open water around yer ship.'); });
+    if (ADM.r) btn(c, 'Send him away', () => admiralGone());
     c = sec('Gift gold to myself');
     { const amt = document.createElement('input'); amt.type = 'number'; amt.min = 1; amt.max = 1000000000; amt.value = ADMIN_GIFT.self || 10000; amt.style.cssText = 'width:130px;padding:5px;border-radius:6px;margin-right:6px';
       amt.oninput = () => { ADMIN_GIFT.self = Math.floor(+amt.value || 0); };
@@ -5402,7 +5405,7 @@ window.__pgBoot = () => {
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const trd = document.getElementById('trade'); if (trd) trd.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -5552,6 +5555,7 @@ window.__pgBoot = () => {
       if (typeof s === 'number') { d.style.cursor = 'pointer'; d.title = 'Click to follow this quest'; d.addEventListener('click', () => { STATE.track = id; save(); refreshQuestHud(); renderQuests(); }); }
       qlist.appendChild(d);
     });
+    try { renderBountyBoard(qlist); } catch (e) { console.error(e); }
     const tip = document.createElement('p'); tip.className = 'note'; tip.textContent = 'Click a quest in progress to follow it. The gold marker on yer minimap and in the sky points the way.';
     qlist.appendChild(tip);
   }
@@ -5590,8 +5594,9 @@ window.__pgBoot = () => {
       } }
     for (const r of raiders) if (r.state === 'patrol' || r.state === 'attack') {
       const [x, y] = S(r.x, r.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = '#c0392b'; ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(4, 5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+      const sz = r.admiral ? 1.8 : r.bountied ? 1.3 : 1;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = r.admiral ? '#141414' : r.bountied ? '#e8c44a' : '#c0392b'; ctx.strokeStyle = r.admiral ? '#e8c44a' : '#1c1c1c'; ctx.lineWidth = r.admiral ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.moveTo(0, -7 * sz); ctx.lineTo(4 * sz, 5 * sz); ctx.lineTo(-4 * sz, 5 * sz); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
     if (ship && !(sailing || onShip || inInterior)) {
       const [x, y] = S(ship.x, ship.z); ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - ship.heading);
@@ -5736,6 +5741,7 @@ window.__pgBoot = () => {
   addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     if ((k === 'e' || k === 'enter') && !e.repeat) interact();
+    if (k === 'u' && !e.repeat && !talk && !uiOpen) { const tp = nearTradePost(); if (tp) openTrade(tp); }
     if (talk && talk.options && k >= '1' && k <= '9') chooseShip(+k - 1);
     if (!talk && !(sailing && ship && ship.submerged) && !e.repeat && (k === 'c' || k === 'q' || k === 'm' || k === 'i')) toggleUI({ c: 'custom', q: 'quests', m: 'map', i: 'forge' }[k]);
     if (k === 'escape') { if (talk) closeDialog(); else if (uiOpen) closeUI(); }
@@ -5760,6 +5766,7 @@ window.__pgBoot = () => {
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'saber', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
@@ -6779,11 +6786,11 @@ window.__pgBoot = () => {
     if (player.root.parent) player.root.parent.remove(player.root); r.group.add(player.root); player.root.scale.setScalar(1 / r.K);
     PL.set(lx, shipFloor(lx, lz, r) ?? W.F.deckY(lz), lz); PS.facing = lx > 0 ? -Math.PI / 2 : Math.PI / 2; PS.vy = 0; PS.grounded = true;
     GUEST.on = true; GUEST.p = null; GUEST.S = r; GUEST.raider = r; r.boarded = true;
-    for (const c of crewOf(r)) if (c.st !== 'fight') { initFighter(c, r.galleon ? 55 : 40); c.facing = c.ch.root.rotation.y; }
+    for (const c of crewOf(r)) if (c.st !== 'fight') { initFighter(c, c.boss ? 1100 : r.admiral ? 80 : r.galleon ? 55 : 40); c.facing = c.ch.root.rotation.y; }
     dist = Math.min(Math.max(dist, 12), 22);
     hudHint.innerHTML = 'WASD to move &middot; F to attack &middot; hold X or right-click to block &middot; E to swing back to yer ship (or jump over the rail)';
     SFX.creak(); SFX.swing(); setTimeout(() => SFX.swing(), 120);
-    toast(fromDeck ? `Grapples away! Ye swing across onto the ${r.galleon ? 'galleon' : 'raider'}'s deck. Cut down her crew!` : 'Ye haul yerself up her side and onto the deck. Her crew draw steel!');
+    if (r.admiral) toast('Ye board the Admiral\'s flagship! Cut through his guard, then face the Admiral himself on the quarterdeck.'); else toast(fromDeck ? `Grapples away! Ye swing across onto the ${r.galleon ? 'galleon' : 'raider'}'s deck. Cut down her crew!` : 'Ye haul yerself up her side and onto the deck. Her crew draw steel!');
   }
   function raiderLeave(msg) {
     const r = GUEST.raider; if (!r) return;
@@ -6792,7 +6799,7 @@ window.__pgBoot = () => {
     if (back) { board(); SFX.swing(); toast(msg || 'Ye swing back across to yer own deck.'); } else if (msg) toast(msg);
   }
   function boardPrompt() {
-    const r = GUEST.raider, n = crewOf(r).length, nm = r.galleon ? 'galleon' : 'raider';
+    const r = GUEST.raider, n = crewOf(r).length, nm = r.admiral ? 'Admiral\'s flagship' : r.galleon ? 'galleon' : 'raider';
     return n ? `Boarding the Blackwater ${nm} &middot; <b>${n}</b> crew left &middot; <b>E</b> Swing back` : `The ${nm} is yers! She'll be scuttled shortly &middot; <b>E</b> Swing back to yer ship`;
   }
   function activeFighters() {
@@ -6802,10 +6809,11 @@ window.__pgBoot = () => {
     return out;
   }
   function hitFighter(c, dm, heavy) {
+    if (c.boss) dm = Math.min(dm, 120);   // no single cut fells the Admiral
     c.hp -= dm; c.flinchT = 0.3; SFX.hit(c.pos);
     puff(c.pos.x, c.pos.y + 1.4, c.pos.z, { color: 0xb02020, size: 0.9, life: 0.4, grow: 1, op: 0.9 });
-    if (c.windT > 0 && (heavy || Math.random() < 0.5)) { c.windT = 0; c.atkT = Math.max(c.atkT, 0.7); }
-    if (c.hp <= 0) { c.st = 'dead'; c.deadT = 0; c.slashT = 0; c.windT = 0; }
+    if (c.windT > 0 && !c.boss && (heavy || Math.random() < 0.5)) { c.windT = 0; c.atkT = Math.max(c.atkT, 0.7); }
+    if (c.hp <= 0) { if (c.boss) toast('The Blackwater Admiral falls!'); c.st = 'dead'; c.deadT = 0; c.slashT = 0; c.windT = 0; }
   }
   // one deck fighter's turn: closes on ye along the deck, circles, winds up and strikes (blockable, parryable)
   function fighterStep(c, S, dt, mine, dmg, pickTarget) {
@@ -6822,18 +6830,18 @@ window.__pgBoot = () => {
     if (tg) {
       c.facing = angLerp(c.facing, Math.atan2(dx, dz), Math.min(1, dt * (dm > 1.8 ? 8 : 10)));
       const busy = c.stagT > 0 || c.windT > 0 || c.slashT > 0;
-      if (dm > 1.8) { if (!busy) { spd = dm > 5 ? 4.6 : 3; const st = spd / K * dt; if (!tryMove(Math.sin(c.facing) * st, Math.cos(c.facing) * st) && !tryMove(Math.sin(c.facing) * st, 0)) tryMove(0, Math.cos(c.facing) * st); } }
+      if (dm > (c.boss ? 2.6 : 1.8)) { if (!busy) { spd = dm > 5 ? 4.6 : 3; const st = spd / K * dt; if (!tryMove(Math.sin(c.facing) * st, Math.cos(c.facing) * st) && !tryMove(Math.sin(c.facing) * st, 0)) tryMove(0, Math.cos(c.facing) * st); } }
       else {
         c.atkT -= dt;
         if (c.stagT > 0) { /* reeling */ }
         else if (c.windT > 0) { c.windT -= dt; if (c.windT <= 0) { SFX.swing(c.pos); c.slashT = 0.4; c.hitAt = 0.15; } }
-        else if (c.atkT <= 0 && c.slashT <= 0) { c.windT = 0.45; c.atkT = 1.3 + Math.random() * 0.8; banditGlint({ pos: c.pos, facing: c.facing + S.heading }); }
+        else if (c.atkT <= 0 && c.slashT <= 0) { c.windT = c.wind0 = c.boss ? 0.32 : 0.45; c.atkT = c.boss ? 0.7 + Math.random() * 0.4 : 1.3 + Math.random() * 0.8; banditGlint({ pos: c.pos, facing: c.facing + S.heading }); }
         else if (c.slashT <= 0) { if (!c.strafe || Math.random() < dt * 0.6) c.strafe = Math.random() < 0.5 ? -1 : 1; const st = 1.3 / K * dt; if (tryMove(Math.cos(c.facing) * c.strafe * st, -Math.sin(c.facing) * c.strafe * st)) spd = 1.3; }
       }
     }
-    if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / 0.45); }
+    if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / (c.wind0 || 0.45)); }
     if (c.slashT > 0) { c.slashT -= dt; action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, c.slashT) / 0.4);
-      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && tg && dm < 2.7 && Math.abs(tg.y - c.lp.y) * K < 2) tg.hit(dmg()); } }
+      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && tg && dm < (c.boss ? 3.6 : 2.7) && Math.abs(tg.y - c.lp.y) * K < (c.boss ? 3 : 2)) tg.hit(c.dmgF ? c.dmgF() : dmg()); } }
     root.position.copy(c.lp); root.rotation.set(-((c.flinchT > 0 ? Math.sin(c.flinchT / 0.3 * Math.PI) * 0.35 : 0) + (c.stagT > 0 ? 0.25 : 0)), c.facing, 0);
     c.ch.update(dt, spd, false, false, action); if (c.ch.props.blade) c.ch.props.blade.visible = true;
     root.getWorldPosition(c.pos);
@@ -6887,7 +6895,7 @@ window.__pgBoot = () => {
     const nDef = (ship.crew || []).filter(isDefender).length, n = Math.min(16, (r.galleon ? 5 : 3) + Math.floor(nDef / 4));   // a bigger crew to cut through means more boarders
     SIEGE.on = true; SIEGE.r = r; SIEGE.t = 0; SIEGE.list = []; armCrew(true);
     ship.group.updateMatrixWorld(); const W = ship.walk, side = Math.sign(shipLocal(ship, r.x, r.z).lx) || 1;
-    crewOf(r).slice(0, n).forEach(c => { c.ch.root.visible = false; c.st = 'gone'; });   // they've come across
+    crewOf(r).filter(c => !c.boss).slice(0, n).forEach(c => { c.ch.root.visible = false; c.st = 'gone'; });   // they've come across
     for (let i = 0; i < n; i++) {
       const ch = makeCharacter(banditLook()); addProp(ch, 'blade'); ch.root.scale.setScalar(1 / ship.K); ship.group.add(ch.root);
       let lz = 0, lx = 0, f = null; for (let k = 0; k < 20 && f === null; k++) { lz = (Math.random() - 0.5) * W.L * 0.55; lx = side * (W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45) * (0.45 + Math.random() * 0.3); f = shipFloor(lx, lz); if (f !== null && shipBlockedAt(lx, lz, f)) f = null; }
@@ -6905,6 +6913,8 @@ window.__pgBoot = () => {
   function captureRaider(r) {
     r.captured = true; BOARD.scuttleT = 14;
     if (r.flags) r.flags.forEach(f => f.visible = false);   // she strikes her colours
+    if (r.admiral) { admiralDefeated(r, 'duel'); toast('The Admiral falls to his knees and his flagship strikes her colours! She\'ll be scuttled in moments. E to swing back!'); SFX.creak(); return; }
+    bountyClaim(r, 'capture');
     const gal = r.galleon;
     addGold(gal ? 900 : 400, `Captured a Blackwater ${gal ? 'galleon' : 'raider'}! Her hold is yers`); addMat('steel', gal ? 5 : 3); addMat('pearl', gal ? 3 : 1); if (gal && Math.random() < 0.6) addMat('gem', 1);
     toast(`Her last hand falls and the Blackwater ${gal ? 'galleon' : 'raider'} strikes her colours! Ye plunder her hold... she'll be scuttled in moments. E to swing back!`);
@@ -6932,10 +6942,10 @@ window.__pgBoot = () => {
         const dmg = () => (r.galleon ? 11 : 9) + Math.floor(Math.random() * 5);
         for (const c of r.deckCrew || []) if (c.st === 'fight' || c.st === 'dead') fighterStep(c, r, dt, true, dmg);
         if (!r.captured && !crewOf(r).some(c => c.st === 'fight')) captureRaider(r);
-        if (!online) { r.speed = Math.max(0, r.speed - 30 * dt); if (ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140) ship.speed = Math.max(0, ship.speed - 20 * dt); }   // lashed together
+        if (!online || r.local) { r.speed = Math.max(0, r.speed - 30 * dt); if (ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140) ship.speed = Math.max(0, ship.speed - 20 * dt); }   // lashed together
       }
     }
-    if (BOARD.scuttleT > 0) { BOARD.scuttleT -= dt; const pr = raiders.find(x => x.captured); if (pr && !online) pr.speed = Math.max(0, pr.speed - 30 * dt);
+    if (BOARD.scuttleT > 0) { BOARD.scuttleT -= dt; const pr = raiders.find(x => x.captured); if (pr && (!online || pr.local)) pr.speed = Math.max(0, pr.speed - 30 * dt);
       if (pr && BOARD.scuttleT <= 0) { if (GUEST.raider === pr) raiderLeave('She\'s scuttled! Ye swing clear as she starts to go down.'); damageShip(pr, pr.hp + 9999); } }
     if (!SIEGE.on && BOARD.cool <= 0 && !GUEST.on && ship && !ship.sinking && !ship.submerged && (onShip || sailing || inInterior) && PLAYER.hp > 0) {
       for (const q of raiders) { if (q.state !== 'attack' || q.captured || !q.group.parent) continue;
@@ -6949,13 +6959,221 @@ window.__pgBoot = () => {
       else {
         const dmg = () => (q.galleon ? 11 : 9) + Math.floor(Math.random() * 5), mine = onShip && !inInterior;
         for (const c of SIEGE.list) fighterStep(c, ship, dt, mine, dmg, b => boarderTarget(b, mine));
-        ship.speed = Math.min(ship.speed, 2); if (!online) q.speed = Math.min(q.speed, 2);
+        ship.speed = Math.min(ship.speed, 2); if (!online || q.local) q.speed = Math.min(q.speed, 2);
         if (!SIEGE.list.some(c => c.st === 'fight' || c.st === 'dead')) endSiege(true);
       }
     }
     const pair = SIEGE.on ? [ship, SIEGE.r] : r && ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140 ? [ship, r] : null;
     updateRopes(!!pair, pair && pair[0], pair && pair[1]);
   }
+  // ===================== The Blackwater Admiral =====================
+  // The Blackwater fleet's flagship: a Titan-class man-o'-war in black and blood red, with the Admiral himself on her
+  // quarterdeck. She comes hunting when a raid ends, or once ye've sunk enough Blackwater ships to earn the fleet's wrath.
+  // Sink her with yer guns, or grapple and board her, cut through her crew and duel the Admiral for the true prize.
+  const ADM = { r: null, wrath: 0, WRATH: 8, cool: 0 };
+  function makeAdmiral() {
+    const m = makeShip('titan', { sail: 0x3a0c0c, hull: 0x0f0d0d, trim: 0x8e1f1f, flag: 'redskull', ports: 0x111111, pattern: 'skull', emblem: 0x111111 });
+    m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
+    const r = Object.assign(m, { home: { x: 0, z: 0 }, maxHp: 4800, galleon: true, admiral: true, local: true, boarder: true, wp: 0, reload: { 1: 0, '-1': 0 }, steer: 0, deckCrew: [] });
+    const W = m.walk;
+    for (let k = 0; k < 10; k++) {   // ten picked hands, spread down the waist
+      const ch = makeCharacter(banditLook()); ch.root.scale.multiplyScalar(1 / m.K);
+      let z0 = (-0.22 + 0.5 * k / 9) * W.L, hw = W.F.pt(z0 / (W.L / 2), 1)[0] * (k % 2 ? 0.45 : -0.45), y = shipFloor(hw, z0, m);
+      if (y == null || shipBlockedAt(hw, z0, y, m)) { hw *= 0.5; y = shipFloor(hw, z0, m) ?? W.F.deckY(z0); }
+      ch.root.position.set(hw, y, z0); ch.root.rotation.y = hw > 0 ? -Math.PI / 2 : Math.PI / 2; m.group.add(ch.root); addProp(ch, 'blade');
+      r.deckCrew.push({ ch, lp: ch.root.position, facing: ch.root.rotation.y });
+    }
+    // the Admiral: half again a man's height, in a black bicorne and a blood-red coat heavy with gold
+    const ach = makeCharacter({ coat: 0x7a1010, shirt: 0x1a1a1a, pants: 0x111111, skin: 0xb88a6a, hair: 0x1a1a1a, beard: 0x1a1a1a, beardStyle: 'braided', hat: 'bicorne', hatColor: 0x0c0c0c, feather: 0x8e1414, coatTrim: true, sword: true, belt: 0x111111, boots: 0x0a0a0a, scar: true, brows: 'angry', mouth: 'scowl', eyeColor: 0xc82020 });
+    ach.root.scale.multiplyScalar(1.5 / m.K); const az = m.T.helm ? m.T.helm.z + 2.2 : -W.L * 0.3, qy = shipFloor(0, az, m) ?? W.F.deckY(az);
+    ach.root.position.set(0, qy, az); ach.root.rotation.y = 0; m.group.add(ach.root); addProp(ach, 'blade');
+    r.deckCrew.push({ ch: ach, lp: ach.root.position, facing: 0, boss: true, dmgF: () => 18 + Math.floor(Math.random() * 7) });
+    const tag = document.createElement('div'); tag.className = 'tag etag'; tag.style.cssText = 'font-size:15px;border:1px solid #d4af37;background:rgba(60,0,0,.85)';
+    tag.innerHTML = '☠ The Blackwater Admiral ☠<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag); r.tag = tag; r.bar = tag.querySelector('.ehp div');
+    enableShadows(m.group); return r;
+  }
+  function admiralArrive(why) {
+    if (ADM.r || !ship || ship.sinking || PLAYER.hp <= 0) return false;
+    const r = makeAdmiral(); let ok = false;
+    for (let i = 0; i < 60 && !ok; i++) { const a = Math.random() * 6.28, d = 1300 + Math.random() * 500; r.x = ship.x + Math.sin(a) * d; r.z = ship.z + Math.cos(a) * d; ok = raidSea(r.x, r.z) && !blockedAt(r, r.x, r.z, 0); }
+    if (!ok) { r.tag.remove(); return false; }
+    r.heading = Math.atan2(ship.x - r.x, ship.z - r.z); r.speed = 16; r.hp = r.maxHp; r.state = 'attack'; r.sinkT = 0; r.pitch = 0; r.roll = 0; r.home = { x: r.x, z: r.z }; raiderWaypoint(r);
+    r.group.rotation.set(0, r.heading, 0); scene.add(r.group); raiders.push(r); ADM.r = r; ADM.wrath = 0;
+    try { SFX.horn(); setTimeout(() => { try { SFX.horn(); } catch (e) {} }, 1400); } catch (e) {}
+    toast(why === 'raid' ? '☠ The raid is over... but a great black ship rises on the horizon. THE BLACKWATER ADMIRAL has come for ye!' : why === 'admin' ? '☠ The Blackwater Admiral is summoned.' : '☠ Ye\'ve sunk one Blackwater ship too many. THE BLACKWATER ADMIRAL\'s flagship is hunting ye!');
+    return true;
+  }
+  function admiralGone() {
+    const r = ADM.r; if (!r) return; if (GUEST.raider === r) raiderLeave(); ADM.r = null; ADM.cool = 120;
+    const i = raiders.indexOf(r); if (i >= 0) raiders.splice(i, 1);
+    if (r.group.parent) r.group.parent.remove(r.group); r.tag.remove();
+  }
+  function admiralDefeated(r, how) {
+    if (r.admDone) return; r.admDone = true;
+    if (how === 'duel') {
+      addGold(40000, 'Ye bested the Blackwater Admiral and took his flagship!'); addMat('steel', 10); addMat('pearl', 6); addMat('gem', 3);
+      if (!STATE.swords.includes('admiral')) { STATE.swords.push('admiral'); toast('Ye take the Admiral\'s Cutlass from his hand! (I · Swords)'); }
+      STATE.admiralBeat = (STATE.admiralBeat || 0) + 1; save();
+    } else { addGold(15000, 'Ye sent the Blackwater Admiral\'s flagship to the bottom!'); addMat('steel', 8); addMat('pearl', 3); }
+    try { SFX.fanfare(); } catch (e) {}
+    bountyClaimAdmiral();
+  }
+  function updateAdmiral(dt) {
+    ADM.cool = Math.max(0, ADM.cool - dt);
+    const r = ADM.r; if (!r) return;
+    if (r.state === 'gone') { admiralGone(); return; }
+    if (r.state === 'attack' || r.state === 'patrol') {
+      r.state = 'attack'; r.boarder = r.hp < r.maxHp * 0.7;   // once she's been hurt, she means to grapple and board
+      const d = ship ? Math.hypot(ship.x - r.x, ship.z - r.z) : 1e9;
+      if (!ship || d > 6000 || PLAYER.hp <= 0) { toast('The Admiral\'s flagship melts into the haze. She\'ll be back.'); admiralGone(); }
+    }
+  }
+  // the Admiral fights harder than any deckhand: quick, heavy blows, and he shrugs off any single cut
+  const isBoss = c => !!(c && c.boss);
+  function noteWrath() { if (ADM.r || ADM.cool > 0) return; ADM.wrath++; if (ADM.wrath === ADM.WRATH - 2) toast('Word of yer raids spreads through the Blackwater fleet. The Admiral is growing angry...'); if (ADM.wrath >= ADM.WRATH) admiralArrive('wrath'); }
+
+  // ===================== Trade runs =====================
+  // Six trading posts, each a moored merchant barge. Each makes some goods cheap and pays well for others, and prices
+  // drift over time. Fill yer hold, sail it somewhere that wants it, sell for a profit. A loaded hold draws raiders from
+  // further off, and if she sinks, the cargo goes down with her.
+  const GOODS = { rum: { name: 'Rum', base: 24, col: 0x8a4a1a }, sugar: { name: 'Sugar', base: 14, col: 0xf2ead8 }, coffee: { name: 'Coffee', base: 32, col: 0x4a2a1a }, spice: { name: 'Spices', base: 46, col: 0xc8501a }, powder: { name: 'Gunpowder', base: 38, col: 0x2a2a2a }, silk: { name: 'Silk', base: 70, col: 0x9b2a8a } };
+  const HOLD = { sloop: 20, brig: 45, galleon: 90, titan: 240 };
+  const POSTS = [
+    { isl: 'Gull Island', make: ['rum'], want: ['silk', 'spice'] },
+    { isl: 'Port Coral', make: ['silk', 'sugar'], want: ['rum', 'powder'] },
+    { isl: 'Jungle Isle', make: ['spice', 'coffee'], want: ['powder', 'sugar'] },
+    { isl: 'Smoke Peak', make: ['powder'], want: ['coffee', 'rum'] },
+    { isl: 'Mermaid Cove', make: ['sugar', 'coffee'], want: ['silk', 'spice'] },
+    { isl: 'Driftwood Isle', make: ['rum', 'powder'], want: ['silk', 'coffee'] },
+  ];
+  const cargoLoad = () => Object.values(STATE.cargo || {}).reduce((a, b) => a + b, 0);
+  const holdCap = () => HOLD[ownKey()] || 20;
+  function postPrice(post, k) {
+    const G = GOODS[k], tick = Math.floor(Date.now() / (15 * 60 * 1000)), h = Math.sin((tick + 1) * 12.9898 + post.i * 78.233 + k.length * 37.719) * 43758.5453;
+    const drift = 0.85 + 0.3 * (h - Math.floor(h));   // prices drift every quarter hour
+    return Math.max(2, Math.round(G.base * drift * (post.make.includes(k) ? 0.55 : post.want.includes(k) ? 1.65 : 1)));
+  }
+  function buildPosts() {
+    POSTS.forEach((post, i) => {
+      post.i = i; const I = ISLANDS.find(x => x.name === post.isl); if (!I) return;
+      let x, z;
+      if (I.kind === 'home') { const p = DOCK_BASE.clone().addScaledVector(DOCK_DIR, DOCK_LEN + 60).addScaledVector(PERP, 55); x = p.x; z = p.y; }
+      else { const d = I.toHome; for (let k = 0; k < 30; k++) { const rr = I.r * 1.2 + 40 + k * 25; x = I.c.x + d.x * rr; z = I.c.y + d.y * rr; if (heightAt(x, z) < -5) break; } }
+      post.x = x; post.z = z;
+      const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = Math.random() * 6.28; scene.add(g);
+      const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a2a }), dark = new THREE.MeshLambertMaterial({ color: 0x3a2516 });
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(9, 1.6, 20), dark); hull.position.y = 0.2; g.add(hull);
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.2, 19.6), wood); deck.position.y = 1.05; g.add(deck);
+      for (let k = 0; k < 4; k++) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.4, 0.2), dark); st.position.set(k % 2 ? 3.6 : -3.6, 2.8, k < 2 ? -4 : 4); g.add(st); }
+      const aw = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.1, 9), new THREE.MeshLambertMaterial({ map: canvasTex(64, 64, (c, w, h) => { for (let s = 0; s < 8; s++) { c.fillStyle = s % 2 ? '#f2ead8' : '#b8302a'; c.fillRect(s * w / 8, 0, w / 8, h); } }) })); aw.position.y = 4.5; g.add(aw);
+      const goods = [...post.make, ...post.want];
+      for (let k = 0; k < 10; k++) { const G = GOODS[goods[k % goods.length]], cr = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), new THREE.MeshLambertMaterial({ color: k % 3 ? 0x8a6538 : G.col })); cr.position.set(-2.8 + (k % 5) * 1.4, 1.8 + (k > 4 ? 1.3 : 0), 6.5 + (k % 2) * 0.2); g.add(cr); }
+      for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.5, 10), wood); b.position.set(2.6, 1.9, -6 + k * 1.4); g.add(b); }
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 12, 8), dark); mast.position.set(0, 7, -7); g.add(mast);
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.8), new THREE.MeshLambertMaterial({ color: 0xd9b13a, side: THREE.DoubleSide })); fl.position.set(1.6, 12, -7); g.add(fl);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); lamp.position.set(0, 5.2, 0); g.add(lamp);
+      post.g = g;
+      const tag = document.createElement('div'); tag.className = 'tag'; tag.style.cssText = 'background:rgba(90,60,10,.8);border:1px solid #d4af37'; tag.textContent = `⚖ Trading post · ${post.isl}`; tagLayer.appendChild(tag); post.tag = tag;
+    });
+  }
+  function nearTradePost() {
+    if (inInterior || DUN.on || RIDE.on || GUEST.on || PLAYER.hp <= 0) return null;
+    const px = sailing || onShip ? ship.x : P.pos.x, pz = sailing || onShip ? ship.z : P.pos.z, reach = sailing || onShip ? 90 + (ship ? ship.T.L * 0.5 : 0) : 40;
+    return POSTS.find(p => p.g && Math.hypot(p.x - px, p.z - pz) < reach) || null;
+  }
+  function updatePosts() {
+    if (ship && ship.cargoN !== cargoLoad()) refreshCargo();
+    for (const p of POSTS) { if (!p.g) continue; const d = Math.hypot(p.x - P.pos.x, p.z - P.pos.z);
+      p.g.position.y = waveHeight(p.x, p.z, clock.elapsedTime) * 0.6 - 0.2;
+      if (d < 900) { tmp2.set(p.x, p.g.position.y + 9, p.z).project(camera); if (tmp2.z < 1) { p.tag.style.display = 'block'; p.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px,${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; continue; } }
+      p.tag.style.display = 'none'; }
+  }
+  let tradeEl = null, tradePost = null;
+  function openTrade(post) {
+    if (!ship) { toast('Ye need a ship to carry cargo.'); return; }
+    if (!tradeEl) { tradeEl = document.createElement('div'); tradeEl.id = 'trade'; tradeEl.className = 'ovl'; tradeEl.innerHTML = '<div class="box"><h2 id="trTitle">Trading post</h2><div id="trBody"></div><div class="foot"><button class="close">Close</button></div></div>'; document.body.appendChild(tradeEl); tradeEl.querySelector('.close').addEventListener('click', closeUI); }
+    tradePost = post; if (talk) closeDialog(); uiOpen = 'trade'; for (const k in keys) keys[k] = false;
+    tradeEl.style.display = 'flex'; renderTrade();
+  }
+  function renderTrade() {
+    const post = tradePost, body = tradeEl.querySelector('#trBody'); STATE.cargo = STATE.cargo || {}; STATE.cargoPaid = STATE.cargoPaid || {};
+    tradeEl.querySelector('#trTitle').textContent = `Trading post · ${post.isl}`;
+    const load = cargoLoad(), cap = holdCap();
+    let h = `<p class="note" style="margin:0 0 8px">Gold: <b>${STATE.gold.toLocaleString()}</b> · Hold: <b>${load}/${cap}</b> crates (${(SHIP_TYPES[ownKey()] || {}).name || 'ship'}). Buy what's cheap here, sell where it's wanted. A loaded hold draws raiders from further off, and sinks with her.</p>`;
+    h += '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="text-align:left;opacity:.8"><th>Goods</th><th>Price</th><th>Here</th><th>In hold</th><th></th></tr>';
+    for (const [k, G] of Object.entries(GOODS)) {
+      const p = postPrice(post, k), have = STATE.cargo[k] || 0, paid = STATE.cargoPaid[k] || 0, note = post.make.includes(k) ? '<span style="color:#2e7d32">cheap</span>' : post.want.includes(k) ? '<span style="color:#9a6400">wanted</span>' : '';
+      const prof = have ? `<span style="color:${p - paid >= 0 ? '#2e7d32' : '#b71c1c'}">${p - paid >= 0 ? '+' : ''}${(p - paid) * have}</span>` : '';
+      h += `<tr style="border-top:1px solid rgba(255,255,255,.12)"><td>${G.name}</td><td><b>${p}</b></td><td>${note}</td><td>${have} ${prof}</td><td style="white-space:nowrap">`
+        + `<button class="ch" data-b="${k}" data-n="1">Buy 1</button><button class="ch" data-b="${k}" data-n="10">10</button><button class="ch" data-b="${k}" data-n="max">Max</button> `
+        + `<button class="ch" data-s="${k}" data-n="${have}" ${have ? '' : 'disabled'}>Sell all</button></td></tr>`;
+    }
+    h += '</table>';
+    const routes = POSTS.filter(q => q !== post && q.g).map(q => { let best = null; for (const k of Object.keys(GOODS)) { const m = postPrice(q, k) - postPrice(post, k); if (!best || m > best.m) best = { k, m }; } return { q, best }; }).sort((a, b) => b.best.m - a.best.m).slice(0, 3);
+    h += '<p class="note" style="margin:10px 0 0">Best runs from here: ' + routes.map(R => `${GOODS[R.best.k].name} → ${R.q.isl} (+${R.best.m}/crate)`).join(' · ') + '</p>';
+    body.innerHTML = h;
+    body.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { const k = b.dataset.b, p = postPrice(post, k), room = holdCap() - cargoLoad();
+      let n = b.dataset.n === 'max' ? Math.min(room, Math.floor(STATE.gold / p)) : Math.min(+b.dataset.n, room, Math.floor(STATE.gold / p));
+      if (n <= 0) { toast(room <= 0 ? 'Yer hold is full.' : 'Ye can\'t afford that.'); return; }
+      const have = STATE.cargo[k] || 0; STATE.cargoPaid[k] = Math.round(((STATE.cargoPaid[k] || 0) * have + p * n) / (have + n)); STATE.cargo[k] = have + n; STATE.gold -= p * n; save(); refreshCargo(); SFX.pickup(); renderTrade(); });
+    body.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { const k = b.dataset.s, n = STATE.cargo[k] || 0; if (!n) return; const p = postPrice(post, k), prof = (p - (STATE.cargoPaid[k] || 0)) * n;
+      STATE.cargo[k] = 0; addGold(p * n, `Sold ${n} ${GOODS[k].name} at ${post.isl}${prof > 0 ? ` (${prof.toLocaleString()} profit)` : ''}`); STATE.tradeProfit = (STATE.tradeProfit || 0) + Math.max(0, prof); save(); refreshCargo(); renderTrade(); });
+  }
+  // crates stacked on deck show how full the hold is
+  function refreshCargo() {
+    if (!ship) return;
+    if (ship.cargoMesh) { ship.group.remove(ship.cargoMesh); ship.cargoMesh = null; }
+    ship.cargoN = cargoLoad(); const n = Math.min(30, Math.ceil(cargoLoad() / holdCap() * 30)); if (!n) return;
+    const m = 1 / ship.K, W = ship.walk, im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0x8a6538 }), n), dmy = new THREE.Object3D();
+    const z0 = (ship.T.hatchZ ?? W.L * 0.08) + 1.5 * m;
+    for (let i = 0; i < n; i++) { const layer = Math.floor(i / 10), col = i % 10, cx = (col % 5 - 2) * 1.05 * m, cz = z0 + Math.floor(col / 5) * 1.05 * m;
+      dmy.position.set(cx, W.F.deckY(cz) + (0.5 + layer) * m, cz); dmy.scale.setScalar(m * 0.95); dmy.rotation.y = (i * 0.37) % 0.2; dmy.updateMatrix(); im.setMatrixAt(i, dmy.matrix); }
+    ship.group.add(im); ship.cargoMesh = im;
+  }
+  function loseCargo() { const n = cargoLoad(); if (!n) return; STATE.cargo = {}; STATE.cargoPaid = {}; save(); setTimeout(() => toast(`Yer cargo goes down with her: ${n} crates lost.`), 1500); }
+
+  // ===================== Bounties =====================
+  // The bounty board (in the quest log) names Blackwater captains with a price on their heads: each sails one of the
+  // raider ships, marked in gold on yer map. Sink or capture that ship to claim it. Online, captains who sink other
+  // players' ships earn bounties of their own, shown over their heads; sink a wanted captain to collect.
+  const CAPTAINS = ['Mordecai Vex', 'Black Annis Crow', 'Silas Gallowglass', 'Red Tobias Marr', 'Iron Nell Sharrow', 'Ezekiel Thorne', 'One-Eyed Jago', 'Cutthroat Wren', 'Barnaby Gristle', 'Grim Hector Vane', 'Lady Sable Ash', 'Bloody Hal Corrigan'];
+  const BNT = { players: [], nextT: 5 };
+  function bountyFor(r) { return (STATE.bounties || []).find(b => raiders[b.i] === r); }
+  function refreshBountyTags() { raiders.forEach((r, i) => { if (r.admiral) return; const b = (STATE.bounties || []).find(x => x.i === i);
+    r.tag.innerHTML = (b ? `<span style="color:#ffd27a">☠ Capt. ${b.name} · ${b.gold.toLocaleString()} gold</span>` : (r.galleon ? 'Blackwater galleon' : 'Blackwater raider')) + '<div class="ehp"><div></div></div>'; r.bar = r.tag.querySelector('.ehp div'); r.bountied = !!b; }); }
+  function updateBounties(dt) {
+    STATE.bounties = STATE.bounties || [];
+    BNT.nextT -= dt; if (BNT.nextT > 0) return; BNT.nextT = 20;
+    if (STATE.bounties.length >= 3) return;
+    const free = raiders.map((r, i) => i).filter(i => !raiders[i].raid && !raiders[i].admiral && !STATE.bounties.some(b => b.i === i));
+    if (!free.length) return;
+    const i = free[Math.floor(Math.random() * free.length)], used = STATE.bounties.map(b => b.name), name = CAPTAINS.filter(n => !used.includes(n))[Math.floor(Math.random() * (CAPTAINS.length - used.length))];
+    const gal = raiders[i].galleon, gold = Math.round((gal ? 3500 : 1800) * (0.8 + Math.random() * 0.5) / 50) * 50;
+    STATE.bounties.push({ i, name, gold, gal }); save(); refreshBountyTags();
+    if (!(window.__mpOnline && window.__mpOnline())) { const r = raiders[i]; if (r.state !== 'sinking' && r.state !== 'gone') { r.maxHp = Math.round(r.maxHp * 1.6); r.hp = r.maxHp; } }   // a captain worth a bounty keeps a stouter ship
+    toast(`New bounty posted: Captain ${name} of the Blackwater ${gal ? 'galleon' : 'raider'}, ${gold.toLocaleString()} gold. (Q · Quests)`);
+  }
+  function bountyClaim(r, how) {   // a raider sunk or captured by ye
+    const b = bountyFor(r); if (!b) return;
+    STATE.bounties = STATE.bounties.filter(x => x !== b); save(); refreshBountyTags(); BNT.nextT = 90;
+    addGold(b.gold, `Bounty claimed: Captain ${b.name} ${how === 'capture' ? 'taken in irons' : 'sent to the bottom'}!`); try { SFX.fanfare(); } catch (e) {}
+  }
+  function bountyVoid(r) { const b = bountyFor(r); if (!b) return; STATE.bounties = STATE.bounties.filter(x => x !== b); save(); refreshBountyTags(); BNT.nextT = 60; toast(`Captain ${b.name} went down to someone else's guns. That bounty is void.`); }
+  function bountyClaimAdmiral() { /* the Admiral carries no posted bounty: his flagship's prize is reward enough */ }
+  function setPlayerBounties(list) { BNT.players = Array.isArray(list) ? list.filter(e => Array.isArray(e) && e[1] > 0).slice(0, 20) : []; if (uiOpen === 'quests') renderQuests(); if (window.__mpRetag) window.__mpRetag(); }
+  function renderBountyBoard(el) {
+    STATE.bounties = STATE.bounties || [];
+    const box = document.createElement('div'); box.className = 'q'; box.style.borderColor = '#d4af37';
+    let h = '<div class="qt">☠ Bounty board<span>sink or capture the ship to collect</span></div><div class="qd">';
+    h += STATE.bounties.length ? STATE.bounties.map(b => { const r = raiders[b.i], d = r && (r.state === 'patrol' || r.state === 'attack') ? Math.round(Math.hypot(r.x - P.pos.x, r.z - P.pos.z)) : null;
+      return `<div>Captain <b>${b.name}</b>, Blackwater ${b.gal ? 'galleon' : 'raider'}: <b style="color:#9a6400">${b.gold.toLocaleString()} gold</b>${d != null ? ` · ${d.toLocaleString()} m away (gold marker on yer map)` : ' · not at sea right now'}</div>`; }).join('') : '<div>No bounties posted right now. Check back soon.</div>';
+    if (ADM.r) h += `<div style="margin-top:6px;color:#b71c1c">The Blackwater Admiral is hunting ye! Sink his flagship, or board her and best him in a duel.</div>`;
+    else h += `<div style="margin-top:6px;opacity:.8">Blackwater ships sunk toward the Admiral's wrath: ${ADM.wrath}/${ADM.WRATH}</div>`;
+    if (window.__mpOnline && window.__mpOnline()) h += '<div style="margin-top:8px"><b>Wanted captains</b> (players who sink other players\' ships): ' + (BNT.players.length ? BNT.players.map(([n, g]) => `${n} <b style="color:#b71c1c">${g.toLocaleString()} gold</b>`).join(' · ') : 'none right now') + '</div>';
+    h += `<div style="margin-top:8px;opacity:.8">Trade profit so far: ${(STATE.tradeProfit || 0).toLocaleString()} gold</div>`;
+    box.innerHTML = h + '</div>'; el.prepend(box);
+  }
+
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -7126,6 +7344,7 @@ window.__pgBoot = () => {
   function shotDamage(ent, enemy) {
     if (ent === ship) return (STATE.sword === 'seasword' ? 22 : 11) * gunMul();
     if (ent.remote) return (ent.sw === 'seasword' ? 12 : 6) * (ent.gm || 1);
+    if (ent.admiral) return 16;   // the flagship's heavy guns
     return ent.galleon ? 12 : 9;   // Blackwater shot: a galleon's guns hit hardest
   }
   function updateBalls(dt, t) {
@@ -7145,7 +7364,7 @@ window.__pgBoot = () => {
         const lx = dx * Math.cos(hh) - dz * Math.sin(hh), lz = dx * Math.sin(hh) + dz * Math.cos(hh), gy = tg.group.position.y;
         if (Math.abs(lx) < tg.T.B / 2 + 0.6 && Math.abs(lz) < tg.T.L / 2 && y < gy + tg.T.H && y > gy - 3) {
           hit = true; damageShip(tg, b.dmg || (b.enemy ? 6 : 11)); SFX.crash({ x, z });
-          if (tg === ship && b.from && b.from.remote && b.from.peer) ELD.threats.set(b.from.peer, clock.elapsedTime);   // the Elder Serpent remembers who fired on ye
+          if (tg === ship && b.from && b.from.remote && b.from.peer) { ELD.threats.set(b.from.peer, clock.elapsedTime); ship.lastBy = { peer: b.from.peer, t: clock.elapsedTime }; }   // the Elder Serpent remembers who fired on ye
           puff(x, y, z, { color: 0x6b4423, size: 3, life: 0.8, grow: 1.5, vy: 3, op: 0.9 });
           puff(x, y + 1, z, { color: 0x888888, size: 4, life: 2, grow: 2, vy: 2, op: 0.6 });
           break;
@@ -7171,6 +7390,8 @@ window.__pgBoot = () => {
     if (tg === ship) { if (tg.hp <= 0) sinkPlayerShip(); }
     else if (tg.hp <= 0 && tg.state !== 'sinking') {
       tg.state = 'sinking'; tg.sinkT = 0; SFX.crash(tg);
+      if (tg.admiral) { tg.captured = false; admiralDefeated(tg, 'sink'); return; }   // the flagship: her own prize
+      if (!tg.captured && !(KR.lock === tg && KR.ally <= 0)) { bountyClaim(tg, 'sink'); noteWrath(); }
       if (tg.captured) { tg.captured = false; questEvent('raider', tg.galleon ? 'galleon' : 'brig'); return; }   // a prize ye took and scuttled: the plunder's already yers
       if (!(KR.lock === tg && KR.ally <= 0)) questEvent('raider', tg.galleon ? 'galleon' : 'brig');   // sunk by ye (or yer kraken)
       if (KR.lock === tg && KR.ally > 0) { addGold(tg.galleon ? 600 : 250, `Yer kraken sank a Blackwater ${tg.galleon ? 'galleon' : 'raider'}!`); addMat('steel', tg.galleon ? 4 : 2); }
@@ -7182,6 +7403,8 @@ window.__pgBoot = () => {
   function sinkPlayerShip() {
     if (ship.sinking) return;
     ship.sinking = true; ship.sinkT = 0; ship.speed = 0;
+    loseCargo();
+    if (ship.lastBy && clock.elapsedTime - ship.lastBy.t < 20 && window.__mpPsunk) window.__mpPsunk(ship.lastBy.peer);   // sunk by another captain: the server puts a price on their head
     toast("Yer ship is sinkin'! Abandon ship!");
     if (inInterior) goUp();
     if (onShip || sailing) detach();
@@ -7248,6 +7471,7 @@ window.__pgBoot = () => {
     if (raid) { r.raid = true; r.state = 'gone'; r.respawnT = Infinity; tag.style.display = 'none'; } else spawnRaider(r);
     enableShadows(m.group); raiders.push(r);
   });
+  try { buildPosts(); refreshBountyTags(); } catch (e) { console.error(e); }
   function bob(r, dt, t) {
     const T = r.T, L = T.L, B = T.B, sx = Math.sin(r.heading), sz = Math.cos(r.heading);
     const hC = waveHeight(r.x, r.z, t), hF = waveHeight(r.x + sx * L * 0.4, r.z + sz * L * 0.4, t), hB = waveHeight(r.x - sx * L * 0.4, r.z - sz * L * 0.4, t);
@@ -7273,10 +7497,10 @@ window.__pgBoot = () => {
       if (!net) {
       let desired = r.heading, want = 14;
       const tdx = target ? target.x - r.x : 0, tdz = target ? target.z - r.z : 0, td = Math.hypot(tdx, tdz);
-      if (target && td < 1000 && !r.captured && !r.boarded) {   // (a crew fighting off boarders, or a prize that's struck, isn't working the guns)
+      if (target && td < (r.admiral ? 7000 : cargoLoad() > 0 ? 1700 : 1000) && !r.captured && !r.boarded) {   // a loaded hold draws them from further off; the Admiral hunts ye across the sea   // (a crew fighting off boarders, or a prize that's struck, isn't working the guns)
         if (r.state !== 'attack' && !warned) { warned = true; toast('Blackwater raiders! At the wheel, press Space to fire the guns on the side ye\'re lookin\'.'); }
         r.huntsShip = target === ship;
-        if (r.state !== 'attack') r.boarder = target === ship && Math.random() < (r.galleon ? 0.55 : 0.35);   // some mean to grapple and board rather than trade broadsides
+        if (r.state !== 'attack' && !r.admiral) r.boarder = target === ship && Math.random() < (r.galleon ? 0.55 : 0.35) + (cargoLoad() > 0 ? 0.2 : 0);   // some mean to grapple and board rather than trade broadsides
         r.state = 'attack';
         const b = Math.atan2(tdx, tdz);
         if (r.boarder && target === ship && !SIEGE.on && BOARD.cool <= 0 && td > 42) { desired = b; want = td > 260 ? 30 : 20; }
@@ -7349,6 +7573,7 @@ window.__pgBoot = () => {
     if (PLAYER.hurtT > 6 && PLAYER.hp > 0) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 5 * dt);
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
+    try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
       autoFireT -= dt;
       const hostile = raiders.filter(r => (r.state === 'attack' || r.state === 'patrol') && Math.hypot(r.x - ship.x, r.z - ship.z) < 520)
@@ -12352,6 +12577,7 @@ window.__pgBoot = () => {
           return;
         }
         if (!ship || ship.sinking) return;
+        ship.lastBy = { peer: m.peer, t: clock.elapsedTime };
         if (d.kill && d.devour) { toast(`${who}'s Elder Serpent swallows yer ship whole!`); ELD.threats.set(m.peer, clock.elapsedTime); for (let i = 0; i < 6; i++) wSplash(ship.x + (Math.random() - 0.5) * 40, 3, ship.z + (Math.random() - 0.5) * 40, true); damageShip(ship, ship.hp + 1, true); ship.group.visible = false; return; }
         if (d.kill && d.grab) { ship.eGrab = { peer: m.peer, t: 0 }; toast(`${who}'s Elder Serpent seizes yer ship in its jaws!`); ELD.threats.set(m.peer, clock.elapsedTime); return; }   // held, shaken and dragged under (in updateShip)
         try { damageShip(ship, d.kill ? ship.hp + 1 : Math.min(50, d.dmg), !!d.kill); ship.krJolt = Math.max(ship.krJolt || 0, 1.6); SFX.crash({ x: ship.x, z: ship.z }); ELD.threats.set(m.peer, clock.elapsedTime); toast(d.kill ? `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s Elder Serpent crushes yer ship in its jaws!` : `${MP.peers.get(m.peer)?.name || 'A rival captain'}'s sea serpent strikes yer hull!`); } catch (e) {} });
@@ -12435,6 +12661,7 @@ window.__pgBoot = () => {
       MP.room.on('rsunk', m => {
         const d = m.data; if (m.peer !== 'server' || !d) return; const r = raiders[d.i]; if (!r) return;
         if (r.state !== 'sinking' && r.state !== 'gone') { r.state = 'sinking'; r.sinkT = 0; r.hp = 0; try { SFX.crash(r); } catch (e) {} }
+        if (d.by === MP.me) { try { if (!d.kr) { bountyClaim(r, 'sink'); noteWrath(); } } catch (e) {} } else try { bountyVoid(r); } catch (e) {}
         if (d.by !== MP.me) { if (Math.hypot(r.x - P.pos.x, r.z - P.pos.z) < 700) toast(`${(MP.peers.get(d.by)?.name || 'Another captain')} sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); return; }
         questEvent('raider', d.gal ? 'galleon' : 'brig');
         if (d.kr) { addGold(d.gal ? 600 : 250, `Yer kraken sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); addMat('steel', d.gal ? 4 : 2); }
@@ -12442,14 +12669,14 @@ window.__pgBoot = () => {
         else { addGold(250, 'Sank a Blackwater raider!'); addMat('steel', 2); }
       });
       window.__mpRaiderDmg = (r, n) => {
-        if (!online()) return false;
+        if (!online() || r.local) return false;   // the Admiral's flagship is sailed by yer own game
         const i = raiders.indexOf(r); if (i < 0) return false;
         r.hp = Math.max(0, r.hp - n); r.lastHit = 0;   // shown right away; the next snapshot corrects it
         MP.room.emit('rdmg', { i, dmg: n, kr: KR.lock === r && KR.ally > 0 ? 1 : 0 }).catch(() => {});
         return true;
       };
       window.__mpRaiderSync = (r, dt) => {
-        if (!online()) return false;
+        if (!online() || r.local) return false;
         const n = r.net;
         if (!fresh(n)) { r.speed = 0; return true; }   // hold position until the server speaks
         if (n.st === 'gone' || n.st === 'sinking') {
@@ -12519,7 +12746,13 @@ window.__pgBoot = () => {
       MP.room.on('raidsnap', m => { if (m.peer !== 'server' || !m.data) return; BWS.raid = m.data; BWS.raidAt = performance.now(); });
       MP.room.on('raid', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
         if (d.on) { BWS.told = false; try { SFX.horn(); } catch (e) {} toast('☠ A BLACKWATER RAID! The Blackwater fleet puts to sea and the Beast has broken loose. No ship is safe!'); }
-        else toast('The Blackwater raid is over. The fleet turns for home, and the Beast returns to its pen.'); });
+        else { toast('The Blackwater raid is over. The fleet turns for home, and the Beast returns to its pen.'); if (sailing || onShip) setTimeout(() => { try { admiralArrive('raid'); } catch (e) {} }, 6000); } });
+      // ---- player bounties: sink another captain's ship and the server puts a price on yer head ----
+      window.__mpPsunk = by => { if (online() && by && by !== MP.me) MP.room.emit('psunk', { by }).catch(() => {}); };
+      MP.room.on('bounties', m => { if (m.peer !== 'server' || !m.data) return; try { setPlayerBounties(m.data.list); } catch (e) {} });
+      MP.room.on('bclaim', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.gold > 0)) return; addGold(Math.min(50000, Math.floor(d.gold)), `Bounty claimed on ${String(d.name || 'a wanted captain').replace(/[<>&]/g, '')}!`); try { SFX.fanfare(); } catch (e) {} });
+      MP.room.on('wanted', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.gold > 0)) return; toast(`☠ Ye sank ${String(d.name || 'a captain').replace(/[<>&]/g, '')}'s ship! There's now a bounty of ${Math.floor(d.gold).toLocaleString()} gold on yer head.`); });
+      window.__mpRetag = () => { for (const p of MP.peers.values()) { if (!p.tag || !p.name) continue; const b = BNT.players.find(e => e[0] === p.name); p.tag.textContent = p.name + (b ? `  ☠ WANTED ${b[1].toLocaleString()}g` : ''); p.tag.style.color = b ? '#ffb0a0' : ''; } };
       MP.room.on('raidwave', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.w > 1)) return; toast(`More Blackwater sails on the horizon! Wave ${d.w}: ${d.n} more ships.`); });
       MP.room.on('bwhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { bwHitMe(Math.min(40, +d.dmg || 0), d.sw === 1); } catch (e) {} });
       MP.room.on('bwdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
@@ -12819,7 +13052,8 @@ window.__pgBoot = () => {
     else { const qs = nearQSpot(), nd = nearNode(), near = nearestNpc(); if (qs) promptHtml = '<b>E</b> ' + qs.label; else if (nearDunDoor()) promptHtml = STATE.dunFound ? '<b>E</b> Descend into the Blackwater Vaults' : '<b>E</b> Search the rock beneath the skull\'s jaw'; else if (nearSwordStone()) promptHtml = '<b>E</b> Try to pull the sword from the stone'; else if (nd) promptHtml = '<b>E</b> ' + nd.label; else if (nearCampChest()) promptHtml = nearCampChest().cd > 0 ? 'The plunder chest is empty' : '<b>E</b> Open the raiders\' plunder chest'; else if (near) promptHtml = `<b>E</b> Talk to ${near.def.name}`; else if (!onShip && nearShip()) promptHtml = `<b>E</b> Board the ${ship.T.name}`; else { const rs = nearRemoteShip(); if (rs) promptHtml = `<b>E</b> Board ${rs.name}'s ${rs.ship.T.name}`; } }
     if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
     if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if (!nearWheel() && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
-      if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight'; }
+      if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight';
+      if (!GUEST.raider && !SIEGE.on) { const tp = nearTradePost(); if (tp) promptHtml = (promptHtml ? promptHtml + ' &middot; ' : '') + `<b>U</b> Trade at the ${tp.isl} post`; } }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
 
