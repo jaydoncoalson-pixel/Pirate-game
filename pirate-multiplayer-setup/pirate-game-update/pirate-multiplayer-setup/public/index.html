@@ -737,6 +737,46 @@ window.__pgBoot = () => {
     }
     return false;
   }
+  // ---------- Gull Island's countryside: winding dirt roads up to Brackenford, the summit and a windmill; woods and meadows ----------
+  const HOME = (() => {
+    const I = ISLANDS[0], H = (x, z) => islandHeight(I, x, z), Hm = {};
+    const vil = SITES.find(S => S.name === 'Brackenford'), camp = SITES.find(S => S.i === 0 && S.kind === 'camp');
+    let top = { x: I.c.x, z: I.c.y, h: -1 };
+    for (let j = -24; j <= 24; j++) for (let i = -24; i <= 24; i++) { const x = I.c.x + i * I.r / 24, z = I.c.y + j * I.r / 24, h = H(x, z); if (h > top.h) top = { x, z, h }; }
+    Hm.top = top; Hm.vil = vil; Hm.camp = camp;
+    const farFrom = (x, z, list) => list.every(([px, pz, r]) => Math.hypot(x - px, z - pz) > r);
+    const avoid = [[vil.x, vil.z, 140], [camp.x, camp.z, 150], [TOWN.x, TOWN.y, 120], [top.x, top.z, 120]];
+    // the windmill: on the highest rise a short walk out of town
+    let mill = null;
+    for (let a = 0; a < 6.283; a += 0.12) for (const r of [170, 200, 230, 260]) {
+      const x = TOWN.x + Math.cos(a) * r, z = TOWN.y + Math.sin(a) * r, h = H(x, z);
+      if (h < 9 || h > 70 || !farFrom(x, z, avoid.slice(0, 2)) || distToSeg(x, z, TOWN_BACK, DOCK_FAR) < 80) continue;
+      if (!mill || h > mill.h) mill = { x, z, h };
+    }
+    Hm.mill = mill;
+    // the roads: a wandering track between two points, nudged sideways by noise (never at the ends)
+    const roads = [], seg = [];
+    const road = (ax, az, bx, bz, wig, seed, w) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(L / 20)), px = -(bz - az) / L, pz = (bx - ax) / L, pts = [];
+      for (let i = 0; i <= n; i++) { const u = i / n, off = (vnoise(u * 3.3 + seed, seed * 1.7) - 0.5) * 2 * wig * Math.sin(u * Math.PI); pts.push([ax + (bx - ax) * u + px * off, az + (bz - az) * u + pz * off]); }
+      roads.push({ pts, w }); for (let i = 0; i < n; i++) seg.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w]); return pts; };
+    const sv = SITES.find(S => S.name === 'Gull Town');
+    const fork = local(-60, 0);   // just above the tavern, where the lanes split
+    road(TOWN_BACK.x, TOWN_BACK.y, fork.x, fork.y, 0, 1, 3.4);
+    road(fork.x, fork.y, vil.x, vil.z, 70, 3.1, 3.2);
+    { const dx = vil.x - top.x, dz = vil.z - top.z, d = Math.hypot(dx, dz); road(vil.x, vil.z, top.x + dx / d * 22, top.z + dz / d * 22, 80, 7.7, 2.6); }
+    if (mill) { const dx = fork.x - mill.x, dz = fork.y - mill.z, d = Math.hypot(dx, dz); road(fork.x, fork.y, mill.x + dx / d * 9, mill.z + dz / d * 9, 35, 5.2, 2.4); }
+    Hm.roads = roads; Hm.fork = fork;
+    // a coarse grid so 'how far to the nearest road' is quick
+    const CELL = 48, grid = new Map(), key = (i, j) => i * 100003 + j;
+    for (const s of seg) { const pad = s[4] + 8; for (let i = Math.floor((Math.min(s[0], s[2]) - pad) / CELL); i <= Math.floor((Math.max(s[0], s[2]) + pad) / CELL); i++) for (let j = Math.floor((Math.min(s[1], s[3]) - pad) / CELL); j <= Math.floor((Math.max(s[1], s[3]) + pad) / CELL); j++) { const k = key(i, j); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(s); } }
+    Hm.roadD = (x, z) => { const L = grid.get(key(Math.floor(x / CELL), Math.floor(z / CELL))); if (!L) return 99; let best = 99; for (const s of L) { const d = distToSeg(x, z, { x: s[0], y: s[1] }, { x: s[2], y: s[3] }) - s[4]; if (d < best) best = d; } return best; };
+    // woods and open meadows: big soft patches, kept clear of the towns
+    Hm.forest = (x, z) => { const f = sstep(0.5, 0.6, fbm(x * 0.0042 + 11, z * 0.0042 + 5)); if (!f) return 0; const near = Math.min(Math.hypot(x - TOWN.x, z - TOWN.y) - 150, Math.hypot(x - vil.x, z - vil.z) - 110); return near < 0 ? 0 : f * sstep(0, 60, near); };
+    Hm.meadow = (x, z) => sstep(0.42, 0.62, fbm(x * 0.0035 + 41, z * 0.0035 + 2));
+    return Hm;
+  })();
+  const HM_C = { lush: new THREE.Color(0x4f9a40), meadow: new THREE.Color(0x96b456), wood: new THREE.Color(0x3a6a2e), earth: new THREE.Color(0x7d7452), road: new THREE.Color(0xa88c5e), roadE: new THREE.Color(0x8f8a56),
+    flowers: [0xf0dc4a, 0xf4f4f0, 0xd86aa8, 0xa88ae8, 0xe8823a].map(c => new THREE.Color(c)) };
   const PALETTES = {
     home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 125 },
     sandbar: { sand: 0xf0dfae, wet: 0xd2bd88, grass: 0x8fb85a, dark: 0x6f9a45, rock: 0x9a9080, rockH: 99 },
@@ -775,6 +815,12 @@ window.__pgBoot = () => {
       const slope = 1 - nrm.getY(f);
       if (cy < 1.2) c.copy(wetSand);
       else if (cy < 3.4) c.copy(sand);
+      else if (I.kind === 'home') {   // meadows, lush grass, dark woodland floor, bare earth on the steeper ground, the odd drift of flowers, and the roads
+        const fo = HOME.forest(cx, cz), md = HOME.meadow(cx, cz);
+        c.copy(HM_C.lush).lerp(HM_C.meadow, md * (1 - fo)).lerp(HM_C.wood, fo * 0.85); c.offsetHSL(0.01 * (vnoise(cx * 0.03, cz * 0.03) - 0.5), 0, (vnoise(cx * 0.09 + 5, cz * 0.09) - 0.5) * 0.07);
+        if (slope > 0.17) c.lerp(HM_C.earth, sstep(0.17, 0.34, slope) * 0.7);
+        const rd = HOME.roadD(cx, cz); if (rd < 3) c.lerp(HM_C.roadE, 0.55 * Math.min(1, (3 - rd) / 3));   // (worn verges: the road itself is laid on top)
+      }
       else c.copy(grass).lerp(darkGrass, vnoise(cx * 0.05, cz * 0.05));
       if (I.kind === 'home' && cy > 3 && distToSeg(cx, cz, TOWN_BACK, DOCK_BASE) < 5.5) c.copy(road);
       if (I.kind === 'port' && cy > 3 && distToSeg(cx, cz, PORT_BACK, PORT_DOCK_BASE) < 5.5) c.copy(road);
@@ -1527,11 +1573,134 @@ window.__pgBoot = () => {
     if (onIsle && JG.callT <= 0) { JG.callT = 1.2 + Math.random() * 3.5; const a = Math.random() * 6.28, pos = { x: P.pos.x + Math.sin(a) * 40, z: P.pos.z + Math.cos(a) * 40 }; try { const r = Math.random(); r < 0.45 ? SFX.jungleBird(pos) : r < 0.7 ? SFX.parrot(pos) : SFX.insects(); } catch (e) {} }
   }
 
+  // ---------- Gull Island's landmarks: the windmill, the watchtower on the summit, a harbour battery, a fishing hamlet, a pond, stone walls, flowers ----------
+  const HMX = { sails: null, flames: [], flags: [] };
+  {
+    const I = ISLANDS[0], G = I.group, stone = lam(0x948c80), stoneD = lam(0x6e675d), thatch = lam(0xb8964e), iron = lam(0x2c2c2e), cloth = lam(0xeee4cc), red = lam(0xa8322a);
+    const mk = (geo, mat, x, y, z, par, rx, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0); (par || G).add(m); return m; };
+    const flameSprite = (par, y, s) => { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffa040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); f.position.y = y; f.scale.setScalar(s); par.add(f); HMX.flames.push({ f, s, ph: Math.random() * 6 }); return f; };
+    const flag = (par, x, y, z, col) => { const pole = mk(new THREE.CylinderGeometry(0.12, 0.15, 9, 6), DARK_WOOD, x, y + 4.5, z, par); const fl = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2, 6, 1), new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide })); fl.geometry.translate(1.8, 0, 0); fl.position.set(x, y + 7.8, z); par.add(fl); HMX.flags.push(fl); };
+    // -- the windmill: a whitewashed stone tower, thatched cap, four lattice sails turning in the wind
+    if (HOME.mill) { const p = HOME.mill, g = new THREE.Group(); g.position.set(p.x, heightAt(p.x, p.z) - 0.6, p.z); g.rotation.y = Math.atan2(TOWN.x - p.x, TOWN.y - p.z); G.add(g);
+      const white = lam(0xece4d4);
+      mk(new THREE.CylinderGeometry(3.1, 4.3, 13, 14), white, 0, 6.5, 0, g); mk(new THREE.CylinderGeometry(4.45, 4.5, 1.2, 14), stoneD, 0, 0.6, 0, g);
+      for (const y of [4.5, 9]) mk(new THREE.CylinderGeometry(4.4 - y * 0.09, 4.4 - y * 0.09, 0.3, 14), DARK_WOOD, 0, y, 0, g);
+      mk(new THREE.BoxGeometry(1.6, 2.6, 0.4), DARK_WOOD, 0, 1.6, 4.1, g); for (const y of [6.5, 10.5]) mk(new THREE.BoxGeometry(0.9, 1.1, 0.3), lam(0x2a2018), 0, y, 4.1 - y * 0.08, g);
+      mk(new THREE.ConeGeometry(4.0, 5, 14), thatch, 0, 15.4, 0, g);
+      const hub = new THREE.Group(); hub.position.set(0, 13.6, 4.0); g.add(hub); mk(new THREE.CylinderGeometry(0.6, 0.6, 1.6, 10), DARK_WOOD, 0, 0, 0, hub, Math.PI / 2);
+      for (let k = 0; k < 4; k++) { const arm = new THREE.Group(); arm.rotation.z = k * Math.PI / 2; hub.add(arm); mk(new THREE.BoxGeometry(0.35, 11.5, 0.35), DARK_WOOD, 0, 5.9, 0.5, arm);
+        mk(new THREE.BoxGeometry(2.5, 8.6, 0.08), cloth, 1.4, 6.8, 0.55, arm); for (let j = 0; j < 5; j++) mk(new THREE.BoxGeometry(2.7, 0.12, 0.14), DARK_WOOD, 1.4, 2.8 + j * 2, 0.62, arm); }
+      HMX.sails = hub;
+      // sacks of flour and a cart by the door
+      for (let k = 0; k < 4; k++) mk(new THREE.SphereGeometry(0.6, 8, 6), lam(0xe0d6bc), -2.4 + (k % 2) * 1.1, 0.95 + Math.floor(k / 2) * 0.8, 5.2 + (k % 2) * 0.4, g).scale.set(1, 1.2, 0.8);
+      { const cart = new THREE.Group(); cart.position.set(3.6, 0.6, 6.5); cart.rotation.y = 0.4; g.add(cart); mk(new THREE.BoxGeometry(2.4, 0.9, 3.6), WOOD, 0, 1.1, 0, cart); for (const sx of [-1.35, 1.35]) mk(new THREE.CylinderGeometry(0.75, 0.75, 0.2, 10), DARK_WOOD, sx, 0.75, 0, cart, 0, 0, Math.PI / 2); mk(new THREE.BoxGeometry(0.15, 0.15, 3), DARK_WOOD, 0, 0.9, 3, cart); }
+      colliders.push({ x: p.x, z: p.z, r: 4.6 }); SPOTS.push({ x: p.x, z: p.z, r: 16 }); }
+    // -- the watchtower on the summit: a ruined round keep with a signal fire, and Gull Island's flag
+    { const p = HOME.top, g = new THREE.Group(); g.position.set(p.x, heightAt(p.x, p.z) - 0.8, p.z); G.add(g);
+      mk(new THREE.CylinderGeometry(4.2, 5.0, 16, 16), stone, 0, 8, 0, g); mk(new THREE.CylinderGeometry(5.2, 5.4, 1.4, 16), stoneD, 0, 0.7, 0, g);
+      for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; if (k === 5) continue; mk(new THREE.BoxGeometry(1.5, 1.6 + (k % 3) * 0.35, 1.0), stone, Math.cos(a) * 4.1, 16.8, Math.sin(a) * 4.1, g, 0, -a, 0); }   // crenellations, one broken away
+      mk(new THREE.BoxGeometry(1.8, 3, 0.5), lam(0x2a2018), 0, 1.5, 4.9, g); for (const y of [7, 12]) mk(new THREE.BoxGeometry(0.5, 1.6, 0.6), lam(0x1a1612), 0, y, 4.6, g);
+      const fire = new THREE.Group(); fire.position.set(0, 16.2, 0); g.add(fire); mk(new THREE.CylinderGeometry(1.4, 0.8, 1.1, 10), iron, 0, 0.6, 0, fire); for (let k = 0; k < 3; k++) mk(new THREE.CylinderGeometry(0.18, 0.18, 2.4, 5), DARK_WOOD, 0, 1.3, 0, fire, 0.5, k * 2.1, 0.5);
+      flameSprite(fire, 2.2, 3.2); flameSprite(fire, 3.2, 2.2);
+      flag(g, -3, 16, -2, 0x2a5aa8);
+      for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28, r = 6 + Math.random() * 8; mk(new THREE.BoxGeometry(1 + Math.random(), 0.7 + Math.random() * 0.6, 0.9 + Math.random()), k % 3 ? stone : stoneD, Math.cos(a) * r, heightAt(p.x + Math.cos(a) * r, p.z + Math.sin(a) * r) - g.position.y + 0.2, Math.sin(a) * r, g, Math.random(), Math.random() * 3, Math.random() * 0.4); }   // fallen stones
+      colliders.push({ x: p.x, z: p.z, r: 5.2 }); SPOTS.push({ x: p.x, z: p.z, r: 24 }); }
+    // -- the harbour battery: a curved stone parapet on the headland across from the lighthouse, four guns covering the bay
+    { let q = DOCK_BASE.clone().addScaledVector(PERP, -95); for (let k = 0; k < 40 && heightAt(q.x, q.y) < 5; k++) q.addScaledVector(DOCK_DIR, -4);
+      const g = new THREE.Group(), y0 = heightAt(q.x, q.y); g.position.set(q.x, y0 - 0.3, q.y); g.rotation.y = Math.atan2(DOCK_DIR.x, DOCK_DIR.y); G.add(g);
+      mk(new THREE.CylinderGeometry(15, 15.5, 0.8, 24, 1, false, -Math.PI * 0.45, Math.PI * 0.9), stoneD, 0, 0.3, 0, g);
+      for (let k = 0; k <= 14; k++) { const a = -Math.PI * 0.42 + k / 14 * Math.PI * 0.84; if (k % 4 === 1) continue; mk(new THREE.BoxGeometry(2.6, 2.2, 1.4), stone, Math.sin(a) * 14.5, 1.5, Math.cos(a) * 14.5, g, 0, a, 0); }   // the parapet, with gun embrasures
+      for (const k of [1, 5, 9, 13]) { const a = -Math.PI * 0.42 + k / 14 * Math.PI * 0.84, gg = new THREE.Group(); gg.position.set(Math.sin(a) * 12, 0.7, Math.cos(a) * 12); gg.rotation.y = a; g.add(gg);
+        mk(new THREE.BoxGeometry(1.6, 0.8, 2.4), WOOD, 0, 0.6, 0, gg); for (const sx of [-0.9, 0.9]) for (const sz of [-0.8, 0.8]) mk(new THREE.CylinderGeometry(0.4, 0.4, 0.2, 10), DARK_WOOD, sx, 0.4, sz, gg, 0, 0, Math.PI / 2);
+        mk(new THREE.CylinderGeometry(0.36, 0.5, 3.4, 10), iron, 0, 1.3, 1.1, gg, Math.PI / 2 - 0.08, 0, 0); mk(new THREE.TorusGeometry(0.42, 0.08, 6, 12), iron, 0, 1.38, 2.75, gg); }
+      for (let k = 0; k < 6; k++) mk(new THREE.SphereGeometry(0.35, 8, 6), iron, -6 + (k % 3) * 0.7 + (k > 2 ? 0.35 : 0), 1.0 + (k > 2 ? 0.55 : 0), 4 + (k > 2 ? 0.3 : 0), g);   // a pyramid of shot
+      for (let k = 0; k < 3; k++) mk(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 10), lam(0x6a4a2a), 6 + k * 1.3, 1.3, 3.5, g);   // powder kegs
+      flag(g, 0, 0.6, -2, 0x2a5aa8);
+      colliders.push({ x: q.x, z: q.y, r: 9 }); SPOTS.push({ x: q.x, z: q.y, r: 22 }); HMX.battery = { x: q.x, z: q.y }; }
+    // -- a fishing hamlet down the coast: huts on stilts, boats drawn up on the sand, nets drying, a driftwood fire
+    { const dA = Math.atan2(DOCK_DIR.y, DOCK_DIR.x), a = dA - 0.62; let r = I.r * 1.4; const cx = I.c.x, cz = I.c.y;
+      for (; r > I.r * 0.4 && heightAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) < 2.2; r -= 3); const ux = Math.cos(a), uz = Math.sin(a), tx = -uz, tz = ux;
+      const at = (along, inland) => [cx + ux * (r - inland) + tx * along, cz + uz * (r - inland) + tz * along];
+      const face = Math.atan2(ux, uz);
+      for (const [al, inl] of [[-26, 14], [0, 18], [24, 13]]) { const [x, z] = at(al, inl), y = heightAt(x, z), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = face + (Math.random() - 0.5) * 0.4; g.scale.setScalar(1.3); G.add(g);
+        for (const sx of [-2.2, 2.2]) for (const sz of [-1.8, 1.8]) mk(new THREE.CylinderGeometry(0.2, 0.24, 3, 6), DARK_WOOD, sx, 1.1, sz, g);
+        mk(new THREE.BoxGeometry(5.4, 0.3, 4.6), PLANK, 0, 2.5, 0, g); mk(new THREE.BoxGeometry(4.8, 3, 4), lam(0x9a7650), 0, 4.1, 0, g);
+        const roof = mk(new THREE.CylinderGeometry(3.5, 3.5, 5.4, 3), thatch, 0, 6.3, 0, g, 0, 0, Math.PI / 2); roof.scale.set(1, 1, 0.75);
+        mk(new THREE.BoxGeometry(1.2, 2, 0.15), DARK_WOOD, 0, 3.6, 2.05, g); mk(new THREE.BoxGeometry(1.6, 0.2, 2.2), PLANK, 0, 1.5, 3.3, g, -0.5, 0, 0);
+        colliders.push({ x, z, r: 3.4 }); }
+      for (const [al, inl, ry] of [[-12, 4, 0.3], [10, 3, -0.5], [36, 5, 1.2]]) { const [x, z] = at(al, inl), g = new THREE.Group(); g.position.set(x, heightAt(x, z) + 0.2, z); g.rotation.set(0.05, face + ry + Math.PI / 2, 0.12); G.add(g);   // rowboats drawn up on the beach, one turned over
+        const hm = new THREE.MeshLambertMaterial({ color: 0x7a5233, side: THREE.DoubleSide }), hull = mk(new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), hm, 0, 0.75, 0, g); hull.scale.set(2.7, 0.85, 1.05);
+        mk(new THREE.TorusGeometry(1, 0.07, 5, 24), DARK_WOOD, 0, 0.75, 0, g, Math.PI / 2).scale.set(2.7, 1.05, 1);   // the gunwale
+        for (const sx of [-1.2, 0.5]) mk(new THREE.BoxGeometry(0.35, 0.08, 1.9), PLANK, sx, 0.62, 0, g);
+        if (al > 30) { g.rotation.x += Math.PI; g.position.y += 0.9; } else for (const sd of [-1, 1]) mk(new THREE.BoxGeometry(2.8, 0.08, 0.14), WOOD, 0.4, 0.85, sd * 0.5, g, 0, sd * 0.2, 0); }   // oars shipped (and one turned over)
+      for (const al of [-4, 6]) { const [x, z] = at(al, 10), y = heightAt(x, z), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = face + Math.PI / 2; G.add(g);   // nets drying on a rack
+        for (const sx of [-2.5, 2.5]) mk(new THREE.CylinderGeometry(0.12, 0.12, 3.4, 5), DARK_WOOD, sx, 1.7, 0, g); mk(new THREE.BoxGeometry(5.4, 0.14, 0.14), DARK_WOOD, 0, 3.3, 0, g);
+        const net = mk(new THREE.PlaneGeometry(4.8, 2.6), new THREE.MeshLambertMaterial({ color: 0x5a6a5a, transparent: true, opacity: 0.75, side: THREE.DoubleSide }), 0, 2, 0.05, g); }
+      { const [x, z] = at(-8, 9), y = heightAt(x, z), g = new THREE.Group(); g.position.set(x, y, z); G.add(g);   // the fire
+        for (let k = 0; k < 8; k++) { const b = k / 8 * 6.28; mk(new THREE.DodecahedronGeometry(0.35, 0), stoneD, Math.cos(b) * 1.1, 0.2, Math.sin(b) * 1.1, g); }
+        for (let k = 0; k < 3; k++) mk(new THREE.CylinderGeometry(0.15, 0.15, 1.8, 5), DARK_WOOD, 0, 0.35, 0, g, Math.PI / 2, k * 1.05, 0.3); flameSprite(g, 0.9, 1.6); }
+      { const [x, z] = at(0, 14); SPOTS.push({ x, z, r: 45 }); HMX.hamlet = { x, z }; } }
+    // -- a pond in a quiet hollow: still water, a muddy rim, reeds, lily pads and a little jetty
+    { let best = null;
+      for (let k = 0; k < 900 && !best; k++) { const a = Math.random() * 6.283, rr = I.r * (0.2 + Math.random() * 0.45), x = I.c.x + Math.cos(a) * rr, z = I.c.y + Math.sin(a) * rr, h = heightAt(x, z);
+        if (h < 10 || h > 70 || HOME.roadD(x, z) < 30 || SPOTS.some(s => Math.hypot(x - s.x, z - s.z) < s.r + 30) || I.sites.some(S => Math.hypot(x - S.x, z - S.z) < (S.r || 60) + 40)) continue;
+        let lo = h, hi = h; for (let j = 0; j < 12; j++) { const b = j / 12 * 6.283, hh = heightAt(x + Math.cos(b) * 15, z + Math.sin(b) * 15); lo = Math.min(lo, hh); hi = Math.max(hi, hh); }
+        if (hi - lo < 1.6) best = { x, z, y: hi + 0.25 }; }
+      if (best) { const { x, z, y } = best, g = new THREE.Group(); g.position.set(x, y, z); G.add(g);
+        mk(new THREE.CircleGeometry(17.5, 32), lam(0x5a4e36), 0, -0.08, 0, g, -Math.PI / 2);
+        const water = mk(new THREE.CircleGeometry(15, 32), new THREE.MeshPhongMaterial({ color: 0x2f6f7f, specular: 0xbfe8ff, shininess: 80, transparent: true, opacity: 0.92 }), 0, 0, 0, g, -Math.PI / 2); HMX.pond = water;
+        for (let k = 0; k < 70; k++) { const b = Math.random() * 6.283, rr = 14 + Math.random() * 3.5; mk(new THREE.ConeGeometry(0.08, 1.6 + Math.random() * 1.6, 4), lam(k % 3 ? 0x5f7f3a : 0x8a8a4a), Math.cos(b) * rr, 0.8, Math.sin(b) * rr, g, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3); }
+        for (let k = 0; k < 14; k++) { const b = Math.random() * 6.283, rr = 3 + Math.random() * 10, pad = mk(new THREE.CircleGeometry(0.7 + Math.random() * 0.5, 8, 0.3, 5.9), lam(0x4a8a3a), Math.cos(b) * rr, 0.04, Math.sin(b) * rr, g, -Math.PI / 2, 0, Math.random() * 6); if (k % 4 === 0) mk(new THREE.SphereGeometry(0.22, 6, 4), lam(0xf2d0e0), pad.position.x, 0.18, pad.position.z, g); }
+        { const jt = new THREE.Group(); jt.position.set(13, 0.3, 0); g.add(jt); mk(new THREE.BoxGeometry(6, 0.25, 1.8), PLANK, -2, 0.2, 0, jt); for (const sx of [-4.6, -1.5, 0.8]) for (const sz of [-0.8, 0.8]) mk(new THREE.CylinderGeometry(0.12, 0.12, 1.6, 5), DARK_WOOD, sx, -0.5, sz, jt); }
+        SPOTS.push({ x, z, r: 26 }); HMX.pondAt = best; } }
+    // -- dry-stone walls across the meadows round Brackenford and town, with gaps where the roads cross
+    { const blocks = [], V = HOME.vil;
+      for (let w = 0; w < 9; w++) { const base = w < 5 ? V : { x: TOWN.x, z: TOWN.y }, a0 = Math.random() * 6.283, d0 = 90 + Math.random() * 110;
+        let x = base.x + Math.cos(a0) * d0, z = base.z + Math.sin(a0) * d0, dir = a0 + Math.PI / 2 + (Math.random() - 0.5) * 0.6; const len = 60 + Math.random() * 90;
+        for (let s = 0; s < len; s += 1.7) { dir += (Math.random() - 0.5) * 0.06; x += Math.cos(dir) * 1.7; z += Math.sin(dir) * 1.7; const h = heightAt(x, z);
+          if (h < 5 || h > 80 || HOME.roadD(x, z) < 4 || HOME.forest(x, z) > 0.3 || SPOTS.some(q => Math.hypot(x - q.x, z - q.z) < q.r) || I.sites.some(S => Math.hypot(x - S.x, z - S.z) < (S.r || 60) * 0.9)) continue;
+          blocks.push(placed(x, h + 0.45, z, 1.8, 1.0 + Math.random() * 0.25, 0.95, 0, -dir, (Math.random() - 0.5) * 0.08)); if (s % 5 < 1.7) colliders.push({ x, z, r: 1.1 }); } }
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), lam(0x8a8478), blocks.length); blocks.forEach((m, i) => im.setMatrixAt(i, m)); im.frustumCulled = false; G.add(im); }
+    // -- the roads themselves: a smooth strip of packed earth laid along each track, following the ground
+    { const pos = [], col = [], idx = [], cA = new THREE.Color(0xa88c5e), cB = new THREE.Color(0x957a50);
+      // the height of the ground as it's actually drawn (flat triangles between the terrain grid's points), so the road sits right on it
+      const size = I.r * 3.6, nseg = Math.min(400, Math.max(48, Math.round(size / 5))), cell = size / nseg, x0 = I.c.x - size / 2, z0 = I.c.y - size / 2;
+      const gh = (i, j) => islandHeight(I, x0 + i * cell, z0 + j * cell);
+      const meshH = (x, z) => { const gx = (x - x0) / cell, gz = (z - z0) / cell, i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, a = gh(i, j), b = gh(i + 1, j), c = gh(i, j + 1), d = gh(i + 1, j + 1);
+        const A = fx > fz ? a + (b - a) * fx + (d - b) * fz : a + (d - c) * fx + (c - a) * fz, B = fx + fz < 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz); return Math.max(A, B, heightAt(x, z)); };
+      for (const R2 of HOME.roads) { const pts = []; for (let i = 0; i < R2.pts.length - 1; i++) { const [ax, az] = R2.pts[i], [bx, bz] = R2.pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 3)); for (let k = 0; k < n; k++) pts.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]); } pts.push(R2.pts[R2.pts.length - 1]);
+        const base = pos.length / 3;
+        pts.forEach(([x, z], i) => { const q = pts[Math.min(pts.length - 1, i + 1)], p0 = pts[Math.max(0, i - 1)], dx = q[0] - p0[0], dz = q[1] - p0[1], L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L, w = R2.w * (0.9 + 0.2 * vnoise(i * 0.3, 3));
+          for (const sd of [-1, 1]) { const vx = x + nx * w * sd, vz = z + nz * w * sd; pos.push(vx, meshH(vx, vz) + 0.12, vz); const c2 = (vnoise(vx * 0.2, vz * 0.2) > 0.5 ? cA : cB); col.push(c2.r, c2.g, c2.b); }
+          if (i < pts.length - 1) { const a = base + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+      const rm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); G.add(rm); }
+    // -- signposts where the roads part
+    { const post = (x, z, a1, a2) => { const g = new THREE.Group(); g.position.set(x, heightAt(x, z), z); G.add(g); mk(new THREE.CylinderGeometry(0.14, 0.16, 3.4, 6), DARK_WOOD, 0, 1.7, 0, g);
+        for (const [a, y] of [[a1, 2.9], [a2, 2.4]]) if (a != null) { const b = mk(new THREE.BoxGeometry(1.8, 0.4, 0.08), WOOD, Math.sin(a) * 0.9, y, Math.cos(a) * 0.9, g); b.rotation.y = a - Math.PI / 2; } colliders.push({ x, z, r: 0.4 }); };
+      const R0 = HOME.roads; const ang = (p, q) => Math.atan2(q[0] - p[0], q[1] - p[1]);
+      post(HOME.fork.x + PERP.x * 4, HOME.fork.y + PERP.y * 4, ang(R0[1].pts[0], R0[1].pts[2]), R0[3] ? ang(R0[3].pts[0], R0[3].pts[2]) : null);
+      post(HOME.vil.x + 8, HOME.vil.z + 8, ang(R0[2].pts[0], R0[2].pts[2]), null); }
+    // -- wildflowers and tall grass in the meadows and along the roadsides
+    { const fl = [], fc = [], tufts = [];
+      for (let k = 0, n = 0; k < 30000 && n < 2600; k++) { const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * I.r * 1.1, x = I.c.x + Math.cos(a) * rr, z = I.c.y + Math.sin(a) * rr, h = heightAt(x, z);
+        if (h < 5 || h > 90 || HOME.forest(x, z) > 0.2 || HOME.roadD(x, z) < 1.5 || distToSeg(x, z, TOWN_BACK, DOCK_BASE) < 45 || SPOTS.some(q => Math.hypot(x - q.x, z - q.z) < q.r * 0.7) || I.sites.some(S => Math.hypot(x - S.x, z - S.z) < (S.r || 60) * 0.8)) continue;
+        const md = HOME.meadow(x, z), byRoad = HOME.roadD(x, z) < 7; if (md < 0.4 && !byRoad) continue; n++;
+        if (Math.random() < 0.55) { const col = HM_C.flowers[(Math.random() * HM_C.flowers.length) | 0]; for (let j = 0; j < 5; j++) { const ox = (Math.random() - 0.5) * 2.4, oz = (Math.random() - 0.5) * 2.4; fl.push(placed(x + ox, heightAt(x + ox, z + oz) + 0.35, z + oz, 0.22, 0.22, 0.22, 0, 0, 0)); fc.push(col); } }
+        else for (let j = 0; j < 3; j++) { const ox = (Math.random() - 0.5) * 2, oz = (Math.random() - 0.5) * 2; tufts.push(placed(x + ox, heightAt(x + ox, z + oz) + 0.5, z + oz, 0.35, 1.1 + Math.random() * 0.6, 0.35, (Math.random() - 0.5) * 0.4, Math.random() * 6, (Math.random() - 0.5) * 0.4)); } }
+      const fm = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), fl.length); fl.forEach((m, i) => { fm.setMatrixAt(i, m); fm.setColorAt(i, fc[i]); }); fm.frustumCulled = false; G.add(fm);
+      const tm = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 4), lam(0x6a9a42), tufts.length); tufts.forEach((m, i) => tm.setMatrixAt(i, m)); tm.frustumCulled = false; G.add(tm); }
+  }
+  function updateHome(dt, t) {
+    if (HMX.sails) HMX.sails.rotation.z -= dt * 0.55;
+    for (const F of HMX.flames) { const k = 0.8 + 0.25 * Math.sin(t * 9 + F.ph) + 0.15 * Math.sin(t * 23 + F.ph * 2); F.f.scale.set(F.s * (0.85 + 0.15 * Math.sin(t * 7 + F.ph)), F.s * k * 1.2, 1); F.f.material.opacity = 0.75 + 0.25 * Math.sin(t * 13 + F.ph); }
+    for (const fl of HMX.flags) { const p = fl.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i); p.setZ(i, Math.sin(t * 4 - x * 1.2) * 0.25 * (x / 3.6)); } p.needsUpdate = true; }
+  }
   // ---------- Forests: broad-leaved trees in the lowlands, pines up on the hills ----------
   const OAK_TRUNK_GEO = new THREE.CylinderGeometry(0.35, 0.6, 1, 6).translate(0, 0.5, 0), CROWN_GEO = new THREE.IcosahedronGeometry(1, 1);
   const PINE_GEO = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
   const oakLeafM = lam(0x3f7f34), oakLeafM2 = lam(0x58913f), pineM = lam(0x2f5f36), barkM = lam(0x5a4130);
-  const TREE_K = { home: 1, port: 0.8, jungle: 2.2, volcano: 0.5, skull: 0.35, sandbar: 0.25, islet: 0.3, cove: 0.6 };
+  const TREE_K = { home: 4.5, port: 0.8, jungle: 2.2, volcano: 0.5, skull: 0.35, sandbar: 0.25, islet: 0.3, cove: 0.6 };
   for (const I of ISLANDS) {
     floraBin = { trunks: [], leaves: [], rocks: [], darkRocks: [], bushes: [] };
     const nPalms = Math.round(I.palms * 2.6), maxH = I.kind === 'volcano' ? 14 : 26;
@@ -1570,7 +1739,8 @@ window.__pgBoot = () => {
         const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * I.r * 1.2;
         const x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z);
         if (h < 7 || h > P_.rockH * 1.6 || (I.kind === 'volcano' && h > 60) || nearTown(x, z, 10) || !clear(x, z)) continue;
-        if (vnoise(x * 0.012 + I.seed * 2, z * 0.012) < 0.42) continue;   // woods and glades
+        if (I.kind === 'home') { if (HOME.roadD(x, z) < 6) continue; if (HOME.forest(x, z) < 0.35 && rand() > 0.03) continue; }   // Gull Island: proper woods, open meadows with the odd lone tree, and nothing on the roads
+        else if (vnoise(x * 0.012 + I.seed * 2, z * 0.012) < 0.42) continue;   // woods and glades
         const pine = h > P_.rockH * 0.55 || (I.kind !== 'jungle' && rand() < 0.25);
         if (pine) {
           const ht = 10 + rand() * 9, rr = 2.2 + rand() * 1.2;
@@ -15104,6 +15274,7 @@ window.__pgBoot = () => {
     try { updatePolish(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateJungle(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateFauna(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateHome(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
