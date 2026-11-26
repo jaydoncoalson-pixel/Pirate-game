@@ -740,7 +740,7 @@ window.__pgBoot = () => {
   const PALETTES = {
     home:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x5f9e48, dark: 0x3f7a35, rock: 0x8a8378, rockH: 125 },
     sandbar: { sand: 0xf0dfae, wet: 0xd2bd88, grass: 0x8fb85a, dark: 0x6f9a45, rock: 0x9a9080, rockH: 99 },
-    jungle:  { sand: 0xe2cd92, wet: 0xc4ad76, grass: 0x3f8a3a, dark: 0x1f5a28, rock: 0x6f6a5e, rockH: 120 },
+    jungle:  { sand: 0xd8c288, wet: 0xb8a06a, grass: 0x2f6e2a, dark: 0x163f1a, rock: 0x5a5e4e, rockH: 120 },
     volcano: { sand: 0x5e5550, wet: 0x463f3b, grass: 0x5d8a3e, dark: 0x45683a, rock: 0x4a423d, rockH: 45 },
     skull:   { sand: 0xd9c9a0, wet: 0xb8a882, grass: 0x8a9a5a, dark: 0x6b7448, rock: 0xa8a294, rockH: 40 },
     port:    { sand: 0xe8d49a, wet: 0xc9b27a, grass: 0x6aa84f, dark: 0x467f38, rock: 0x8a8378, rockH: 125 },
@@ -1449,6 +1449,74 @@ window.__pgBoot = () => {
     }
   }
 
+  // ---------- The jungle: Jungle Isle grows a real rainforest ----------
+  // Layered like the real thing: giant emergent trees with buttress roots and broad flat crowns, lianas hanging from
+  // them, a mid-storey of broad-leaved banana and elephant-ear plants, ferns carpeting the floor, splashes of flowers,
+  // mist lying in the hollows, parrots wheeling over the canopy and birdsong and insects underneath.
+  const JG = { mist: [], parrots: [], I: null };
+  const JLEAF_GEO = (() => { const g = new THREE.PlaneGeometry(1, 1, 1, 5); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i) + 0.5, x = p.getX(i); p.setXYZ(i, x * (0.25 + Math.sin(y * Math.PI) * 0.75), y, -y * y * 0.45 + Math.abs(x) * 0.08); } g.computeVertexNormals(); return g; })();
+  const JTRUNK_GEO = new THREE.CylinderGeometry(0.45, 0.75, 1, 7).translate(0, 0.5, 0), JBUTT_GEO = new THREE.BoxGeometry(0.18, 1, 1).translate(0, 0.5, 0.5);
+  const JVINE_GEO = new THREE.CylinderGeometry(0.06, 0.05, 1, 4).translate(0, -0.5, 0), JFLOWER_GEO = new THREE.IcosahedronGeometry(0.28, 0);
+  const jl = c => { const m = new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }); return m; };
+  const JFERN_GEO = (() => { const g = new THREE.PlaneGeometry(1, 1, 1, 2); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i) + 0.5, x = p.getX(i); p.setXYZ(i, x * (0.3 + Math.sin(y * Math.PI) * 0.7), y, -y * y * 0.5); } g.computeVertexNormals(); return g; })();
+  const JDENS = (() => { try { const q = (JSON.parse(localStorage.getItem('pg_settings')) || {}).quality; return q === 'low' ? 0.4 : q === 'high' ? 1 : 0.75; } catch (e) { return 0.75; } })();   // Settings: quality
+  function buildJungle(I, clear) {
+    JG.I = I; const P_ = PALETTES.jungle, top = P_.rockH * 1.25;
+    const L = { trunk: [], butt: [], crownA: [], crownB: [], crownC: [], vine: [], leafA: [], leafB: [], fernA: [], fernB: [], flowerR: [], flowerO: [], flowerP: [], midT: [], midC: [], bush: [], litA: [], litB: [] };
+    const D = n => Math.round(n * JDENS);
+    const spot = (minH, maxH, rr = 1.15) => { for (let k = 0; k < 30; k++) { const a = rand() * 6.2832, r = Math.sqrt(rand()) * I.r * rr, x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z); if (h > minH && h < maxH && clear(x, z)) return { x, z, h }; } return null; };
+    // emergent giants
+    for (let n = 0; n < D(950); n++) { const s = spot(6, top); if (!s) continue; const ht = 18 + rand() * 16, cr = 7 + rand() * 6;
+      L.trunk.push(placed(s.x, s.h - 0.5, s.z, 1.6, ht, 1.6, (rand() - 0.5) * 0.06, rand() * 6, (rand() - 0.5) * 0.06));
+      for (let b = 0; b < 4; b++) { const a = b * 1.57 + rand() * 0.4; L.butt.push(placed(s.x, s.h - 0.4, s.z, 1, 2.5 + rand() * 2, 1.8 + rand() * 1.2, 0, a, 0)); }
+      for (let k = 0; k < 6; k++) { const ox = (rand() - 0.5) * cr * 1.1, oz = (rand() - 0.5) * cr * 1.1; [L.crownA, L.crownB, L.crownC][k % 3].push(placed(s.x + ox, s.h + ht + (rand() - 0.2) * cr * 0.5, s.z + oz, cr * (0.55 + rand() * 0.35), cr * (0.42 + rand() * 0.2), cr * (0.55 + rand() * 0.35), rand(), rand() * 6, rand())); }
+      for (let v = 0; v < 3 + (rand() * 4 | 0); v++) { const a = rand() * 6.28, d = cr * (0.3 + rand() * 0.6), len = ht * (0.45 + rand() * 0.5); L.vine.push(placed(s.x + Math.cos(a) * d, s.h + ht - 1, s.z + Math.sin(a) * d, 1, len, 1, (rand() - 0.5) * 0.15, 0, (rand() - 0.5) * 0.15)); }
+      colliders.push({ x: s.x, z: s.z, r: 1.6 }); }
+    // the understorey trees: slimmer trunks under the giants, one dark rounded crown each
+    for (let n = 0; n < D(1100); n++) { const s = spot(5, top); if (!s) continue; const ht = 7 + rand() * 6, cr = 2.8 + rand() * 2.2;
+      L.midT.push(placed(s.x, s.h - 0.3, s.z, 0.6, ht, 0.6, (rand() - 0.5) * 0.12, 0, (rand() - 0.5) * 0.12)); L.midC.push(placed(s.x, s.h + ht + cr * 0.2, s.z, cr, cr * 0.75, cr, 0, rand() * 6, 0)); colliders.push({ x: s.x, z: s.z, r: 0.6 }); }
+    // a carpet of leaf litter and low growth, so the floor is never bare grass
+    for (let n = 0; n < D(4200); n++) { const s = spot(3.8, top); if (!s) continue; const sc = 3 + rand() * 4; (n % 2 ? L.litA : L.litB).push(placed(s.x, s.h + 0.05, s.z, sc, 0.3 + rand() * 0.3, sc * (0.7 + rand() * 0.6), 0, rand() * 6, 0)); }
+    // thick low shrubs
+    for (let n = 0; n < D(1800); n++) { const s = spot(4.5, top); if (!s) continue; const sc = 1.6 + rand() * 2.6; L.bush.push(placed(s.x, s.h + sc * 0.25, s.z, sc, sc * 0.6, sc, 0, rand() * 6, 0)); }
+    // banana and elephant-ear plants: clumps of big leaves
+    for (let n = 0; n < D(1900); n++) { const s = spot(4.5, top); if (!s) continue; const sz = 2.2 + rand() * 2.8, nl = 5 + (rand() * 4 | 0), list = rand() < 0.5 ? L.leafA : L.leafB;
+      for (let k = 0; k < nl; k++) { const a = k / nl * 6.28 + rand() * 0.5; list.push(placed(s.x, s.h + 0.2, s.z, sz * 0.7, sz * (1.1 + rand() * 0.6), sz, -0.55 - rand() * 0.5, a, 0)); } }
+    // ferns carpeting the floor
+    for (let n = 0; n < D(5200); n++) { const s = spot(4, top); if (!s) continue; const sz = 1.9 + rand() * 2.0, list = rand() < 0.55 ? L.fernA : L.fernB;
+      for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28 + rand() * 0.4; list.push(placed(s.x, s.h + 0.05, s.z, sz * 0.35, sz * 1.4, sz * 0.8, -1.0 - rand() * 0.35, a, 0)); } }
+    // flowers
+    for (let n = 0; n < D(1100); n++) { const s = spot(4, top); if (!s) continue; const c = rand(); (c < 0.4 ? L.flowerR : c < 0.7 ? L.flowerO : L.flowerP).push(placed(s.x, s.h + 0.3 + rand() * 0.6, s.z, 1, 0.8, 1, rand(), rand() * 6, 0)); }
+    const mk = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; I.group.add(im); };
+    const bark = lam(0x3a3022), barkL = lam(0x54483a);
+    mk(JTRUNK_GEO, barkL, L.trunk); mk(JBUTT_GEO, bark, L.butt);
+    mk(CROWN_GEO, lam(0x18491e), L.crownA); mk(CROWN_GEO, lam(0x24622a), L.crownB); mk(CROWN_GEO, lam(0x357a2e), L.crownC);
+    mk(JVINE_GEO, lam(0x2e4a1c), L.vine);
+    mk(JLEAF_GEO, jl(0x3c8f2e), L.leafA); mk(JLEAF_GEO, jl(0x2a6e26), L.leafB); mk(JFERN_GEO, jl(0x4a9a34), L.fernA); mk(JFERN_GEO, jl(0x2f7a30), L.fernB);
+    mk(OAK_TRUNK_GEO, bark, L.midT); mk(CROWN_GEO, lam(0x1a4a22), L.midC); mk(CROWN_GEO, lam(0x24602a), L.bush); mk(CROWN_GEO, lam(0x1e4a1e), L.litA); mk(CROWN_GEO, lam(0x2c5a22), L.litB);
+    mk(JFLOWER_GEO, lam(0xe0303a), L.flowerR); mk(JFLOWER_GEO, lam(0xff9a2a), L.flowerO); mk(JFLOWER_GEO, lam(0xd04ad0), L.flowerP);
+    // mist lying in the hollows under the canopy
+    for (let n = 0; n < 40; n++) { const s = spot(4, 60, 0.9); if (!s) continue; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xdfeee4, transparent: true, opacity: 0.22, depthWrite: false })); const sc = 30 + rand() * 30; sp.scale.set(sc, sc * 0.35, 1); sp.position.set(s.x, s.h + 3 + rand() * 4, s.z); sp.userData = { x: s.x, ph: rand() * 6.28 }; I.group.add(sp); JG.mist.push(sp); }
+    // parrots wheeling over the canopy
+    const pcol = [0xd8202a, 0x2a6ad8, 0x2aa83a, 0xf0c020];
+    for (let n = 0; n < 14; n++) { const g = new THREE.Group(), c = pcol[n % 4], m = lam(c), m2 = lam(pcol[(n + 1) % 4]);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.35, 6, 4), m); body.scale.set(0.8, 0.8, 1.8); g.add(body);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 1.1), m2); tail.position.z = -0.9; g.add(tail);
+      const wings = [-1, 1].map(sd => { const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.45), m2); w.geometry.translate(sd * 0.6, 0, 0); g.add(w); return w; });
+      const cx = I.c.x + (rand() - 0.5) * I.r * 1.2, cz = I.c.y + (rand() - 0.5) * I.r * 1.2;
+      g.userData = { cx, cz, cy: Math.max(heightAt(cx, cz), 0) + 34 + rand() * 18, r: 25 + rand() * 45, sp: (0.25 + rand() * 0.3) * (rand() < 0.5 ? -1 : 1), a: rand() * 6.28, wings }; I.group.add(g); JG.parrots.push(g); }
+  }
+  function updateJungle(dt, t) {
+    const I = JG.I; if (!I) return;
+    const d = Math.hypot(camera.position.x - I.c.x, camera.position.z - I.c.y); if (d > I.r * 4) return;
+    for (const p of JG.parrots) { const u = p.userData; u.a += u.sp * dt; p.position.set(u.cx + Math.cos(u.a) * u.r, u.cy + Math.sin(u.a * 2.3) * 3, u.cz + Math.sin(u.a) * u.r); p.rotation.set(0, Math.atan2(-Math.sin(u.a) * u.sp, Math.cos(u.a) * u.sp), Math.sign(u.sp) * -0.35); const f = Math.sin(t * 14 + u.a * 7) * 0.7; u.wings[0].rotation.z = f; u.wings[1].rotation.z = -f; }
+    for (const m of JG.mist) { m.material.opacity = 0.16 + 0.08 * Math.sin(t * 0.3 + m.userData.ph); m.position.x = m.userData.x + Math.sin(t * 0.05 + m.userData.ph) * 8; }
+    // birdsong, parrot squawks and the drone of insects while ye're in the jungle
+    const onIsle = !inInterior && !onShip && !sailing && Math.hypot(P.pos.x - I.c.x, P.pos.z - I.c.y) < I.r * 1.15 && heightAt(P.pos.x, P.pos.z) > 2;
+    JG.callT = (JG.callT || 2) - dt;
+    if (onIsle && JG.callT <= 0) { JG.callT = 1.2 + Math.random() * 3.5; const a = Math.random() * 6.28, pos = { x: P.pos.x + Math.sin(a) * 40, z: P.pos.z + Math.cos(a) * 40 }; try { const r = Math.random(); r < 0.45 ? SFX.jungleBird(pos) : r < 0.7 ? SFX.parrot(pos) : SFX.insects(); } catch (e) {} }
+  }
+
   // ---------- Forests: broad-leaved trees in the lowlands, pines up on the hills ----------
   const OAK_TRUNK_GEO = new THREE.CylinderGeometry(0.35, 0.6, 1, 6).translate(0, 0.5, 0), CROWN_GEO = new THREE.IcosahedronGeometry(1, 1);
   const PINE_GEO = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
@@ -1466,7 +1534,7 @@ window.__pgBoot = () => {
       if (I.kind !== 'jungle' && vnoise(x * 0.02 + I.seed, z * 0.02) < 0.38) continue; // palms grow in groves
       palm(x, z); n++;
     }
-    const nBush = I.kind === 'jungle' ? 260 : (I.kind === 'home' || I.kind === 'port') ? 50 : 15;
+    const nBush = I.kind === 'jungle' ? 0 : (I.kind === 'home' || I.kind === 'port') ? 50 : 15;
     for (let i = 0, n = 0; i < nBush * 20 && n < nBush; i++) {
       const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * I.r * 1.3;
       const x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z);
@@ -1487,7 +1555,7 @@ window.__pgBoot = () => {
     // forests: clumped by noise, oaks below, pines on the high ground
     {
       const trunks = [], crowns = [], crowns2 = [], pines = [], pineTrunks = [];
-      const nT = Math.round(I.r * I.r / 1500 * (TREE_K[I.kind] || 0.5)), P_ = PALETTES[I.kind];
+      const nT = I.kind === 'jungle' ? 0 : Math.round(I.r * I.r / 1500 * (TREE_K[I.kind] || 0.5)), P_ = PALETTES[I.kind];
       for (let tries = 0, n = 0; tries < nT * 12 && n < nT; tries++) {
         const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * I.r * 1.2;
         const x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z);
@@ -1508,6 +1576,7 @@ window.__pgBoot = () => {
       const mk = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; I.group.add(im); };
       mk(OAK_TRUNK_GEO, barkM, trunks); mk(OAK_TRUNK_GEO, barkM, pineTrunks); mk(CROWN_GEO, oakLeafM, crowns); mk(CROWN_GEO, oakLeafM2, crowns2); mk(PINE_GEO, pineM, pines);
     }
+    if (I.kind === 'jungle') buildJungle(I, clear);
     flushFlora(I);
   }
   floraBin = null;
@@ -8988,6 +9057,9 @@ window.__pgBoot = () => {
       init, get muted() { return muted; },
       toggle() { muted = !muted; STATE.muted = muted; save(); if (master) master.gain.value = muted ? 0 : 0.8 * vol; return muted; },
       setVolume(v) { vol = Math.max(0, Math.min(1, v)); if (master) master.gain.value = muted ? 0 : 0.8 * vol; },
+      jungleBird(pos) { const p = far(pos, 220), f = 1400 + Math.random() * 1600, n = 2 + (Math.random() * 4 | 0); for (let i = 0; i < n; i++) { const d = i * (0.11 + Math.random() * 0.06); tone({ type: 'sine', f0: f * (1 + (i % 2) * 0.25), f1: f * (i % 2 ? 0.8 : 1.35), dur: 0.1, vol: 0.05, pos: p, delay: d }); } },
+      parrot(pos) { const p = far(pos, 260); tone({ type: 'sawtooth', f0: 1300, f1: 700, dur: 0.18, vol: 0.035, pos: p }); tone({ type: 'square', f0: 900, f1: 1500, dur: 0.14, vol: 0.02, pos: p, delay: 0.16 }); noise({ dur: 0.2, f0: 3200, q: 4, vol: 0.04, pos: p }); },
+      insects() { for (let i = 0; i < 6; i++) noise({ dur: 0.09, f0: 5200 + Math.random() * 800, q: 12, vol: 0.025, delay: i * 0.11 + Math.random() * 0.03 }); },
       gull(pos) { const p = far(pos, 260); for (let i = 0; i < 2 + (Math.random() * 3 | 0); i++) { const d = i * (0.18 + Math.random() * 0.1), f = 1700 + Math.random() * 500; tone({ type: 'triangle', f0: f, f1: f * 0.62, dur: 0.22, vol: 0.05, pos: p, delay: d }); tone({ type: 'sine', f0: f * 2, f1: f * 1.2, dur: 0.16, vol: 0.02, pos: p, delay: d }); } },
       step(wood) { if (wood) { noise({ dur: 0.07, f0: 1800, q: 2, vol: 0.1 }); tone({ f0: 150, f1: 90, dur: 0.06, vol: 0.1 }); } else noise({ dur: 0.1, type: 'lowpass', f0: 900, f1: 300, vol: 0.08 }); },
       splash(pos, big) { noise({ dur: big ? 0.9 : 0.35, type: 'lowpass', f0: big ? 2500 : 1700, f1: 300, vol: big ? 0.45 : 0.12, pos: far(pos, 900) }); },
@@ -14375,6 +14447,7 @@ window.__pgBoot = () => {
     if (inInterior && interior.stern) renderSternView();
     try { cineCam(dt); } catch (e) {}   // the Leviathan's cinematics take the camera
     try { updatePolish(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateJungle(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
