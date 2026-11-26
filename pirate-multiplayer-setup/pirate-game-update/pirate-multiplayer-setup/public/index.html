@@ -823,6 +823,7 @@ window.__pgBoot = () => {
         extra: (c, x, y, z) => { if (X.field) { const d = Math.hypot(x - X.field.x, z - X.field.z); if (d < X.field.r + 10) c.lerp(soil, sstep(X.field.r + 10, X.field.r - 6, d)).lerp(cane, 0.3 * sstep(X.field.r, X.field.r - 20, d)); } } }); }
     // -- Smoke Peak
     { const I = ISLANDS[3], X = ISLX[3] = { I }, vil = site('Ashfall'), camp = campOn(3), H = (x, z) => islandHeight(I, x, z), peak = H(I.c.x, I.c.y);
+      X.vil = vil;
       let maxH = peak; for (let r = 0; r < I.r; r += 10) for (let a = 0; a < 6.283; a += 0.5) maxH = Math.max(maxH, H(I.c.x + Math.cos(a) * r, I.c.y + Math.sin(a) * r)); X.maxH = maxH;
       // the temple on the crater rim, on the side facing Ashfall
       const va = Math.atan2(vil.z - I.c.y, vil.x - I.c.x); let rim = { r: 0, h: -1 }; for (let r = 0; r < I.r; r += 4) { const h = H(I.c.x + Math.cos(va) * r, I.c.y + Math.sin(va) * r); if (h > rim.h) rim = { r, h }; }
@@ -2017,8 +2018,8 @@ window.__pgBoot = () => {
       inst(G, new THREE.BoxGeometry(1, 1, 1), lam(0xb8a070), tr); inst(G, new THREE.SphereGeometry(1, 10, 6, 0, 6.28, 0, 1.57), lam(0xd8c08a), nests); inst(G, new THREE.SphereGeometry(1, 8, 6), lam(0xf4f0e4), eggs);
       { const p = scatter(I, 1, (x, z, h) => h > 4 && free(I, x, z, 10), 3000)[0]; if (p) { const g = grp(G, p.x, p.z, Math.random() * 6, -1.2), sh = mk(new THREE.SphereGeometry(5, 12, 6, 0, 6.28, 0, 1.4), lam(0x6a7a4a), 0, 0, 0, g); sh.scale.set(1.2, 0.55, 1);
           for (let k = 0; k < 7; k++) { const b = k / 7 * 6.28; mk(new THREE.CylinderGeometry(1.1, 1.1, 0.2, 6), lam(0x4f5a38), Math.cos(b) * 3.4, 2 - 0.2, Math.sin(b) * 2.8, g, 0.35 * Math.sin(b), 0, -0.35 * Math.cos(b)); } mk(new THREE.CylinderGeometry(1.3, 1.3, 0.2, 6), lam(0x4f5a38), 0, 2.8, 0, g);
-          colliders.push({ x: p.x, z: p.z, r: 5.5 }); SPOTS.push({ x: p.x, z: p.z, r: 12 }); } }
-      { const p = scatter(I, 1, (x, z, h) => h > 3.5 && h < 8 && free(I, x, z, 10), 3000)[0]; if (p) { const g = grp(G, p.x, p.z, Math.random() * 6, 0); for (const sx of [-2, 2]) for (const sz of [-1.5, 1.5]) mk(new THREE.CylinderGeometry(0.15, 0.15, 3, 5), DARK_WOOD, sx, 1.5, sz, g); const rf = mk(new THREE.ConeGeometry(3.6, 1.6, 4), thatch, 0, 3.6, 0, g, 0, Math.PI / 4); rf.scale.z = 0.8; mk(new THREE.BoxGeometry(3, 0.8, 1.2), WOOD, 0, 0.5, 0, g); colliders.push({ x: p.x, z: p.z, r: 2.6 }); SPOTS.push({ x: p.x, z: p.z, r: 10 }); } } }
+          colliders.push({ x: p.x, z: p.z, r: 5.5 }); SPOTS.push({ x: p.x, z: p.z, r: 12 }); X.shell = { x: p.x, z: p.z }; } }
+      { const p = scatter(I, 1, (x, z, h) => h > 3.5 && h < 8 && free(I, x, z, 10), 3000)[0]; if (p) { const g = grp(G, p.x, p.z, Math.random() * 6, 0); for (const sx of [-2, 2]) for (const sz of [-1.5, 1.5]) mk(new THREE.CylinderGeometry(0.15, 0.15, 3, 5), DARK_WOOD, sx, 1.5, sz, g); const rf = mk(new THREE.ConeGeometry(3.6, 1.6, 4), thatch, 0, 3.6, 0, g, 0, Math.PI / 4); rf.scale.z = 0.8; mk(new THREE.BoxGeometry(3, 0.8, 1.2), WOOD, 0, 0.5, 0, g); colliders.push({ x: p.x, z: p.z, r: 2.6 }); SPOTS.push({ x: p.x, z: p.z, r: 10 }); X.shelter = { x: p.x, z: p.z }; } } }
   }
   function updateHome(dt, t) {
     if (HMX.sails) HMX.sails.rotation.z -= dt * 0.55;
@@ -3203,6 +3204,26 @@ window.__pgBoot = () => {
   NPC_DEFS.push({ name: 'Ghost of Captain Hollowell', ghost: true, night: true, at: frameLocal(GRAVE_F, -74, 32.5), face: GRAVE_F.perp.clone().negate(), far: 300,
     look: { coat: 0x9fd8c8, shirt: 0xd8fff0, pants: 0x7ab8a8, hat: 'tricorn', hatColor: 0x6aa898, hair: 0xd8fff0, beard: 0xd8fff0, skin: 0xbfeee0, belt: 0x5a9888 },
     lines: ["...cold... so cold, down in the dark...", "Leave me be, living one. Unless ye've come to set me free."] });
+
+  // ---- quest-givers out across the islands, each by one of its landmarks ----
+  const QG = (() => {
+    const v2 = (x, z) => new THREE.Vector2(x, z), toward = (p, q, d) => { const dx = q.x - p.x, dz = q.z - p.z, L = Math.hypot(dx, dz) || 1; return v2(p.x + dx / L * d, p.z + dz / L * d); }, faceTo = (a, q) => { const d = v2(q.x - a.x, q.z - a.y); return d.lengthSq() > 0.01 ? d.normalize() : v2(0, 1); };
+    const G = {}, add = (key, at, lookAt, def) => { if (!at) return; G[key] = { x: at.x, z: at.y }; NPC_DEFS.push(Object.assign({ at, face: faceTo(at, lookAt) }, def)); };
+    const town = { x: TOWN.x, z: TOWN.y }, X5 = ISLX[5], X3 = ISLX[3], X8 = ISLX[8], X9 = ISLX[9], X1 = ISLX[1], X7 = ISLX[7];
+    if (HOME.mill) add('miller', toward(HOME.mill, town, 9), town, { name: 'Miller Hobb', look: { shirt: 0xe8dcc0, pants: 0x6a5a40, hat: 'straw', hatColor: 0xd8c890, beard: 0xb8a888, hair: 0xb8a888, skin: 0xd8a880 }, lines: ["Flour on me boots, flour in me beard. That's the miller's life.", "Wind's good today. Listen to them sails creak."] });
+    add('warden', toward(HOME.top, HOME.vil, 11), HOME.vil, { name: 'Watchwarden Ida', look: { coat: 0x2a5aa8, shirt: 0xe8e0d0, pants: 0x3a3a44, hat: 'tricorn', hatColor: 0x1c2a44, hair: 0x5a3a24, longHair: true, skin: 0xc8946a }, lines: ["From up here ye can see every sail between Gull Island and Port Coral.", "When the beacon burns, the whole island knows trouble's coming."] });
+    if (HMX.battery) { const b = HMX.battery; add('gunner', v2(b.x - DOCK_DIR.x * 3, b.z - DOCK_DIR.y * 3), { x: b.x + DOCK_DIR.x * 50, z: b.z + DOCK_DIR.y * 50 }, { name: 'Gunner Rourke', look: { coat: 0x7a2a22, shirt: 0xe8dcc8, pants: 0x2d2a33, hat: 'tricorn', hatColor: 0x2a1a14, beard: 0x3a2a1a, hair: 0x3a2a1a, skin: 0xc08a60 }, lines: ["Four guns, all loaded, all pointed at the bay. Let 'em come.", "I lost the hearing in me left ear to a twelve-pounder. Worth it."] }); }
+    if (HMX.hamlet) add('wenna', v2(HMX.hamlet.x, HMX.hamlet.z), town, { name: 'Old Wenna', look: { shirt: 0x6a7a8a, dress: 0x4a5a6a, hair: 0xd8d8d0, longHair: true, skin: 0xb88a68, hat: 'bandana', hatColor: 0x8a3a2a }, lines: ["Sixty years mending nets on this beach, and the sea's never once said thank ye.", "The turtles come up the sand on the full moon. Sight to see."] });
+    if (X5 && X5.top) add('governor', v2(X5.top.x + PORT.toHome.x * 20, X5.top.z + PORT.toHome.y * 20), { x: X5.top.x + PORT.toHome.x * 60, z: X5.top.z + PORT.toHome.y * 60 }, { name: 'Governor Alvarez', look: { coat: 0xe8e0d0, shirt: 0xf8f4ec, pants: 0xe8e0d0, hat: 'tricorn', hatColor: 0xf0ead8, feather: 0xc8a030, beard: 0x2a2018, hair: 0x2a2018, skin: 0xd8a47a, belt: 0xc8a030 }, lines: ["Port Coral is the jewel of these waters, captain. I intend to keep it so.", "Do mind the hedges. I had them sent from the mainland."] });
+    if (X5 && X5.mill) add('overseer', toward(X5.mill, { x: PORT_FRAME.origin.x, z: PORT_FRAME.origin.y }, 14), { x: PORT_FRAME.origin.x, z: PORT_FRAME.origin.y }, { name: 'Overseer Dace', look: { shirt: 0xc8b890, pants: 0x5a4a30, hat: 'straw', hatColor: 0xc8b078, beard: 0x5a3a20, skin: 0xa8784e }, lines: ["Cane in, sugar out. The mill never sleeps and neither do I.", "Smell that? Burnt sugar. Best smell in the world."] });
+    if (X3 && X3.temple) add('ashra', toward(X3.temple, X3.vil || { x: X3.I.c.x, z: X3.I.c.y }, 16), { x: X3.temple.x, z: X3.temple.z }, { name: 'Pyre-keeper Ashra', look: { coat: 0x5a1a14, shirt: 0x2a1a14, pants: 0x2a2020, hair: 0x1a1414, longHair: true, skin: 0x8a5a3a, hat: 'bandana', hatColor: 0xc83a14 }, lines: ["The mountain's fire has burned in this temple since before the first ship found these seas.", "Mind yer step. The ground here is thin, and hungry."] });
+    if (X8 && X8.fall) add('lio', toward(X8.fall, X8.vil, 30), { x: X8.fall.x, z: X8.fall.z }, { name: 'Pearl-diver Lio', look: { shirt: 0x3aa8b8, pants: 0x2a5a6a, hair: 0x1a1410, skin: 0x8a5a3a }, lines: ["I can hold my breath for four minutes. Five, if there's a pearl at the bottom.", "That waterfall's louder than it looks. Hides things, too."] });
+    if (X9 && X9.hut) add('brin', toward(X9.hut, X9.vil, 9), X9.vil, { name: 'Marsh-warden Brin', look: { coat: 0x4a5a34, shirt: 0x8a8a5a, pants: 0x3a3424, hat: 'straw', hatColor: 0x8a7a4a, beard: 0x6a5a3a, hair: 0x6a5a3a, skin: 0xb8885a }, lines: ["Watch where ye step. The marsh swallows boots, and sometimes the men in 'em.", "From my hut I can see every boat comin' into Saltmarsh."] });
+    if (X1 && X1.camp) add('finn', v2(X1.camp.x, X1.camp.z), { x: X1.I.c.x, z: X1.I.c.y }, { name: 'Castaway Finn', look: { shirt: 0xd8d0b8, pants: 0x6a5a48, hair: 0x8a6a3a, beard: 0x8a6a3a, skin: 0xc8844e }, lines: ["Three hundred and twelve days on this beach. I've named every crab.", "Ye wouldn't happen to have any bread? Real bread?"] });
+    if (X7 && X7.shelter) add('tess', toward(X7.shelter, { x: X7.I.c.x, z: X7.I.c.y }, 5), { x: X7.I.c.x, z: X7.I.c.y }, { name: 'Warden Tess', look: { shirt: 0x6a8a4a, pants: 0x4a3a2a, hat: 'straw', hatColor: 0xc8b078, hair: 0xa84a24, longHair: true, skin: 0xd8a47a }, lines: ["Every turtle on this beach has a name, and I know 'em all.", "Tread soft. There's eggs under that sand."] });
+    { const V = HOME.vil; add('mabel', v2(V.x + 6, V.z + 6), { x: V.x, z: V.z }, { name: 'Mabel of Brackenford', look: { shirt: 0xc87a8a, dress: 0x8a4a5a, hair: 0x6a4a2a, longHair: true, skin: 0xe0b08a }, lines: ["Brackenford's quiet, captain. We like it that way.", "My Finn went to sea a year ago and never came home."] }); }
+    return G;
+  })();
   const tagLayer = document.getElementById('tags');
   const hudTitle = document.querySelector('#hud h1');
   const npcs = NPC_DEFS.map(def => {
@@ -5800,6 +5821,97 @@ window.__pgBoot = () => {
           lines: ["He's gone, then. Properly gone. I felt the graveyard sigh, just before dawn.", "Ye've done a kindness most wouldn't, captain. Here: the parish pays for a proper burial, and I'd say ye've earned it."] },
       ] },
   };
+
+  // ---- quests out across the islands, sending ye from one island's landmarks to another's ----
+  {
+    const P = (k, o) => () => { const q = typeof k === 'function' ? k() : k; return q ? { x: q.x + (o || [0, 0])[0], z: q.z + (o || [0, 0])[1] } : null; };
+    const X5 = ISLX[5], X3 = ISLX[3], X8 = ISLX[8], X9 = ISLX[9], X7 = ISLX[7], X4 = ISLX[4];
+    const campOf = i => { const S = SITES.find(q => q.kind === 'camp' && q.i === i); return S ? { x: S.x, z: S.z } : null; };
+    const NQ = {
+      grist: { title: 'Grist for the mill', reward: 500, giver: 'Miller Hobb', hint: 'Miller Hobb, at the windmill above Gull Town, has a broken millstone.',
+        start: ["Captain! My millstone's cracked clean in two. No flour, no bread, no Gull Town.", "Only stone hard enough is the black basalt round the fire temple on Smoke Peak. Fetch me a slab?", "And I'll need iron for the bands that hold it."],
+        done: ["Hear that? Grinding like the day it was cut. Gull Town eats tonight!"],
+        stages: [
+          { type: 'spot', at: P(() => X3 && X3.temple), r: 22, label: 'Pry loose a slab of basalt', text: 'Cut a slab of basalt from the fire temple on Smoke Peak, far to the north', act: () => { SFX.chop(); toast('A slab of black basalt, still warm from the mountain.'); } },
+          { type: 'mats', mats: { iron: 3 }, text: 'Gather 3 iron scrap for the millstone bands' },
+          { type: 'talk', npc: 'Miller Hobb', need: { mats: { iron: 3 } }, text: 'Bring the basalt and iron to Miller Hobb at the windmill', lines: ["That's mountain stone, all right. Hand me that iron...", "There! She'll grind for another hundred years."] } ] },
+      beacon: { title: 'Light the beacon', reward: 650, giver: 'Watchwarden Ida', hint: 'Watchwarden Ida, at the watchtower on the summit of Gull Island, keeps a lookout.',
+        start: ["Blackwater sails have been sighted off the point, captain. The beacon needs to burn bright tonight.", "Ordinary wood won't do. The sugar mill on Port Coral sells a spirit that burns like the sun. Fetch me a cask."],
+        done: ["See it burn? Every ship from here to Skull Isle knows Gull Island is watching."],
+        stages: [
+          { type: 'talk', npc: 'Overseer Dace', need: { gold: 100 }, text: 'Buy a cask of cane spirit from Overseer Dace at the Port Coral sugar mill (100 gold)', lines: ["Cane spirit for Ida's beacon? Strong enough to strip paint. A hundred gold.", "Mind ye don't drink it."] },
+          { type: 'kill', what: 'raider', n: 2, text: 'Sink 2 Blackwater raider ships seen from the tower' },
+          { type: 'spot', at: P(() => HOME.top), r: 14, cond: isNight, condText: 'The beacon is lit after dark. Come back at nightfall (8 in the evening).', label: 'Pour the spirit and light the beacon', text: 'Return to the summit watchtower after dark and light the beacon', act: () => { SFX.splash && SFX.splash(null, false); toast('WHOOSH! The beacon roars up into the night sky.'); } },
+          { type: 'talk', npc: 'Watchwarden Ida', text: 'Report to Watchwarden Ida', lines: ["Now THAT'S a beacon. They'll see it from Port Coral.", "Here, captain. The island owes ye."] } ] },
+      powder: { title: 'Powder for the guns', reward: 550, giver: 'Gunner Rourke', hint: 'Gunner Rourke, at the harbour battery across the bay from the lighthouse, is short of powder.',
+        start: ["Not a dry keg of powder left in my battery, captain. A supply boat went down off the fishing hamlet.", "Old Wenna's folk saw kegs wash up. Fetch what ye can, then go take a look at Fort Blackwater for me. I want to know how many guns they've got."],
+        done: ["Four guns, all loaded, and I know exactly what we're up against. Ye're a gunner's friend."],
+        stages: [
+          { type: 'spot', at: P(() => HMX.hamlet), r: 30, label: 'Gather the washed-up powder kegs', text: 'Gather the powder kegs washed up by the fishing hamlet down the Gull Island coast', act: () => toast('Six kegs, and only two of them soaked through.') },
+          { type: 'spot', at: P(() => X4 && X4.gate), r: 26, label: 'Count the fort\'s guns', text: 'Spy on Fort Blackwater from among the skull pikes on Skull Isle', act: () => toast('Twelve guns on the walls... and every one of them pointed at the sea.') },
+          { type: 'talk', npc: 'Gunner Rourke', text: 'Report back to Gunner Rourke at the harbour battery', lines: ["Twelve, eh? Then we'll need every one of these kegs. Good work, captain."] } ] },
+      toyboat: { title: 'The pond and the turtles', reward: 400, giver: 'Old Wenna', hint: 'Old Wenna, at the fishing hamlet on the Gull Island coast, has an errand for ye.',
+        start: ["My grandson lost his little toy boat on the lily pond, up inland. Cried all night, poor lamb.", "And while ye're sailing about, leave this charm at the great turtle shell on Turtle Cay. For luck. My mother always did."],
+        done: ["He hasn't let go of that boat since. And the turtles came up the beach last night. Bless ye."],
+        stages: [
+          { type: 'spot', at: P(() => HMX.pondAt), r: 22, label: 'Fish the toy boat out of the pond', text: 'Find the toy boat on the lily pond in the hills of Gull Island', act: () => toast('A little carved boat, tangled in the lily pads.') },
+          { type: 'spot', at: P(() => X7 && X7.shell), r: 14, label: 'Leave Wenna\'s charm at the shell', text: 'Leave the charm at the great turtle shell on Turtle Cay', act: () => toast('Ye tuck the charm under the edge of the shell. Somewhere, a turtle sighs.') },
+          { type: 'talk', npc: 'Old Wenna', text: 'Bring the toy boat back to Old Wenna', lines: ["His boat! And the charm left proper? Ye're a good soul, captain."] } ] },
+      soiree: { title: 'The governor\'s soirée', reward: 900, giver: 'Governor Alvarez', hint: 'Governor Alvarez, in the mansion on the hill above Port Coral, is planning a grand party.',
+        start: ["I'm hosting the finest soirée these islands have ever seen, captain. I need three things.", "Pink coral from the sea arch at Mermaid Cove, for the table. A pearl or two for the ladies.", "And those bandits camped up the hill from Coral Heights. I can't have guests robbed on the way."],
+        done: ["The soirée was the talk of every island! And no one was robbed. Splendid."],
+        stages: [
+          { type: 'spot', at: P(() => X8 && X8.arch), r: 26, label: 'Break off a branch of pink coral', text: 'Gather pink coral beneath the sea arch at Mermaid Cove, far to the south', act: () => toast('A branch of coral as pink as a sunset.') },
+          { type: 'kill', what: 'Blackwater raider', n: 4, text: 'Clear the Blackwater raiders camped on Port Coral\'s hills', at: () => campOf(5) },
+          { type: 'talk', npc: 'Governor Alvarez', need: { mats: { pearl: 2 } }, text: 'Bring the coral and 2 pearls to Governor Alvarez at his mansion', lines: ["Exquisite! And the road is safe! Captain, you have saved my reputation.", "Do take this, with the governor's compliments."] } ] },
+      cane: { title: 'Sweet cargo', reward: 600, giver: 'Overseer Dace', hint: 'Overseer Dace, at the sugar mill on Port Coral, has lost a shipment.',
+        start: ["Raiders hit my sugar barge in the night. Sank her, and the cargo's floating all over the sea.", "Sink one of the devils for me, gather what ye can, and run a sample of the new sugar to the marsh-warden at Saltmarsh. He's my best customer."],
+        done: ["The mill's running, the cane's coming in, and the marsh folk are hooked on my sugar. Ha!"],
+        stages: [
+          { type: 'kill', what: 'raider', n: 1, text: 'Sink a Blackwater raider ship that hit the sugar barge' },
+          { type: 'cargo', n: 4, text: 'Recover 4 floating cargo crates of sugar' },
+          { type: 'talk', npc: 'Marsh-warden Brin', text: 'Deliver the sugar to Marsh-warden Brin at his watch hut on Driftwood Isle', lines: ["Dace's sugar! The marsh folk'll dance for a week.", "Tell him I'll take twelve barrels next season."] },
+          { type: 'talk', npc: 'Overseer Dace', text: 'Report back to Overseer Dace at the sugar mill', lines: ["Twelve barrels! Ha! Here, captain, take yer cut."] } ] },
+      flame: { title: 'The eternal flame', reward: 750, giver: 'Pyre-keeper Ashra', hint: 'Pyre-keeper Ashra, at the fire temple on Smoke Peak, fears for the temple\'s flame.',
+        start: ["The temple's flame is guttering, captain. It hasn't gone out in a thousand years.", "It must be fed with fire gems from the mountain, and blessed with water from the hot springs, by moonlight.", "And the steam vents must be read: they tell us what the mountain wants."],
+        done: ["The flame burns bright, and the mountain sleeps easy. The fire remembers ye, captain."],
+        stages: [
+          { type: 'spot', at: P(() => X3 && X3.vents[0]), r: 16, label: 'Read the steam vent', text: 'Read the sulphur steam vent on the slopes of Smoke Peak', act: () => toast('The steam hisses and curls... it smells of iron and old fire.') },
+          { type: 'spot', at: P(() => X3 && X3.springs[0]), r: 16, cond: isNight, condText: 'The water must be drawn by moonlight. Come back after dark.', label: 'Draw water from the hot spring', text: 'Draw water from the hot spring on Smoke Peak, after dark', act: () => toast('The water steams in the flask, and glows faintly in the moonlight.') },
+          { type: 'mats', mats: { gem: 2 }, text: 'Gather 2 fire gems on Smoke Peak' },
+          { type: 'talk', npc: 'Pyre-keeper Ashra', need: { mats: { gem: 2 } }, text: 'Bring the gems and the spring water to Pyre-keeper Ashra at the fire temple', lines: ["The gems... and the water still warm. Stand back, captain.", "*FWOOM* There. A thousand years more."] } ] },
+      falls: { title: 'Behind the waterfall', reward: 800, giver: 'Pearl-diver Lio', hint: 'Pearl-diver Lio, by the waterfall on Mermaid Cove, has found something.',
+        start: ["There's a crack in the rock behind the waterfall, captain. I saw something glint in there, but I can't get past the falls alone.", "The old divers say the whale bones on Driftwood Isle point the way to every treasure in these seas. Look there too."],
+        done: ["A pirate's cache behind MY waterfall! Ye've made me the richest diver in Shellharbor."],
+        stages: [
+          { type: 'spot', at: P(() => X8 && X8.fall), r: 26, label: 'Squeeze in behind the falls', text: 'Search behind the waterfall on Mermaid Cove', act: () => toast("A rusted lockbox, wedged in the rock. The lock has a whale's tail carved in it.") },
+          { type: 'spot', at: P(() => X9 && X9.whale), r: 20, cond: isNight, condText: 'The bones only give up their secret by moonlight. Come back after dark.', label: 'Search the whale\'s skull by moonlight', text: 'Search the whale skeleton on Driftwood Isle, after dark', act: () => toast("In the whale's eye socket, by moonlight: a key with a whale's tail for a bow.") },
+          { type: 'talk', npc: 'Pearl-diver Lio', text: 'Bring the key back to Pearl-diver Lio at the waterfall', lines: ["*click* It opens! Gold, pearls... and a letter signed 'Blackwater'. Half's yours, captain."] } ] },
+      bones: { title: 'Lights on the marsh', reward: 550, giver: 'Marsh-warden Brin', hint: 'Marsh-warden Brin, at the stilted watch hut on Driftwood Isle, has seen strange lights.',
+        start: ["Lights out on the marsh at night, captain. Moving lights. Folk say it's the ghosts of drowned men.", "I say it's bandits, signalling to Blackwater ships. Clear 'em out and I'll sleep easier."],
+        done: ["No lights for a week now. Just frogs. Lovely, ordinary frogs."],
+        stages: [
+          { type: 'kill', what: 'Bandit', n: 4, text: 'Clear out the bandits signalling from Driftwood Isle', at: () => ({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }) },
+          { type: 'spot', at: P(() => X9 && X9.whale), r: 20, cond: isNight, condText: 'Come back after dark, when the lights show.', label: 'Watch the marsh from the whale bones', text: 'Watch the marsh by night from the whale skeleton on Driftwood Isle', act: () => toast('Dark. Quiet. No lights at all... just the frogs.') },
+          { type: 'talk', npc: 'Marsh-warden Brin', text: 'Tell Marsh-warden Brin the lights are gone', lines: ["Ghosts, my foot. Here, captain, for yer trouble."] } ] },
+      raft: { title: 'Word from the castaway', reward: 600, giver: 'Castaway Finn', hint: 'A castaway is living rough on Palm Key, to the east of Gull Island.',
+        start: ["A ship! A real ship! Captain, I've been stuck on this beach for three hundred and twelve days.", "My wife Mabel lives in Brackenford, up in the hills of Gull Island. Tell her I'm alive?", "And if ye could spare some hardwood, I'll finish my raft and sail home myself."],
+        done: ["Mabel wrote back! She's waiting at the Gull Town dock every evening. I'm going home!"],
+        stages: [
+          { type: 'talk', npc: 'Mabel of Brackenford', text: 'Find Mabel in the village of Brackenford, in the hills of Gull Island, and tell her Finn is alive', lines: ["Alive? My Finn is ALIVE?", "Oh, captain... tell him I'm waiting. Tell him I never stopped."] },
+          { type: 'mats', mats: { wood: 5 }, text: 'Gather 5 hardwood for Finn\'s raft' },
+          { type: 'talk', npc: 'Castaway Finn', need: { mats: { wood: 5 } }, text: 'Bring the hardwood and Mabel\'s message to Castaway Finn on Palm Key', lines: ["She's waiting? She never stopped?", "Then this raft will be the finest ever built. Thank ye, captain. Take everything I saved."] } ] },
+      nests: { title: 'Guardians of the nests', reward: 500, giver: 'Warden Tess', hint: 'Warden Tess, at the shelter on Turtle Cay, is worried about her turtles.',
+        start: ["Raiders have been stealing turtle eggs to sell in Port Coral, captain. It's breaking my heart.", "Sink one of their ships, and I'll need gull feathers from the nests on Gull Rocks, to mark the nests so I can find them by night."],
+        done: ["Every nest marked, and no more thieves. The hatchlings ran for the sea last night. Ye should've seen them."],
+        stages: [
+          { type: 'kill', what: 'raider', n: 1, text: 'Sink a Blackwater raider ship carrying stolen eggs' },
+          { type: 'spot', at: () => { const I = ISLANDS[6]; return { x: I.c.x, z: I.c.y }; }, r: 60, label: 'Gather feathers from the nests', text: 'Gather gull feathers from the nests on Gull Rocks', act: () => toast('A handful of white feathers, and an earful from some very angry gulls.') },
+          { type: 'spot', at: P(() => X7 && X7.shell), r: 14, cond: isNight, condText: 'The nests are marked by night, when the mothers have gone. Come back after dark.', label: 'Mark the nests', text: 'Mark the turtle nests on Turtle Cay after dark', act: () => toast('One feather by each nest. Not a single egg disturbed.') },
+          { type: 'talk', npc: 'Warden Tess', text: 'Tell Warden Tess the nests are safe', lines: ["Every one of them? Oh, captain. Thank ye."] } ] },
+    };
+    for (const k in NQ) QUESTS[k] = NQ[k];
+  }
   // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
   STATE.qprog = STATE.qprog || {};
   for (const id in STATE.quests) { const s = STATE.quests[id]; if (!QUESTS[id]) delete STATE.quests[id]; else if (typeof s === 'number' && s >= QUESTS[id].stages.length) STATE.quests[id] = QUESTS[id].stages.length - 1; }
