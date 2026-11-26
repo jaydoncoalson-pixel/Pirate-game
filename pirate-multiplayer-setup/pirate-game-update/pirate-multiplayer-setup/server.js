@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createSim } = require('./sim');
+const { createAbyss } = require('./abyss');
 const { createEnv } = require('./env');
 const W = require('./world');
 const { createAccounts } = require('./accounts');
@@ -23,7 +24,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const ENV_MS = 1000;        // time-and-weather updates to browsers: once a second
 // Peer-to-peer topics the server still passes along unchanged (player-vs-player effects).
-const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite', 'sbite']);
+const RELAY_TOPICS = new Set(['fire', 'pvp', 'ebite', 'sbite', 'efire']);
 // which version of the game page this server is handing out: browsers still running an older page are told to refresh
 const BUILD = (() => { try { return crypto.createHash('sha1').update(fs.readFileSync(path.join(__dirname, 'public', 'index.html'))).digest('hex').slice(0, 10); } catch (e) { return ''; } })();
 
@@ -96,6 +97,10 @@ const sim = createSim({
   broadcast: (topic, data) => broadcastRaw(serverEmit(topic, data)),
   adminOk: d => !ADMIN_KEY || (d && d.key === ADMIN_KEY),
   hornOwns: q => hornOwns(q),
+});
+const abyss = createAbyss({
+  sendTo: (id, topic, data) => { const q = players.get(id); if (q) send(q.ws, serverEmit(topic, data)); },
+  broadcast: (topic, data) => broadcastRaw(serverEmit(topic, data)),
 });
 
 // ---------- the Serpent Horn: the true horn (and the Elder Serpent) belongs to the bob3 account ----------
@@ -191,6 +196,7 @@ wss.on('connection', ws => {
       send(ws, hornMsg(players.get(id)));
       send(ws, serverEmit('bounties', { list: bountyList() }));
       send(ws, serverEmit('fctl', { isles: fwSnap() }));
+      send(ws, serverEmit('lvsnap', abyss.snapshot()));
       { const ri = sim.raidInfo(); send(ws, serverEmit('raidtier', { tier: ri.tier, mul: ri.mul })); for (const i of ri.subs) send(ws, serverEmit('raidsub', { i, mul: ri.mul })); if (ri.list.length || ri.best.length) send(ws, serverEmit('raidboard', { list: ri.list, best: ri.best })); }
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
@@ -243,6 +249,7 @@ wss.on('connection', ws => {
       if (m.topic === 'ebite' && !ebiteOk(me, m.data)) return;
       if (m.topic === 'sbite' && !sbiteOk(me, m.data)) return;
       if (m.topic === 'kadmin' && ADMIN_KEY && !(m.data && m.data.key === ADMIN_KEY)) { send(ws, serverEmit('admin_denied', { what: 'kraken' })); return; }
+      if (abyss.handle(id, m.topic, m.data, players)) return;
       if (sim.handle(id, m.topic, m.data, players)) return;           // world events: the server decides
       if (RELAY_TOPICS.has(m.topic)) broadcastRaw({ t: 'emit', topic: m.topic, data: m.data, from: id }, id);
       // anything else (e.g. a client trying to send bsnap/rsnap/bhit) is dropped
@@ -250,7 +257,7 @@ wss.on('connection', ws => {
   });
   ws.on('close', () => {
     if (!id) return;
-    const q = players.get(id); players.delete(id); sim.removePlayer(id);
+    const q = players.get(id); players.delete(id); sim.removePlayer(id); abyss.removePlayer(id);
     broadcastRaw({ t: 'left', id });
     console.log(`- ${q ? q.name : id} — ${players.size} online`);
   });
@@ -261,10 +268,11 @@ wss.on('connection', ws => {
 setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; try { ws.ping(); } catch (e) {} } }, 15000);
 
 // ---------- game loop ----------
-let last = Date.now(), snapAcc = 0, envAcc = 0;
+let last = Date.now(), snapAcc = 0, envAcc = 0, lvAcc = 0;
 setInterval(() => {
   const now = Date.now(), dt = Math.min(0.2, (now - last) / 1000); last = now;
   sim.tick(dt, players);
+  abyss.tick(dt, players);
   env.tick(dt);
   envAcc += dt * 1000;
   if (envAcc >= ENV_MS) { envAcc = 0; if (players.size) broadcastRaw(serverEmit('env', env.snapshot())); }
@@ -273,6 +281,7 @@ setInterval(() => {
     snapAcc = 0;
     const snap = sim.snapshot();
     for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap', 'bwsnap', 'raid']) broadcastRaw(serverEmit(k === 'raid' ? 'raidsnap' : k, snap[k]));
+    const lv = abyss.snapshot(); if (lv.on || (lvAcc = (lvAcc || 0) + 1) % 20 === 0) broadcastRaw(serverEmit('lvsnap', lv));   // the Leviathan: every snapshot while it's up, every 2 s otherwise
   }
 }, TICK_MS);
 
