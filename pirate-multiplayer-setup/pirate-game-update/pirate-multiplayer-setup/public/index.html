@@ -2620,8 +2620,8 @@ window.__pgBoot = () => {
   // ---------- Player ----------
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
   // the Sword of the Sea makes its holder the Drowned Tyrant: taller, faster, far harder to kill
-  const TYRANT = { size: 1.4, speed: 1.6, hp: 400, dmgTaken: 0.4 }, tyrantSpd = () => STATE.sword === 'seasword' ? (SEAF.intro > 0 ? 0 : TYRANT.speed * (SEAF.on ? 1.3 : 1)) : 1;
-  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0 };   // Kraken Form (the Sword of the Sea's transformation)
+  const TYRANT = { size: 1.4, speed: 1.6, hp: 400, dmgTaken: 0.4 }, tyrantSpd = () => STATE.sword === 'seasword' ? (SEAF.intro > 0 ? 0 : TYRANT.speed * (SEAF.on ? 2.4 : 1)) : 1;
+  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0, SIZE: 5, DMG: 4, REACH: 4 };   // Kraken Form (the Sword of the Sea's transformation)
   const MARINE_LOOK = { coat: 0x0a1418, shirt: 0x101c1e, pants: 0x080e10, hat: 'none', eyepatch: false, coatTrim: false, sash: 0x0a1012, boots: 0x060a0c, parrot: 'none', skin: 0x4c6264, beardStyle: 'none', beardOn: false, hairStyle: 'bald', earring: false, scar: false, tattoo: false, freckles: false, brows: 'angry' };   // (drowned: grey-green skin, hooded, his beard become tentacles)
   // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
   // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
@@ -6068,7 +6068,7 @@ window.__pgBoot = () => {
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
-    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V Kraken Form (30s, ye become a giant grey kraken: ye hit far harder and further, each strike throws three crescents, and tentacles burst out of the ground under yer foes).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
+    seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V Kraken Form (30s, ye become a colossal grey kraken 30 paces tall: 4x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
@@ -6091,7 +6091,7 @@ window.__pgBoot = () => {
     if (id === 'rusty' && PLAYER.hp < PLAYER.max * 0.4) m *= 1.25;
     if (id === 'saber') m *= 1 + 0.1 * Math.min(4, SWP.chain);
     if (id === 'admiral') m *= 1 + 0.08 * SWP.cmdN;
-    if (id === 'seasword' && SEAF.on) m *= 1.75;   // Kraken Form
+    if (id === 'seasword' && SEAF.on) m *= SEAF.DMG;   // Kraken Form
     return m;
   }
   function swordOnHit(tg, dm, crit, pos) {
@@ -8483,7 +8483,7 @@ window.__pgBoot = () => {
     if (RIDE.on && ELD.on && !ELD.leaving && ELD.hp > 0) { elderHurt(n * 3); return; }   // riding: yer serpent takes the blow for ye (until he falls and ye're thrown off)
     if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
     if (STATE.sword === 'seasword' && SEAF.intro > 0) return;   // nothing touches ye inside the rising column
-    if (STATE.sword === 'seasword' && SEAF.on) n *= 0.35;   // Kraken Form
+    if (STATE.sword === 'seasword' && SEAF.on) n *= 0.08;   // Kraken Form
     if (STATE.sword === 'seasword') n *= TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
     n *= gearDR();   // legendary armour
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
@@ -8825,7 +8825,7 @@ window.__pgBoot = () => {
       if (PLAYER.hitPending <= 0) {
         const PF = plFacing(), fx = Math.sin(PF), fz = Math.cos(PF); let hits = 0, critHit = false;
         const sw = curSword(), mv = PLAYER.move || {}, fin = PLAYER.swingKind === 2 || !!mv.heavy, axe = STATE.sword === 'axe';
-        const reachB = sw.reach * (mv.reach || (fin ? 1.15 : 1)) * (STATE.sword === 'seasword' && SEAF.on ? 1.5 : 1), arcB = mv.arc != null ? mv.arc : fin ? Math.min(sw.arc, -0.25) : sw.arc, mulB = (mv.mul || (fin ? 1.6 : 1)) * swordPassiveMul();
+        const krk = STATE.sword === 'seasword' && SEAF.on, reachB = sw.reach * (mv.reach || (fin ? 1.15 : 1)) * (STATE.sword === 'seasword' && SEAF.on ? SEAF.REACH : 1), arcB = krk ? -1 : mv.arc != null ? mv.arc : fin ? Math.min(sw.arc, -0.25) : sw.arc, mulB = (mv.mul || (fin ? 1.6 : 1)) * swordPassiveMul();
         const critCh = 0.12 + (STATE.sword === 'rapier' ? 0.15 : 0), rollCrit = () => { if (SWP.ripN > 0) { SWP.ripN--; return true; } return CMB.riposteT > 0 || Math.random() < critCh; };
         if (mv.slam) slamWave(P.pos.x, P.pos.y, P.pos.z, reachB);
         for (const b of bandits) {
@@ -13702,8 +13702,8 @@ window.__pgBoot = () => {
       S2.core.material.opacity = Math.max(0, 1 - u); S2.glow.material.opacity = 0.5 * Math.max(0, 1 - u);
       const gx = S2.g.position.x, gz = S2.g.position.z, R = 2.8 * (S2.sc || 1) * (1 + u * 1.4);
       if (Math.random() < 0.7) puff(gx + (Math.random() - 0.5) * R * 2 * S2.fw.z, S2.g.position.y - 0.6, gz - (Math.random() - 0.5) * R * 2 * S2.fw.x, { color: 0xdffbff, size: 1 + Math.random(), life: 0.5, grow: 2, vy: 1.5, op: 0.7 });
-      for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone' || S2.hit.has(b)) continue; if (Math.hypot(b.pos.x - gx, b.pos.z - gz) < R + 0.8 && Math.abs(b.pos.y - S2.g.position.y) < 4) { S2.hit.add(b); hitBandit(b, Math.round(curSword().dmg * 0.6 * (SEAF.on ? 1.75 : 1))); seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); } }
-      for (const T2 of tideTargets()) { if (!T2.ship || S2.hit.has(T2.e)) continue; if (Math.hypot(T2.e.x - gx, T2.e.z - gz) < R + (T2.e.T ? T2.e.T.L * 0.4 : 12)) { S2.hit.add(T2.e); T2.hit(25); seaImpact(gx, 3, gz); } }
+      for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone' || S2.hit.has(b)) continue; if (Math.hypot(b.pos.x - gx, b.pos.z - gz) < R + 0.8 && Math.abs(b.pos.y - S2.g.position.y) < 4) { S2.hit.add(b); hitBandit(b, Math.round(curSword().dmg * 0.6 * (SEAF.on ? SEAF.DMG : 1))); seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); } }
+      for (const T2 of tideTargets()) { if (!T2.ship || S2.hit.has(T2.e)) continue; if (Math.hypot(T2.e.x - gx, T2.e.z - gz) < R + (T2.e.T ? T2.e.T.L * 0.4 : 12)) { S2.hit.add(T2.e); T2.hit(SEAF.on ? 90 : 25); seaImpact(gx, 3, gz); } }
       if (u >= 1) { scene.remove(S2.g); S2.g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); SLASHES.splice(i, 1); } }
   }
   // running on the sea: a splash of white water at every footfall, a spreading ring, and spray kicked up behind
@@ -13828,7 +13828,7 @@ window.__pgBoot = () => {
   function poseSeaForm(F, root, k, t, dt, moving, slash) {
     F.g.visible = k > 0.03; if (!F.g.visible) return;
     const wp = root.getWorldPosition(new THREE.Vector3()); F.g.position.copy(wp); F.g.quaternion.copy(root.getWorldQuaternion(new THREE.Quaternion()));
-    F.g.scale.setScalar(0.1 + 0.9 * k);
+    const S = SEAF.SIZE; F.g.scale.setScalar((0.1 + 0.9 * k) * S);
     const w = moving ? 5.5 : 2.2;
     F.bd.position.y = 2.3 + Math.sin(t * 2.1) * 0.15 + (moving ? Math.abs(Math.sin(t * 5.5)) * 0.25 : 0);
     F.bd.rotation.x = moving ? 0.12 : 0; F.mantle.rotation.x = -0.4 + Math.sin(t * 1.4) * 0.07 - (moving ? 0.25 : 0); F.mantle.rotation.z = Math.sin(t * 0.9) * 0.05;
@@ -13842,21 +13842,22 @@ window.__pgBoot = () => {
         segs.forEach((sg, i) => { if (!i) return; const u = i / n; sg.rotation.x = (i < 5 ? -0.18 : i >= n - 3 ? -0.16 : -0.02) + Math.sin(t * w - i * 0.6 + Lg.ph) * (0.03 + u * 0.1); sg.rotation.z = Math.sin(t * w * 0.6 - i * 0.5 + Lg.ph * 2) * 0.06; }); }
     }
     F.disc.rotation.z = -t * 0.9; F.disc.material.opacity = 0.35 * k; F.L.intensity = 0.8 * k;
-    F.bub -= dt; if (F.bub <= 0) { F.bub = moving ? 0.05 : 0.12; const a = Math.random() * 6.28, r = 2 + Math.random() * 4;
-      puff(wp.x + Math.cos(a) * r, wp.y + 0.3, wp.z + Math.sin(a) * r, { color: Math.random() < 0.6 ? 0xc8f0ff : 0x6a7078, size: 0.5 + Math.random() * 0.6, life: 1.2, grow: 1, vy: 1 + Math.random() * 1.5, op: 0.7 }); }   // sea water and ink dripping off it
+    F.bub -= dt; if (F.bub <= 0) { F.bub = moving ? 0.03 : 0.07; const a = Math.random() * 6.28, r = (2 + Math.random() * 4) * S * k;
+      puff(wp.x + Math.cos(a) * r, wp.y + 0.3 + Math.random() * 3 * S * k, wp.z + Math.sin(a) * r, { color: Math.random() < 0.6 ? 0xc8f0ff : 0x6a7078, size: (0.5 + Math.random() * 0.6) * S * k, life: 1.4, grow: 1, vy: (1 + Math.random() * 1.5) * S * 0.6, op: 0.7 });
+      if (moving && k > 0.8 && Math.random() < 0.5) { const b = Math.random() * 6.28, rr = 4 * S; puff(wp.x + Math.cos(b) * rr, wp.y + 0.5, wp.z + Math.sin(b) * rr, { color: 0xe8e0d0, size: 2.5 * S, life: 1.2, grow: 1.6, vy: 2, op: 0.5 }); SEACTL.shake = Math.max(SEACTL.shake, 0.25); } }   // the ground shakes under it   // sea water and ink dripping off it
   }
   // a tentacle bursting up out of the ground (or sea) under a foe, then sinking back
   const KTENT = [];
   function groundTentacle(x, y, z) {
-    const T = krTentacle(10, 6, 0.5), g = new THREE.Group(); g.add(T.root); g.position.set(x, y - 6, z); g.rotation.y = Math.random() * 6.28; scene.add(g);
+    const T = krTentacle(10, 6, 0.5), g = new THREE.Group(); g.add(T.root); g.scale.setScalar(3); g.position.set(x, y - 18, z); g.rotation.y = Math.random() * 6.28; scene.add(g);
     T.segs.forEach((s2, i) => { if (i) s2.rotation.x = -0.08 - i * 0.025; });
     KTENT.push({ g, T, y, t: 0 });
-    for (let k = 0; k < 12; k++) { const a = Math.random() * 6.28; puff(x, y + 0.3, z, { color: k % 2 ? 0x8a7a60 : 0xd8f4ff, size: 1 + Math.random(), life: 0.8, grow: 1.8, vx: Math.cos(a) * 6, vz: Math.sin(a) * 6, vy: 4 + Math.random() * 5, op: 0.85 }); }
+    for (let k = 0; k < 12; k++) { const a = Math.random() * 6.28; puff(x, y + 0.3, z, { color: k % 2 ? 0x8a7a60 : 0xd8f4ff, size: 3 + Math.random() * 3, life: 1, grow: 1.8, vx: Math.cos(a) * 14, vz: Math.sin(a) * 14, vy: 8 + Math.random() * 10, op: 0.85 }); }
   }
   function updateKTent(dt, t) {
     for (let i = KTENT.length - 1; i >= 0; i--) { const K = KTENT[i]; K.t += dt;
       const up = K.t < 0.22 ? K.t / 0.22 : K.t < 0.9 ? 1 : Math.max(0, 1 - (K.t - 0.9) / 0.5);
-      K.g.position.y = K.y - 6.2 + up * 6.2; K.T.segs.forEach((s2, j) => { if (j) s2.rotation.z = Math.sin(t * 8 - j * 0.7) * 0.12 * up; });
+      K.g.position.y = K.y - 18.5 + up * 18.5; K.T.segs.forEach((s2, j) => { if (j) s2.rotation.z = Math.sin(t * 8 - j * 0.7) * 0.12 * up; });
       if (K.t > 1.4) { scene.remove(K.g); KTENT.splice(i, 1); } }
   }
   const SFORM = { fx: null, col: null };
@@ -13878,14 +13879,14 @@ window.__pgBoot = () => {
   function seaFormBurst() {
     SEAF.burst = true; SEAF.on = true; SEAF.t = SEAF.DUR; SEAF.cd = SEAF.CD; SEAF.spearT = 1; SEAF.boltT = 1.5;
     const x = P.pos.x, y = P.pos.y, z = P.pos.z;
-    strikeAt(x, z); seaCastFx(0x5fe8ff, 1.6); SFX.roar(); SFX.splash({ x, z }, true); SEACTL.shake = Math.max(SEACTL.shake, 1.4); flashT = 0.35;
-    for (let k = 0; k < 18; k++) { const a = Math.random() * 6.28; puff(x + Math.cos(a) * 3, y + 1 + Math.random() * 4, z + Math.sin(a) * 3, { color: 0x1c2024, size: 4 + Math.random() * 4, life: 2.2, grow: 1.8, vx: Math.cos(a) * 6, vz: Math.sin(a) * 6, vy: 1, op: 0.75 }); }   // a cloud of black ink
+    strikeAt(x, z); seaCastFx(0x5fe8ff, 3); SFX.roar(); setTimeout(() => SFX.roar(), 500); SFX.splash({ x, z }, true); SEACTL.shake = Math.max(SEACTL.shake, 1.4); flashT = 0.35;
+    for (let k = 0; k < 18; k++) { const a = Math.random() * 6.28; puff(x + Math.cos(a) * 12, y + 2 + Math.random() * 15, z + Math.sin(a) * 12, { color: 0x1c2024, size: 14 + Math.random() * 12, life: 2.2, grow: 1.8, vx: Math.cos(a) * 6, vz: Math.sin(a) * 6, vy: 1, op: 0.75 }); }   // a cloud of black ink
     for (let k = 0; k < 40; k++) { const a = k / 40 * 6.28, e = Math.random() * 1.1; puff(x, y + 2 + Math.random() * 6, z, { color: k % 3 ? 0x9ff6ff : 0xffffff, size: 1.5 + Math.random() * 2, life: 1.1, grow: 2, vx: Math.cos(a) * Math.cos(e) * 22, vz: Math.sin(a) * Math.cos(e) * 22, vy: Math.sin(e) * 14 + 4, op: 0.9 }); }
     // the shockwave: everything close is thrown back and hurt, ships nearby are battered
     for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone') continue; const dx = b.pos.x - x, dz = b.pos.z - z, d = Math.hypot(dx, dz);
-      if (d < 24 && Math.abs(b.pos.y - y) < 8) { const dm = Math.round(320 * (1 - d / 40)); hitBandit(b, dm); dmgNum(b.pos, `${dm}!`, 'crit'); banditFlinch(b, true, dx / Math.max(d, 0.1) * 2.5, dz / Math.max(d, 0.1) * 2.5); } }
-    for (const c of activeFighters()) { const d = Math.hypot(c.pos.x - x, c.pos.z - z); if (d < 14) { const dm = Math.round(260 * (1 - d / 30)); hitFighter(c, dm, true); dmgNum(c.pos, `${dm}!`, 'crit'); if (c.st === 'dead') swordOnKill(); } }
-    for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 160) T2.hit(T2.ship ? 60 : 90);
+      if (d < 80 && Math.abs(b.pos.y - y) < 30) { const dm = Math.round(1200 * (1 - d / 120)); hitBandit(b, dm); dmgNum(b.pos, `${dm}!`, 'crit'); banditFlinch(b, true, dx / Math.max(d, 0.1) * 2.5, dz / Math.max(d, 0.1) * 2.5); } }
+    for (const c of activeFighters()) { const d = Math.hypot(c.pos.x - x, c.pos.z - z); if (d < 40) { const dm = Math.round(900 * (1 - d / 60)); hitFighter(c, dm, true); dmgNum(c.pos, `${dm}!`, 'crit'); if (c.st === 'dead') swordOnKill(); } }
+    for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 400) T2.hit(T2.ship ? 250 : 400);
     toast('KRAKEN FORM! Ye burst out of the sea as the kraken itself. (30s · V to change back)');
   }
   function seaFormEnd(quiet) {
@@ -13897,7 +13898,15 @@ window.__pgBoot = () => {
       toast('The kraken sinks away into sea water, and ye\'re yerself again.'); }
   }
   // three crescents instead of one, and bigger
-  function seaFormSlashes() { seaSlash(-0.38, 1.45); seaSlash(0, 1.8); seaSlash(0.38, 1.45); }
+  function seaFormSlashes() {
+    for (const a of [-0.7, -0.35, 0, 0.35, 0.7]) seaSlash(a, a ? 4 : 5);   // five huge crescents
+    // the arms come down: everything at sea within reach is smashed
+    const x = P.pos.x + Math.sin(P.facing) * 25, z = P.pos.z + Math.cos(P.facing) * 25;
+    for (const T2 of tideTargets()) if (Math.hypot(T2.e.x - x, T2.e.z - z) < 90) { T2.hit(T2.ship ? 150 : 250); seaImpact(T2.e.x, 4, T2.e.z); }
+    if (LEV.on && Math.hypot(LEV.head.x - x, LEV.head.z - z) < 160) levHurt(300);
+    for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28; puff(x + Math.cos(a) * 6, P.pos.y + 1, z + Math.sin(a) * 6, { color: k % 2 ? 0xe8e0d0 : 0xd8f4ff, size: 6 + Math.random() * 6, life: 1, grow: 1.8, vx: Math.cos(a) * 18, vz: Math.sin(a) * 18, vy: 6 + Math.random() * 8, op: 0.8 }); }
+    SEACTL.shake = Math.max(SEACTL.shake, 1.1);
+  }
   function updateSeaForm(dt, t) {
     SEAF.cd = Math.max(0, SEAF.cd - dt);
     const can = seaOn() && PLAYER.hp > 0 && !sailing && !RIDE.on && !inInterior && !DUN.on;
@@ -13912,7 +13921,7 @@ window.__pgBoot = () => {
     }
     if (SFORM.col) { const C = SFORM.col, show = SEAF.intro > 0 ? Math.min(1, SEAF.introT / 0.4) : 0, hgt = 3 + Math.min(1, SEAF.introT / 1.2) * 16;
       C.g.visible = show > 0.01 || C.m1.material.opacity > 0.01;
-      if (C.g.visible) { C.g.position.set(P.pos.x, P.pos.y - 0.5, P.pos.z); const r = 3.6 - Math.min(1, SEAF.introT / SEAF.INTRO) * 1.2; C.g.scale.set(r, hgt, r);
+      if (C.g.visible) { C.g.position.set(P.pos.x, P.pos.y - 0.5, P.pos.z); const r = (3.6 + Math.min(1, SEAF.introT / SEAF.INTRO) * 8); C.g.scale.set(r, hgt * 3, r);
         C.m1.material.opacity += (0.75 * show - C.m1.material.opacity) * Math.min(1, dt * 10); C.m2.material.opacity = C.m1.material.opacity * 0.6;
         C.m1.rotation.y += dt * 3; C.m2.rotation.y -= dt * 4.5; columnTex.offset.y -= dt * 2.2; C.L.intensity = 3 * C.m1.material.opacity; } }
     // grow into the form, and shrink back out of it
@@ -13924,17 +13933,18 @@ window.__pgBoot = () => {
     updateKTent(dt, t);
     if (!SEAF.on) return;
     SEAF.t -= dt; if (SEAF.t <= 0) { seaFormEnd(); return; }
-    if (PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 25 * dt);   // the sea mends ye as fast as they can cut
+    if (PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 80 * dt);   // the sea mends ye as fast as they can cut
     // tentacles burst up out of the ground under the closest foes
-    if ((SEAF.spearT -= dt) <= 0) { SEAF.spearT = 2;
-      const near = bandits.filter(b => b.state !== 'dead' && b.state !== 'gone' && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 45).sort((a, b) => Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) - Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z)).slice(0, 3);
+    if ((SEAF.spearT -= dt) <= 0) { SEAF.spearT = 1.2;
+      const near = bandits.filter(b => b.state !== 'dead' && b.state !== 'gone' && Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 120).sort((a, b) => Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) - Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z)).slice(0, 8);
       for (const b of near) { const x = b.pos.x, y = b.pos.y, z = b.pos.z;
         groundTentacle(x, y, z);
-        const dm = 150; hitBandit(b, dm); dmgNum(b.pos, `${dm}`, 'heavy'); banditFlinch(b, true, 0, 0); SFX.splash({ x, z }, false); } }
+        const dm = 500; hitBandit(b, dm); dmgNum(b.pos, `${dm}`, 'heavy'); banditFlinch(b, true, 0, 0); SFX.splash({ x, z }, false); } }
     // the sky strikes ships that come near
-    if ((SEAF.boltT -= dt) <= 0) { SEAF.boltT = 3;
-      const near = tideTargets().filter(T2 => Math.hypot(T2.e.x - P.pos.x, T2.e.z - P.pos.z) < 500);
-      if (near.length) { const T2 = near[Math.floor(Math.random() * near.length)]; strikeAt(T2.e.x, T2.e.z); T2.hit(T2.ship ? 30 : 45); } }
+    if ((SEAF.boltT -= dt) <= 0) { SEAF.boltT = 1.2;
+      const near = tideTargets().filter(T2 => Math.hypot(T2.e.x - P.pos.x, T2.e.z - P.pos.z) < 900);
+      for (const T2 of near.sort(() => Math.random() - 0.5).slice(0, 2)) { strikeAt(T2.e.x, T2.e.z); T2.hit(T2.ship ? 100 : 150); }
+      if (LEV.on && Math.hypot(LEV.head.x - P.pos.x, LEV.head.z - P.pos.z) < 900) { strikeAt(LEV.head.x, LEV.head.z); levHurt(200); } }
   }
   // other captains in Kraken Form
   function seaFormRemote(p, d, dt) {
@@ -14810,9 +14820,9 @@ window.__pgBoot = () => {
     } else if (RIDE.on) {
       camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 8, P.pos.z), Math.min(1, dt * 6));
       if (!drag && performance.now() > userOrbitUntil && ELD.speed > 3) yaw = angLerp(yaw, ELD.h + Math.PI, Math.min(1, dt * 0.6));
-    } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7 + SEAF.k * 3.2, P.pos.z), Math.min(1, dt * 8));
+    } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7 + SEAF.k * 16, P.pos.z), Math.min(1, dt * 8));
     if (snapCam) { camTarget.set(P.pos.x, P.pos.y + 1.7, P.pos.z); snapCam = false; }
-    { const dd = dist * (sailing || RIDE.on ? 1 : 1 + SEAF.k * 1.1);   // pull back so the kraken fits on screen
+    { const dd = dist * (sailing || RIDE.on ? 1 : 1 + SEAF.k * 5.5);   // pull back so the kraken fits on screen
     camera.position.set(
       camTarget.x + Math.sin(yaw) * Math.cos(pitch) * dd,
       camTarget.y + Math.sin(pitch) * dd,
