@@ -931,27 +931,33 @@ window.__pgBoot = () => {
     const P_ = PALETTES[I.kind], IX = ISLX[ISLANDS.indexOf(I)];
     const sand = new THREE.Color(P_.sand), wetSand = new THREE.Color(P_.wet), grass = new THREE.Color(P_.grass),
           darkGrass = new THREE.Color(P_.dark), rock = new THREE.Color(P_.rock), road = new THREE.Color(0xb59a6a), c = new THREE.Color();
-    for (let f = 0; f < pos.count; f += 3) {
-      const cx = (pos.getX(f) + pos.getX(f + 1) + pos.getX(f + 2)) / 3;
-      const cy = (pos.getY(f) + pos.getY(f + 1) + pos.getY(f + 2)) / 3;
-      const cz = (pos.getZ(f) + pos.getZ(f + 1) + pos.getZ(f + 2)) / 3;
-      const slope = 1 - nrm.getY(f);
-      if (cy < 1.2) c.copy(wetSand);
-      else if (cy < 3.4) c.copy(sand);
-      else if (I.kind === 'home') {   // meadows, lush grass, dark woodland floor, bare earth on the steeper ground, the odd drift of flowers, and the roads
+    const sandC = new THREE.Color(), landC = new THREE.Color();
+    // the colour of the ground at one point: the island's own look inland, blended smoothly down into dry sand and then
+    // wet sand at the waterline, the edge between them ragged with noise so it never runs in a straight line
+    const colAt = (c, cx, cy, cz, slope) => {
+      if (I.kind === 'home') {   // meadows, lush grass, dark woodland floor, bare earth on the steeper ground, and the roads' worn verges
         const fo = HOME.forest(cx, cz), md = HOME.meadow(cx, cz);
         c.copy(HM_C.lush).lerp(HM_C.meadow, md * (1 - fo)).lerp(HM_C.wood, fo * 0.85); c.offsetHSL(0.01 * (vnoise(cx * 0.03, cz * 0.03) - 0.5), 0, (vnoise(cx * 0.09 + 5, cz * 0.09) - 0.5) * 0.07);
         if (slope > 0.17) c.lerp(HM_C.earth, sstep(0.17, 0.34, slope) * 0.7);
-        const rd = HOME.roadD(cx, cz); if (rd < 3) c.lerp(HM_C.roadE, 0.55 * Math.min(1, (3 - rd) / 3));   // (worn verges: the road itself is laid on top)
+        const rd = HOME.roadD(cx, cz); if (rd < 3) c.lerp(HM_C.roadE, 0.55 * Math.min(1, (3 - rd) / 3));
       }
       else if (IX && IX.look) IX.look(c, cx, cy, cz, slope);
       else c.copy(grass).lerp(darkGrass, vnoise(cx * 0.05, cz * 0.05));
+      const e = cy + (vnoise(cx * 0.045 + I.seed, cz * 0.045) - 0.5) * 2.6 + (vnoise(cx * 0.2, cz * 0.2 + I.seed) - 0.5) * 0.8, t = sstep(2.2, 5.4, e);
+      if (t < 1) { sandC.copy(wetSand).lerp(sand, sstep(0.5, 2.2, cy + (vnoise(cx * 0.08, cz * 0.08) - 0.5) * 0.8)); landC.copy(c); c.copy(sandC).lerp(landC, t); }
       if (I.kind === 'home' && cy > 3 && distToSeg(cx, cz, TOWN_BACK, DOCK_BASE) < 5.5) c.copy(road);
       if (I.kind === 'port' && cy > 3 && distToSeg(cx, cz, PORT_BACK, PORT_DOCK_BASE) < 5.5) c.copy(road);
       if (cy > 3 && onSiteRoad(I, cx, cz)) c.copy(road);
       if (!(IX && IX.noRock) && (cy > P_.rockH || slope > 0.35)) c.copy(rock);
       if (I.kind === 'volcano' && cy > 30 && !IX) c.set(0x2f2926);
       if (IX && IX.noRock && slope > 0.42) c.lerp(rock, 0.5);
+    };
+    for (let f = 0; f < pos.count; f += 3) {
+      const slope = 1 - nrm.getY(f), y0 = pos.getY(f), y1 = pos.getY(f + 1), y2 = pos.getY(f + 2);
+      if (Math.min(y0, y1, y2) < 7.5 && Math.max(y0, y1, y2) > 0) {   // along the shore: each corner coloured on its own, so sand fades into grass across the triangles
+        for (let k = 0; k < 3; k++) { colAt(c, pos.getX(f + k), pos.getY(f + k), pos.getZ(f + k), slope); cols.set([c.r, c.g, c.b], (f + k) * 3); }
+        rand(); continue; }   // (still draw from the seeded sequence, so everything placed after the ground lands where it always has)
+      colAt(c, (pos.getX(f) + pos.getX(f + 1) + pos.getX(f + 2)) / 3, (y0 + y1 + y2) / 3, (pos.getZ(f) + pos.getZ(f + 1) + pos.getZ(f + 2)) / 3, slope);
       c.offsetHSL(0, 0, (rand() - 0.5) * 0.04);
       for (let k = 0; k < 3; k++) cols.set([c.r, c.g, c.b], (f + k) * 3);
     }
