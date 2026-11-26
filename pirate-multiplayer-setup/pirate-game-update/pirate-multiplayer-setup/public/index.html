@@ -104,6 +104,102 @@
   #acct .row button { padding: 5px 10px; font-size: 13px; }
   .mbtn { display: block; width: 100%; margin: 0 0 8px; font-size: 17px !important; padding: 10px 12px !important; }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Crimson+Pro:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* ===== Visual polish: one consistent look across the HUD, panels and menus ===== */
+  :root {
+    --ink: #f3ead8; --ink-dim: rgba(243,234,216,.72); --gold: #e8c46a; --gold-hi: #ffe39a; --glass: rgba(12,16,22,.68); --glass-hi: rgba(20,26,34,.82);
+    --edge: rgba(232,196,106,.28); --paper: #f3e6c8; --paper-2: #e9d6ae; --wood: #5a3a1e; --wood-hi: #7a5430; --red: #c8443a;
+    --title: 'Cinzel', Georgia, serif; --body: 'Crimson Pro', Georgia, 'Times New Roman', serif; --shadow: 0 6px 22px rgba(0,0,0,.38);
+  }
+  html, body { font-family: var(--body); }
+  body { -webkit-font-smoothing: antialiased; }
+  /* HUD panels: dark glass with a thin gold edge */
+  #hud { left: 18px; top: 16px; padding: 10px 14px 12px; background: var(--glass); border: 1px solid var(--edge); border-radius: 12px; box-shadow: var(--shadow); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); text-shadow: none; min-width: 210px; max-width: 340px; }
+  #hud h1 { font-family: var(--title); font-weight: 700; font-size: 17px; letter-spacing: 1.5px; color: var(--gold-hi); text-transform: uppercase; margin-bottom: 6px; }
+  #hud p { font-size: 13px; line-height: 1.35; color: var(--ink-dim); max-height: 0; overflow: hidden; opacity: 0; transition: max-height .5s, opacity .5s, margin .5s; margin: 0; }
+  #hud p.show { max-height: 80px; opacity: 1; margin: 0 0 6px; }
+  #bars { margin-top: 2px; gap: 6px; }
+  .bar { font-size: 12px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); }
+  .bar span { width: 44px; }
+  .bb { position: relative; width: 170px; height: 12px; border-radius: 6px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,240,200,.22); box-shadow: inset 0 1px 3px rgba(0,0,0,.6); }
+  .bb i.val { position: absolute; inset: 0; font: 600 10px/12px var(--body); color: #fff; text-align: center; text-shadow: 0 1px 2px #000; font-style: normal; letter-spacing: .5px; }
+  #hpFill { background: linear-gradient(180deg, #ef6a56, #b8322a); transition: width .25s; }
+  #hullFill { background: linear-gradient(180deg, #e2c25e, #a7862e); transition: width .25s; }
+  #gunTxt { color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
+  #hudR { right: 18px; top: 16px; }
+  #clock, #gold, #quest { background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--shadow); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #clock { font-size: 13px; letter-spacing: .4px; border-radius: 999px; padding: 5px 14px; }
+  #gold { font: 600 20px var(--body); border-radius: 999px; padding: 5px 16px 5px 12px; color: var(--gold-hi); }
+  #quest { border-radius: 12px; padding: 10px 14px; }
+  #qTitle { font-family: var(--title); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); }
+  #qObj { font-size: 14px; color: var(--ink); }
+  /* minimap: a brass-rimmed porthole */
+  #mini { left: 18px; bottom: 18px; border: 4px solid #b08a3e; box-shadow: 0 0 0 2px #3a2810, 0 0 0 5px rgba(232,196,106,.35), var(--shadow); }
+  /* toasts: a tidy stack of messages instead of one long line */
+  #toast { display: none !important; }
+  #toasts { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 6; width: max(300px, min(560px, calc(100vw - 760px))); }
+  .toastc { background: var(--glass-hi); color: var(--ink); border: 1px solid var(--edge); border-left: 3px solid var(--gold); border-radius: 10px; padding: 8px 16px; font-size: 16px; line-height: 1.3; box-shadow: var(--shadow); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); text-align: center; max-width: 100%; animation: toastIn .35s ease-out; transition: opacity .5s, transform .5s; }
+  .toastc.gold { border-left-color: #ffd24a; color: var(--gold-hi); }
+  .toastc.warn { border-left-color: var(--red); }
+  .toastc.out { opacity: 0; transform: translateY(-8px); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-10px) scale(.97); } to { opacity: 1; transform: none; } }
+  /* interaction prompt: keycaps */
+  #prompt { bottom: 150px; background: var(--glass-hi); border: 1px solid var(--edge); border-radius: 12px; padding: 9px 18px; font-size: 16px; color: var(--ink); box-shadow: var(--shadow); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #prompt b { background: linear-gradient(180deg, #fff1cc, #e6c98a); color: #2a1a0c; border-radius: 5px; box-shadow: 0 2px 0 #8a6a30; font-family: var(--body); font-weight: 600; padding: 0 7px; margin: 0 6px 0 2px; }
+  /* bottom bar and weapon hotbar */
+  #btns { right: 18px; bottom: 18px; gap: 6px; }
+  #btns button { background: var(--glass); color: var(--ink); border: 1px solid var(--edge); border-radius: 9px; padding: 7px 12px; font: 600 13px var(--body); letter-spacing: .3px; box-shadow: var(--shadow); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .15s, transform .15s, border-color .15s; }
+  #btns button:hover { background: var(--glass-hi); border-color: var(--gold); transform: translateY(-1px); filter: none; }
+  #weapons { right: 18px; bottom: 64px; }
+  #weapons div { background: var(--glass); border: 1px solid var(--edge); border-radius: 9px; padding: 7px 12px; font: 600 13px var(--body); box-shadow: var(--shadow); transition: border-color .15s, color .15s; }
+  #weapons div.on { border-color: var(--gold); color: var(--gold-hi); background: var(--glass-hi); box-shadow: 0 0 0 1px var(--gold), var(--shadow); }
+  /* name tags */
+  .tag { background: rgba(12,16,22,.62); border: 1px solid rgba(255,240,200,.14); border-radius: 999px; font: 13px var(--body); padding: 2px 10px; color: var(--ink); }
+  .etag { background: rgba(70,12,12,.7); border-color: rgba(255,120,100,.3); border-radius: 8px; }
+  .ehp { height: 5px; border-radius: 3px; }
+  /* panels: parchment on a dark wood frame */
+  .ovl { background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.55)); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: ovlIn .2s ease-out; z-index: 10; }
+  @keyframes ovlIn { from { opacity: 0; } to { opacity: 1; } }
+  .ovl .box { background: linear-gradient(180deg, #f6ebd0, #ecdcb6); border: 2px solid #3a2410; border-radius: 14px; box-shadow: 0 0 0 4px #7a5430, 0 0 0 6px #3a2410, 0 20px 60px rgba(0,0,0,.55); padding: 20px 22px 18px; animation: boxIn .22s ease-out; color: #2a1a0c; }
+  @keyframes boxIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+  .ovl h2 { font-family: var(--title); font-weight: 700; font-size: 21px; letter-spacing: 1.2px; color: #5a2010; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid rgba(90,58,30,.3); }
+  .ovl .box::-webkit-scrollbar { width: 10px; } .ovl .box::-webkit-scrollbar-thumb { background: #b08a5a; border-radius: 6px; border: 2px solid #ecdcb6; } .ovl .box::-webkit-scrollbar-track { background: transparent; }
+  .ovl button { background: linear-gradient(180deg, #fbf3df, #ead7ad); border: 1px solid #7a5430; border-radius: 8px; color: #2a1a0c; font: 600 14px var(--body); box-shadow: 0 2px 0 #9a7444; transition: transform .1s, box-shadow .1s, background .15s; }
+  .ovl button:hover:not(:disabled) { background: linear-gradient(180deg, #fff8e6, #f2e0b8); filter: none; }
+  .ovl button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #9a7444; }
+  .ovl button:disabled { opacity: .5; cursor: default; box-shadow: none; }
+  .tabs button.on, .ctl button.ch.on, .ovl button.on { background: linear-gradient(180deg, #7a5430, #5a3a1e); color: #fff3d6; border-color: #3a2410; box-shadow: 0 2px 0 #2a1808; }
+  .ovl .foot button.close, .ovl .foot button { min-width: 96px; }
+  .q, .sword { background: rgba(255,250,238,.5); border: 1px solid rgba(107,68,35,.25); border-radius: 10px; }
+  .q.on, .sword.eq { background: #fffaf0; border-color: #7a5430; box-shadow: 0 0 0 1px #7a5430; }
+  .qt, .sword h3 { font-family: var(--title); font-size: 14px; letter-spacing: .6px; font-weight: 700; }
+  .note { font-size: 14px; }
+  #dialog { background: linear-gradient(180deg, #f6ebd0, #ecdcb6); border: 2px solid #3a2410; box-shadow: 0 0 0 3px #7a5430, 0 14px 40px rgba(0,0,0,.5); border-radius: 14px; font-family: var(--body); }
+  #dname { font-family: var(--title); font-weight: 700; letter-spacing: 1px; font-size: 14px; text-transform: uppercase; }
+  #dtext { font-size: 19px; }
+  #dopts button { border: 1px solid #7a5430; border-radius: 8px; background: rgba(255,250,238,.7); font-family: var(--body); }
+  /* title / pause menu */
+  #menu { background: radial-gradient(ellipse at 50% 40%, rgba(10,20,30,.25), rgba(4,8,12,.8)); }
+  #menu .box { background: rgba(14,18,24,.86); border: 1px solid var(--edge); box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 30px 80px rgba(0,0,0,.6); color: var(--ink); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 28px 30px 22px; }
+  #menu h2 { font-family: var(--title); color: var(--gold-hi); font-size: 34px !important; letter-spacing: 3px; border: none; padding: 0; text-shadow: 0 2px 18px rgba(232,196,106,.35); }
+  #menu .note { color: var(--ink-dim); opacity: 1; }
+  #menu .mbtn { background: rgba(255,255,255,.04); color: var(--ink); border: 1px solid var(--edge); box-shadow: none; font: 600 17px var(--body) !important; letter-spacing: .5px; border-radius: 10px; transition: background .15s, border-color .15s, transform .15s; }
+  #menu .mbtn:hover { background: rgba(232,196,106,.14); border-color: var(--gold); transform: translateY(-1px); }
+  #menu #mPlay { background: linear-gradient(180deg, #e8c46a, #b88a2e); color: #1a1006; border-color: #f3d98e; }
+  #menu #mPlay:hover { background: linear-gradient(180deg, #f3d48a, #c99a3a); }
+  #mVer { margin-top: 10px; font-size: 12px; color: rgba(243,234,216,.4); letter-spacing: .5px; }
+  /* settings */
+  #settings .srow { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(90,58,30,.18); }
+  #settings .srow label { flex: 1; font-size: 15px; }
+  #settings .srow small { display: block; font-size: 12px; opacity: .65; }
+  #settings input[type=range] { width: 170px; accent-color: #7a5430; }
+  #settings h3 { font-family: var(--title); font-size: 13px; letter-spacing: 1.5px; color: #7a3a1a; margin: 14px 0 2px; text-transform: uppercase; }
+  /* screen dressing */
+  #vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 58%, rgba(0,0,0,.42) 100%); z-index: 0; }
+  #fps { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font: 600 11px Consolas, monospace; color: #bff8ff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 6px; pointer-events: none; display: none; z-index: 30; }
+</style>
 </head>
 <body>
 <div id="hud">
@@ -139,7 +235,7 @@
 </div><div class="foot"><button class="close">Close chart</button></div></div></div>
 <div id="menu" class="ovl"><div class="box" style="text-align:center;width:min(420px,calc(100vw - 32px))">
 <h2 id="mTitle" style="font-size:30px;margin-bottom:4px"></h2><p class="note" id="mSub" style="margin:0 0 16px"></p>
-<button class="mbtn" id="mPlay"></button><button class="mbtn" id="mSave">Save game</button><button class="mbtn" id="mAcct">Accounts and save codes</button><button class="mbtn" id="mSnd"></button><button class="mbtn" id="mCtl">Controls</button>
+<button class="mbtn" id="mPlay"></button><button class="mbtn" id="mSave">Save game</button><button class="mbtn" id="mAcct">Accounts and save codes</button><button class="mbtn" id="mSet">Settings</button><button class="mbtn" id="mSnd"></button><button class="mbtn" id="mCtl">Controls</button>
 <div id="mCtlBox" class="note" style="display:none;text-align:left;line-height:1.7"><b>WASD</b> walk &middot; <b>Shift</b> run &middot; <b>Space</b> jump &middot; <b>F</b> attack &middot; <b>1 / 2</b> switch weapon &middot; <b>E</b> talk and interact &middot; <b>Drag</b> to look around<br><b>C</b> customize &middot; <b>Q</b> quests &middot; <b>M</b> map &middot; <b>I</b> swords &middot; <b>N</b> sound &middot; <b>Esc</b> this menu</div>
 </div></div>
 <div id="prompt"></div>
@@ -278,7 +374,8 @@ window.__pgBoot = () => {
   if (!window.THREE) { document.getElementById('err').style.display = 'flex'; return; }
 
   let renderer;
-  try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); }
+  let AA = false; try { AA = (JSON.parse(localStorage.getItem('pg_settings')) || {}).quality === 'high'; } catch (e) {}
+  try { renderer = new THREE.WebGLRenderer({ antialias: AA, powerPreference: 'high-performance' }); }
   catch (e) { document.getElementById('err').style.display = 'flex'; return; }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.0));
   renderer.shadowMap.enabled = false;
@@ -1927,6 +2024,28 @@ window.__pgBoot = () => {
     }
     for (const top of list) { if (top.isMesh) continue; let any = false; top.traverse(o => { if (o.isMesh || o.isLight || o.isSprite) any = true; }); if (!any && top.parent) top.parent.remove(top); }   // emptied holder groups
   }
+  // Merge the still meshes hung directly on each joint of a rig into one mesh per look (material type and colour), so a
+  // character, which is built from dozens of small parts, draws in a handful of calls. Joints keep animating as before.
+  const matSig = m => [m.type, m.color ? m.color.getHex() : 0, m.emissive ? m.emissive.getHex() : 0, m.transparent ? 1 : 0, m.opacity, m.side, m.depthWrite ? 1 : 0, m.blending, m.shininess || 0, m.specular ? m.specular.getHex() : 0].join('|');
+  function bakeRig(root, skip) {
+    const nodes = []; root.traverse(o => { if (!o.isMesh && !o.isSprite) nodes.push(o); });
+    for (const node of nodes) {
+      const groups = new Map();
+      for (const c of node.children) { if (!c.isMesh || c.children.length || skip.has(c) || c.isInstancedMesh || c.isSkinnedMesh || Array.isArray(c.material) || c.material.map || c.material.vertexColors || !c.visible) continue;
+        const g = c.geometry; if (!g.attributes.position || !g.attributes.normal || (g.morphAttributes && Object.keys(g.morphAttributes).length)) continue;
+        const k = matSig(c.material); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
+      for (const ms of groups.values()) {
+        if (ms.length < 2) continue;
+        const parts = ms.map(o => { o.updateMatrix(); const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrix); return g; });
+        let n = 0; for (const g of parts) n += g.attributes.position.count;
+        const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let off = 0;
+        for (const g of parts) { pos.set(g.attributes.position.array, off); nor.set(g.attributes.normal.array, off); off += g.attributes.position.count * 3; g.dispose(); }
+        const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); mg.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); mg.computeBoundingSphere();
+        const mm = new THREE.Mesh(mg, ms[0].material); mm.castShadow = ms.some(o => o.castShadow); mm.renderOrder = ms[0].renderOrder; node.add(mm);
+        for (const o of ms) node.remove(o);
+      }
+    }
+  }
   function makeCharacter(o) {
     const root = new THREE.Group(), body = new THREE.Group(), upper = new THREE.Group(), HIP = 0.95;
     root.add(body); root.scale.setScalar(o.scale || 1);
@@ -2354,6 +2473,7 @@ window.__pgBoot = () => {
       body.rotation.y = c.yaw;
       if (ch.props.blade) { ch.props.blade.rotation.x = c.wrX; ch.props.blade.rotation.y = c.wrY; }   // the wrist: cocked back on the wind-up, snapping through on the strike
     };
+    root.userData.rig = true; bakeRig(root, new Set([blob]));   // dozens of little meshes per pirate become a handful: far fewer draw calls with a crowd about
     return ch;
   }
   // tools the crew carry while they work
@@ -4789,7 +4909,19 @@ window.__pgBoot = () => {
   // ---------- Money ----------
   const goldEl = document.getElementById('goldN'), toastEl = document.getElementById('toast');
   let toastT = 0;
-  function toast(msg) { toastEl.textContent = toastT > 2.6 ? toastEl.textContent + '   ·   ' + msg : msg; toastEl.style.opacity = 1; toastT = 3.4; }
+  // messages stack as separate cards that fade on their own (repeats of the same message are folded together)
+  const toastsEl = document.createElement('div'); toastsEl.id = 'toasts'; document.body.appendChild(toastsEl);
+  const toastSeen = new Map();
+  function toast(msg) {
+    msg = String(msg); toastEl.textContent = msg;
+    const key = msg.replace(/[\d,.]+/g, '#'), now = performance.now(), seen = toastSeen.get(key);
+    if (seen && now - seen.at < 1800 && seen.el.isConnected) { seen.el.textContent = msg; seen.at = now; clearTimeout(seen.tm); seen.tm = setTimeout(() => fadeToast(seen.el), 2600 + msg.length * 30); return; }
+    const el = document.createElement('div'); el.className = 'toastc' + (/^\+\d[\d,]* gold/.test(msg) || /^\+\d+ /.test(msg) ? ' gold' : /☠|sinkin|ENRAGED|Boarders|cut down|going down/i.test(msg) ? ' warn' : ''); el.textContent = msg; toastsEl.appendChild(el);
+    while (toastsEl.children.length > 4) toastsEl.firstChild.remove();
+    const rec = { el, at: now, tm: setTimeout(() => fadeToast(el), Math.min(7500, 2800 + msg.length * 30)) }; toastSeen.set(key, rec);
+    if (toastSeen.size > 60) for (const [k, v] of toastSeen) if (!v.el.isConnected) toastSeen.delete(k);
+  }
+  function fadeToast(el) { el.classList.add('out'); setTimeout(() => el.remove(), 500); }
   function updateGold() { goldEl.textContent = STATE.gold.toLocaleString(); }
   function addGold(n, why) {
     if (n > 0 && (STATE.legacy || 0) > 0 && !/admin|gift/i.test(why || '')) n = Math.round(n * legacyMul());   // Captain's Legacy
@@ -5453,7 +5585,7 @@ window.__pgBoot = () => {
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const trd = document.getElementById('trade'); if (trd) trd.style.display = 'none'; const ih = document.getElementById('isleHall'); if (ih) ih.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const trd = document.getElementById('trade'); if (trd) trd.style.display = 'none'; const ih = document.getElementById('isleHall'); if (ih) ih.style.display = 'none'; const se = document.getElementById('settings'); if (se) se.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -6317,6 +6449,7 @@ window.__pgBoot = () => {
   // smoke, splashes, sparks
   const fx = [];
   function puff(x, y, z, o) {
+    if (window.__fxDensity < 100 && Math.random() * 100 > window.__fxDensity) return;   // Settings: effects density
     const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: o.color ?? 0xdddddd, transparent: true, depthWrite: false, opacity: o.op ?? 0.8 }));
     const s = o.size ?? 2; m.position.set(x, y, z); m.scale.set(s, s, 1); scene.add(m);
     fx.push({ m, life: o.life ?? 1.5, t: 0, vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0, grow: o.grow ?? 1.5, op: o.op ?? 0.8, s });
@@ -8775,12 +8908,12 @@ window.__pgBoot = () => {
 
   // ---------- Sound effects (all synthesised in the browser, no files) ----------
   const SFX = (() => {
-    let ctx = null, master = null, noiseBuf = null, muted = !!STATE.muted;
+    let ctx = null, master = null, noiseBuf = null, muted = !!STATE.muted, vol = 1;
     const amb = {};
     function init() {
       if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return; }
       try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ctx = null; return; }
-      master = ctx.createGain(); master.gain.value = muted ? 0 : 0.8;
+      master = ctx.createGain(); master.gain.value = muted ? 0 : 0.8 * vol;
       const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
       const len = ctx.sampleRate * 2; noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -8824,7 +8957,9 @@ window.__pgBoot = () => {
     const far = (pos, range) => pos ? { x: pos.x, z: pos.z, range } : null;
     return {
       init, get muted() { return muted; },
-      toggle() { muted = !muted; STATE.muted = muted; save(); if (master) master.gain.value = muted ? 0 : 0.8; return muted; },
+      toggle() { muted = !muted; STATE.muted = muted; save(); if (master) master.gain.value = muted ? 0 : 0.8 * vol; return muted; },
+      setVolume(v) { vol = Math.max(0, Math.min(1, v)); if (master) master.gain.value = muted ? 0 : 0.8 * vol; },
+      gull(pos) { const p = far(pos, 260); for (let i = 0; i < 2 + (Math.random() * 3 | 0); i++) { const d = i * (0.18 + Math.random() * 0.1), f = 1700 + Math.random() * 500; tone({ type: 'triangle', f0: f, f1: f * 0.62, dur: 0.22, vol: 0.05, pos: p, delay: d }); tone({ type: 'sine', f0: f * 2, f1: f * 1.2, dur: 0.16, vol: 0.02, pos: p, delay: d }); } },
       step(wood) { if (wood) { noise({ dur: 0.07, f0: 1800, q: 2, vol: 0.1 }); tone({ f0: 150, f1: 90, dur: 0.06, vol: 0.1 }); } else noise({ dur: 0.1, type: 'lowpass', f0: 900, f1: 300, vol: 0.08 }); },
       splash(pos, big) { noise({ dur: big ? 0.9 : 0.35, type: 'lowpass', f0: big ? 2500 : 1700, f1: 300, vol: big ? 0.45 : 0.12, pos: far(pos, 900) }); },
       swing(pos) { noise({ dur: 0.22, f0: 600, f1: 2600, q: 3, vol: pos ? 0.1 : 0.18, pos: far(pos, 120) }); },
@@ -11303,6 +11438,7 @@ window.__pgBoot = () => {
   document.getElementById('mSave').onclick = () => { save(); mSub.textContent = 'Game saved'; };
   mSnd.onclick = () => { toggleSound(); mSnd.textContent = `Sound: ${SFX.muted ? 'off' : 'on'}`; };
   document.getElementById('mAcct').onclick = () => { menuOpen = false; menuEl.style.display = 'none'; fromMenu = true; openUI('acct'); };
+  document.getElementById('mSet').onclick = () => openSettings(true);
   document.getElementById('mCtl').onclick = () => { mCtlBox.style.display = mCtlBox.style.display === 'none' ? 'block' : 'none'; };
   acctEl.querySelector('.close').addEventListener('click', () => { if (fromMenu) { fromMenu = false; showMenu(); } });
   addEventListener('keydown', e => { if (menuOpen && e.key !== 'Escape') e.stopImmediatePropagation(); }, true);   // no game hotkeys behind the menu
@@ -13816,10 +13952,133 @@ window.__pgBoot = () => {
   const tmp = new THREE.Vector3();
   let lastFrameAt = 0;
   let questHudTimer = 0;
+  // ===================== Polish: settings, HUD details, ambience and a frame loop that can't freeze =====================
+  const SET_KEY = 'pg_settings';
+  const SETTINGS = Object.assign({ quality: 'medium', fps: 'auto', shake: 100, vol: 80, music: 32, grade: true, vignette: true, showFps: false, particles: 100 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
+  const Q = { low: { pr: 0.7, far: 7000 }, medium: { pr: 1, far: 11000 }, high: { pr: 1.5, far: 14000 } };
+  const AUTOFPS = { cap: 60, work: 0, n: 0, t: 0 };
+  const capFps = () => SETTINGS.fps === 'auto' ? AUTOFPS.cap : SETTINGS.fps;
+  let FRAME_MS = 1000 / capFps() - 1.5;
+  const vignetteEl = document.createElement('div'); vignetteEl.id = 'vignette'; document.body.prepend(vignetteEl);
+  const fpsEl = document.createElement('div'); fpsEl.id = 'fps'; document.body.appendChild(fpsEl);
+  function applySettings(saveIt) {
+    const q = Q[SETTINGS.quality] || Q.medium;
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.pr)); renderer.setSize(innerWidth, innerHeight);
+    camera.far = q.far; camera.updateProjectionMatrix();
+    vignetteEl.style.display = SETTINGS.vignette ? 'block' : 'none'; fpsEl.style.display = SETTINGS.showFps ? 'block' : 'none';
+    FRAME_MS = 1000 / capFps() - 1.5; window.__fxDensity = SETTINGS.particles;
+    try { MUSIC.volume = Math.max(0, Math.min(1, SETTINGS.music / 100)); } catch (e) {}
+    try { SFX.setVolume(SETTINGS.vol / 100); } catch (e) {}
+    if (saveIt) try { localStorage.setItem(SET_KEY, JSON.stringify(SETTINGS)); } catch (e) {}
+  }
+  let setFromMenu = false;
+  function openSettings(fromMenuFlag) {
+    let el = document.getElementById('settings');
+    if (!el) { el = document.createElement('div'); el.id = 'settings'; el.className = 'ovl'; el.innerHTML = '<div class="box" style="width:min(520px,calc(100vw - 32px))"><h2>Settings</h2><div id="setBody"></div><div class="foot"><button class="close">Done</button></div></div>'; document.body.appendChild(el);
+      el.querySelector('.close').onclick = () => { closeUI(); if (setFromMenu) { setFromMenu = false; showMenu(); } }; }
+    setFromMenu = !!fromMenuFlag; if (setFromMenu) { menuOpen = false; menuEl.style.display = 'none'; } else if (uiOpen) closeUI();
+    renderSettings(); uiOpen = 'settings'; el.style.display = 'flex';
+  }
+  function renderSettings() {
+    const b = document.getElementById('setBody'); b.innerHTML = '';
+    const head = t => { const h = document.createElement('h3'); h.textContent = t; b.appendChild(h); };
+    const row = (label, sub, ctl) => { const r = document.createElement('div'); r.className = 'srow'; const l = document.createElement('label'); l.innerHTML = `${label}${sub ? `<small>${sub}</small>` : ''}`; r.append(l, ctl); b.appendChild(r); };
+    const choice = (key, opts) => { const c = document.createElement('div'); c.className = 'ctl'; for (const [v, t] of opts) { const x = document.createElement('button'); x.className = 'ch' + (SETTINGS[key] === v ? ' on' : ''); x.textContent = t; x.onclick = () => { SETTINGS[key] = v; applySettings(true); renderSettings(); }; c.appendChild(x); } return c; };
+    const slider = (key, min, max, step, fmt) => { const w = document.createElement('div'); w.style.cssText = 'display:flex;align-items:center;gap:8px'; const s = document.createElement('input'); s.type = 'range'; s.min = min; s.max = max; s.step = step; s.value = SETTINGS[key]; const v = document.createElement('span'); v.style.cssText = 'width:42px;text-align:right;font-size:13px'; v.textContent = fmt(SETTINGS[key]);
+      s.oninput = () => { SETTINGS[key] = +s.value; v.textContent = fmt(+s.value); applySettings(true); }; ['keydown', 'keyup'].forEach(ev => s.addEventListener(ev, e => e.stopPropagation())); w.append(s, v); return w; };
+    head('Graphics');
+    row('Quality', 'Resolution and view distance. Low for older machines.', choice('quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]));
+    row('Frame rate limit', 'Auto runs at 60 and drops to 30 if yer machine struggles.', choice('fps', [['auto', 'Auto'], [30, '30'], [60, '60']]));
+    row('Effects density', 'Spray, smoke and splashes.', slider('particles', 25, 100, 5, v => v + '%'));
+    row('Vignette', 'Soft darkening at the edges of the screen.', choice('vignette', [[true, 'On'], [false, 'Off']]));
+    row('Camera shake', '', slider('shake', 0, 100, 5, v => v + '%'));
+    row('Show frame rate', '', choice('showFps', [[true, 'On'], [false, 'Off']]));
+    head('Audio');
+    row('Effects and ambience', '', slider('vol', 0, 100, 1, v => v + '%'));
+    row('Music', '', slider('music', 0, 100, 1, v => v + '%'));
+    row('All sound', '', choice('_snd', [[false, SFX.muted ? 'Muted' : 'On']]));
+    b.querySelector('.srow:last-child button').onclick = () => { toggleSound(); renderSettings(); };
+  }
+  // the HUD: numbers on the health and hull bars, and control hints that show when they change then fade
+  for (const id of ['hpFill', 'hullFill']) { const i = document.createElement('i'); i.className = 'val'; document.getElementById(id).parentNode.appendChild(i); }
+  const hpVal = document.querySelector('#hpFill + i.val'), hullVal = document.querySelector('#hullFill + i.val');
+  let hintT = 0, hintTxt = ''; const hintShow = force => { const tx = hudHint.textContent; if (!force && tx === hintTxt) return; hintTxt = tx; hudHint.classList.add('show'); hintT = 8; };
+  new MutationObserver(() => hintShow(false)).observe(hudHint, { childList: true, characterData: true, subtree: true }); hintShow(true);
+  addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') { if (!uiOpen && !talk) hintShow(true); } });
+  const POL = { t: 0, frames: 0, fpsT: 0, gullT: 6, creakT: 7 };
+  function updatePolish(dt) {
+    POL.frames++; POL.fpsT += dt; if (POL.fpsT >= 0.5) { if (SETTINGS.showFps) fpsEl.textContent = `${Math.round(POL.frames / POL.fpsT)} fps (cap ${capFps()}) · ${renderer.info.render.calls} draws`; POL.frames = 0; POL.fpsT = 0; }
+    if (hintT > 0) { hintT -= dt; if (hintT <= 0) hudHint.classList.remove('show'); }
+    if ((POL.t -= dt) <= 0) { POL.t = 0.2; hpVal.textContent = `${Math.max(0, Math.ceil(PLAYER.hp))} / ${PLAYER.max}`; if (ship) hullVal.textContent = `${Math.max(0, Math.ceil(ship.hp))} / ${ship.maxHp}`; }
+    // ambience: gulls by day near land, timbers creaking underfoot at sea
+    const day = gameTime > 6 && gameTime < 19;
+    if ((POL.gullT -= dt) <= 0) { POL.gullT = 7 + Math.random() * 10; if (day && !inInterior && !DUN.on) { let nearLand = false; for (let k = 0; k < 6 && !nearLand; k++) { const a = k * 1.05; if (heightAt(camera.position.x + Math.sin(a) * 350, camera.position.z + Math.cos(a) * 350) > 0) nearLand = true; } if (nearLand) try { SFX.gull({ x: camera.position.x + (Math.random() - 0.5) * 120, z: camera.position.z + (Math.random() - 0.5) * 120 }); } catch (e) {} } }
+    if ((POL.creakT -= dt) <= 0) { POL.creakT = 6 + Math.random() * 9; if ((onShip || sailing) && ship && Math.abs(ship.speed) > 2) try { SFX.creak(); } catch (e) {} }
+  }
+  applySettings(false);
+  // ---- scenery baking: the islands are built from thousands of small meshes (every plank, crate and roof). Once the
+  // world has settled, any that haven't moved, changed or blinked for a few seconds are merged into a few big meshes per
+  // material and area, and the originals are hidden (kept in place). A watcher restores a batch the moment any of its
+  // originals moves, hides or changes colour, so scripted scenery keeps working.
+  const BAKE = { snap: null, recs: [], i: 0, state: 0, t: 0 };
+  const _bm = new THREE.Matrix4();
+  function sceneryCandidates() {
+    const out = [];
+    for (const I of ISLANDS) I.group.traverse(o => {
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.children.length || Array.isArray(o.material) || !o.geometry.attributes.normal) return;
+      if (o.geometry.morphAttributes && Object.keys(o.geometry.morphAttributes).length) return;
+      for (let p = o; p; p = p.parent) { if (!p.visible || (p.userData && p.userData.rig)) return; }
+      out.push(o); });
+    return out;
+  }
+  const sigOf = o => matSig(o.material) + '|' + (o.material.map ? o.material.map.uuid : '') + '|' + (o.material.vertexColors ? 1 : 0) + '|' + (o.geometry.attributes.position.version);
+  function bakeSnapshot() { const m = new Map(); for (const o of sceneryCandidates()) { o.updateMatrixWorld(); m.set(o, { e: o.matrixWorld.elements.slice(), s: sigOf(o) }); } return m; }
+  function bakeScenery() {
+    const now = sceneryCandidates(), groups = new Map(), CELL = 500;
+    for (const o of now) { const a = BAKE.snap.get(o); if (!a || a.s !== sigOf(o)) continue; const e = o.matrixWorld.elements; let same = true; for (let k = 0; k < 16; k++) if (Math.abs(e[k] - a.e[k]) > 1e-5) { same = false; break; } if (!same) continue;
+      const m = o.material, cx = Math.floor(e[12] / CELL), cz = Math.floor(e[14] / CELL), key = matSig(m) + '|' + (m.map ? m.map.uuid : '') + '|' + (m.vertexColors ? 1 : 0) + '|' + cx + ',' + cz;
+      if (!groups.has(key)) groups.set(key, []); groups.get(key).push(o); }
+    let merged = 0, calls = 0;
+    for (const ms of groups.values()) {
+      if (ms.length < 3) continue;
+      const m0 = ms[0].material, uv = !!m0.map, col = !!m0.vertexColors;
+      if ((uv && ms.some(o => !o.geometry.attributes.uv)) || (col && ms.some(o => !o.geometry.attributes.color))) continue;
+      const parts = ms.map(o => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld); return g; });
+      let n = 0; for (const g of parts) n += g.attributes.position.count;
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uvs = uv ? new Float32Array(n * 2) : null, cols = col ? new Float32Array(n * 3) : null; let o3 = 0, o2 = 0;
+      for (const g of parts) { pos.set(g.attributes.position.array, o3); nor.set(g.attributes.normal.array, o3); if (uvs) uvs.set(g.attributes.uv.array, o2); if (cols) cols.set(g.attributes.color.array, o3); o3 += g.attributes.position.count * 3; o2 += g.attributes.position.count * 2; g.dispose(); }
+      const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); mg.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); if (uvs) mg.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); if (cols) mg.setAttribute('color', new THREE.BufferAttribute(cols, 3)); mg.computeBoundingSphere();
+      const mesh = new THREE.Mesh(mg, m0); mesh.matrixAutoUpdate = false; mesh.castShadow = ms.some(o => o.castShadow); mesh.receiveShadow = ms.some(o => o.receiveShadow); scene.add(mesh);
+      const rec = { mesh, ms, snap: ms.map(o => ({ e: o.matrixWorld.elements.slice(), s: sigOf(o) })) };
+      for (const o of ms) o.layers.set(30);   // hidden from the camera but left in place, so scripts that move or show them still find them
+      BAKE.recs.push(rec); merged += ms.length; calls++;
+    }
+    console.log(`scenery baked: ${merged} meshes into ${calls}`);
+  }
+  function unbake(rec) { scene.remove(rec.mesh); rec.mesh.geometry.dispose(); for (const o of rec.ms) o.layers.set(0); rec.dead = true; }
+  function updateBake(dt) {
+    const wall = performance.now(); if (!BAKE.t) BAKE.t = wall;
+    if (BAKE.state === 0) { if (wall - BAKE.t > 2500) { BAKE.snap = bakeSnapshot(); BAKE.state = 1; BAKE.t = wall; } return; }
+    if (BAKE.state === 1) { if (wall - BAKE.t > 4000) { try { bakeScenery(); } catch (e) { console.error(e); } BAKE.state = 2; BAKE.snap = null; } return; }
+    // watch a slice of the originals each frame
+    const R = BAKE.recs; if (!R.length) return;
+    for (let k = 0; k < 6; k++) { const rec = R[BAKE.i = (BAKE.i + 1) % R.length]; if (rec.dead) continue;
+      for (let j = 0; j < rec.ms.length; j++) { const o = rec.ms[j], a = rec.snap[j]; let vis = true; for (let p = o; p; p = p.parent) if (!p.visible) { vis = false; break; }
+        const e = o.matrixWorld.elements; let moved = !vis || a.s !== sigOf(o) || !o.parent; if (!moved) for (let q = 12; q < 15; q++) if (Math.abs(e[q] - a.e[q]) > 1e-4) { moved = true; break; }
+        if (moved) { unbake(rec); break; } } }
+  }
+  // one frame; if anything in it throws, log it and carry on with the next frame rather than freezing the game
+  let tickErrs = 0;
   function tick() {
+    const t0 = performance.now(), ran0 = lastFrameAt;
+    try { tickFrame(); } catch (e) { if (tickErrs++ < 8) console.error('frame error', e); requestAnimationFrame(tick); }
+    if (lastFrameAt !== ran0) { const A = AUTOFPS; A.work += performance.now() - t0; A.n++; if (!A.since) A.since = t0;
+      if (t0 - A.since > 3000 && SETTINGS.fps === 'auto') { const w = A.work / A.n; if (A.cap === 60 && w > 19) { A.cap = 30; FRAME_MS = 1000 / 30 - 1.5; } else if (A.cap === 30 && w < 8) { A.cap = 60; FRAME_MS = 1000 / 60 - 1.5; } A.work = A.n = 0; A.since = t0; } }
+  }
+  function tickFrame() {
     const now = performance.now();
-    // Cap the simulation/render workload to a steady 30 FPS on slower machines.
-    if (now - lastFrameAt < 33.3) { requestAnimationFrame(tick); return; }
+    // cap the frame rate (Settings: 30 or 60)
+    if (now - lastFrameAt < FRAME_MS) { requestAnimationFrame(tick); return; }
     lastFrameAt = now;
     let dt = Math.min(clock.getDelta(), 0.05);
     if (CMB.stop > 0) { CMB.stop -= dt; dt *= 0.1; }   // hit-stop: the world catches for an instant on a heavy blow
@@ -14086,7 +14345,9 @@ window.__pgBoot = () => {
     if (STOM.scene) updatePuffIn(dt);
     if (inInterior && interior.stern) renderSternView();
     try { cineCam(dt); } catch (e) {}   // the Leviathan's cinematics take the camera
-    if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
+    try { updatePolish(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
     requestAnimationFrame(tick);
   }
