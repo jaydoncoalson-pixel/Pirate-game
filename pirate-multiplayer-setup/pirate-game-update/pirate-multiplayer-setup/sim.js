@@ -18,7 +18,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     hp: 50, max: 50, state: 'idle', atkT: 0, slashT: 0, hitAt: 0, target: null, victim: null, wait: Math.random() * 3, deadT: 0,
   }));
   const raiders = W.RAIDER_SPAWNS.map(s => ({
-    home: s.home, T: s.T, galleon: s.galleon, maxHp: s.maxHp, raid: !!s.raid, leaving: false, leaveT: 0,
+    home: s.home, T: s.T, galleon: s.galleon, maxHp: s.maxHp, baseHp: s.maxHp, raid: !!s.raid, leaving: false, leaveT: 0,
     x: s.home.x, z: s.home.z, heading: 0, speed: 10, steer: 0, hp: s.maxHp, state: s.raid ? 'gone' : 'patrol',
     reload: { 1: 0, '-1': 0 }, wpt: null, blockT: 0, sinkT: 0, respawnT: 0, target: null, heldBy: null, lastHitBy: null, lastHitKr: false,
   }));
@@ -27,7 +27,14 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
   // Every 5 minutes (while anyone is online) there's a 5% chance the Blackwater fleet sails out of Fort Blackwater.
   // Waves of raid ships come, each bigger than the last; every raider at sea turns more savage; and the Blackwater
   // Beast breaks out of its pen and hunts every ship that doesn't fly the Blackwater flag. After 8 minutes it's over.
-  const RAID = { on: false, t: 0, dur: 480, rollT: 300, wave: 0, waveT: 0 };
+  // Raids come in tiers: veteran (x1.8 hull) and dread (x2.6) raids send a Blackwater flagship (x2.5 more) with every
+  // other wave from the third on. Every ship sunk in a raid counts toward the raid leaderboard; the top captain earns a
+  // purse when it ends.
+  const RAID = { on: false, t: 0, dur: 480, rollT: 300, wave: 0, waveT: 0, tier: 1, mul: 1, kills: new Map() };
+  const RAID_BEST = new Map();   // captain -> most ships sunk in one raid (while the server runs)
+  let PLS = new Map();
+  const raidList = () => [...RAID.kills.values()].sort((a, b) => b.n - a.n).slice(0, 5).map(k => [k.name, k.n]);
+  const bestList = () => [...RAID_BEST].sort((a, b) => b[1] - a[1]).slice(0, 5);
   // players: Map id -> { p: presence } (filled by the relay)
   const footTargets = players => [...players].filter(([, q]) => q.p && q.p.md === 1 && typeof q.p.x === 'number');
   const shipTargets = players => [...players].filter(([, q]) => q.p && q.p.sh && q.p.sh.a === 1);
@@ -129,11 +136,14 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     r.heading = Math.random() * 6.28; r.speed = 18; r.steer = 0; r.hp = r.maxHp; r.state = 'patrol'; r.sinkT = 0; r.leaving = false; r.leaveT = 0;
     r.target = null; r.heldBy = null; r.lastHitBy = null; r.lastHitKr = false;
   }
-  function raidStart() {
+  function raidStart(tier = 1) {
     if (RAID.on) return;
-    Object.assign(RAID, { on: true, t: 0, wave: 0, waveT: 4 });
+    const mul = [1, 1.8, 2.6][tier - 1] || 1;
+    Object.assign(RAID, { on: true, t: 0, wave: 0, waveT: 4, tier, mul, kills: new Map() });
+    for (const r of raiders) if (r.raid) { r.maxHp = Math.round(r.baseHp * mul); r.sub = false; }
     monsters.beastRelease();
-    broadcast('raid', { on: 1, dur: RAID.dur });
+    broadcast('raid', { on: 1, dur: RAID.dur, tier });
+    broadcast('raidtier', { tier, mul });
     console.log('*** Blackwater raid begins');
   }
   function raidEnd() {
@@ -141,19 +151,28 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     RAID.on = false; RAID.rollT = 300;
     for (const r of raiders) if (r.raid) { if (r.state === 'patrol' || r.state === 'attack') { r.leaving = true; r.leaveT = 0; } else if (r.state === 'gone') r.respawnT = Infinity; }
     monsters.beastRecall();
+    for (const r of raiders) if (r.raid) { r.maxHp = r.baseHp; r.sub = false; }
+    const list = raidList();
+    for (const [name, n] of list) if (n > (RAID_BEST.get(name) || 0)) RAID_BEST.set(name, n);
+    let top = null; for (const [id, k] of RAID.kills) if (!top || k.n > top.n) top = { id, ...k };
+    if (top && top.n > 0) sendTo(top.id, 'raidwin', { gold: 5000 * RAID.tier, n: top.n });
+    broadcast('raidboard', { list, best: bestList(), final: 1, tier: RAID.tier });
+    broadcast('raidtier', { tier: 1, mul: 1 });
     broadcast('raid', { on: 0 });
     console.log('*** Blackwater raid over');
   }
   function updateRaid(dt, players) {
     if (!RAID.on) {
       if (!players.size) return;
-      RAID.rollT -= dt; if (RAID.rollT <= 0) { RAID.rollT = 300; if (Math.random() < 0.05) raidStart(); }
+      RAID.rollT -= dt; if (RAID.rollT <= 0) { RAID.rollT = 300; if (Math.random() < 0.05) { const q = Math.random(); raidStart(q < 0.7 ? 1 : q < 0.95 ? 2 : 3); } }
       return;
     }
     RAID.t += dt; RAID.waveT -= dt;
     if (RAID.waveT <= 0) {   // each wave is bigger than the last: 2 ships, then 3, then 4...
       RAID.wave++; RAID.waveT = 40; let n = 1 + RAID.wave, sent = 0;
-      for (const r of raiders) if (n > 0 && r.raid && r.state === 'gone' && r.respawnT === Infinity) { r.respawnT = Math.random() * 8; n--; sent++; }
+      const flag = RAID.tier >= 2 && RAID.wave >= 3 && RAID.wave % 2 === 1;
+      for (const r of raiders) if (n > 0 && r.raid && r.state === 'gone' && r.respawnT === Infinity) { r.respawnT = Math.random() * 8; n--; sent++;
+        if (flag && r.galleon && !r.sub) { r.sub = true; r.maxHp = Math.round(r.baseHp * RAID.mul * 2.5); broadcast('raidsub', { i: raiders.indexOf(r), mul: RAID.mul }); } }
       if (sent) broadcast('raidwave', { w: RAID.wave, n: sent });
     }
     if (RAID.t >= RAID.dur || !players.size) raidEnd();
@@ -217,6 +236,7 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
     if (r.state === 'sinking' || r.state === 'gone') return;
     r.hp = 0; r.state = 'sinking'; r.sinkT = 0; r.heldBy = null;
     broadcast('rsunk', { i: raiders.indexOf(r), by, kr: kr ? 1 : 0, gal: r.galleon ? 1 : 0 });
+    if (RAID.on && by && PLS.has(by)) { const k = RAID.kills.get(by) || { name: PLS.get(by).name, n: 0 }; k.n++; RAID.kills.set(by, k); broadcast('raidboard', { list: raidList(), best: bestList(), tier: RAID.tier }); }
   }
 
   raiders.forEach(r => { if (r.raid) r.respawnT = Infinity; else spawnRaider(r, new Map()); });
@@ -225,8 +245,9 @@ function createSim({ sendTo, broadcast, adminOk = () => true, hornOwns = () => f
 
   // ---------- public API ----------
   return {
-    tick(dt, players) { updateRaid(dt, players); updateBandits(dt, players); updateRaiders(dt, players); monsters.tick(dt, players); },
-    raidAdmin(cmd) { if (cmd === 'start') raidStart(); else if (cmd === 'stop') raidEnd(); },
+    tick(dt, players) { PLS = players; updateRaid(dt, players); updateBandits(dt, players); updateRaiders(dt, players); monsters.tick(dt, players); },
+    raidAdmin(cmd) { if (cmd === 'start') raidStart(1); else if (cmd === 'start2') raidStart(2); else if (cmd === 'start3') raidStart(3); else if (cmd === 'stop') raidEnd(); },
+    raidInfo() { return { tier: RAID.on ? RAID.tier : 1, mul: RAID.on ? RAID.mul : 1, subs: raiders.map((r, i) => r.sub ? i : -1).filter(i => i >= 0), list: raidList(), best: bestList() }; },
     snapshot() {
       return {
         bsnap: bandits.map((b, i) => [i, r1(b.x), r1(b.z), r2(b.facing), Math.max(0, Math.round(b.hp)), BST.indexOf(b.state), b.slashT > 0 ? 1 : 0]),

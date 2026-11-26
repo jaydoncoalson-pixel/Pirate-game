@@ -147,6 +147,24 @@ function onPsunk(id, me, d) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, t] of psunkSeen) if (now - t > 120000) psunkSeen.delete(k); }, 60000);
 
+// ---------- the faction war: the Navy and the Brethren contest the islands ----------
+// Each captain's game reports influence won for their side at an island (sinkings nearby, cargo sold there, its fort
+// stormed). The server keeps the tally (decaying slowly, so islands can change hands), caps how fast any one captain can
+// add to it, and tells everyone who holds what.
+const FW_ISLES = new Set(['Gull Island', 'Palm Key', 'Jungle Isle', 'Smoke Peak', 'Skull Isle', 'Port Coral', 'Turtle Cay', 'Mermaid Cove', 'Driftwood Isle']);
+const FW = new Map();   // island -> [navy, brethren]
+const fwOwner = e => { const [n, b] = e; if (Math.max(n, b) < 20) return null; return n > b * 1.1 ? 'navy' : b > n * 1.1 ? 'brethren' : null; };
+const fwSnap = () => { const o = {}; for (const [k, e] of FW) o[k] = [Math.round(e[0]), Math.round(e[1]), fwOwner(e)]; return o; };
+let fwDirty = false;
+function onFgain(me, d) {
+  if (!d || !FW_ISLES.has(d.isl) || (d.f !== 'navy' && d.f !== 'brethren')) return;
+  const now = Date.now(); me.fw = me.fw && now - me.fw.t < 60000 ? me.fw : { t: now, pts: 0 };
+  const pts = Math.max(0, Math.min(50, Math.round(+d.pts || 0), 200 - me.fw.pts)); if (!pts) return; me.fw.pts += pts;
+  const e = FW.get(d.isl) || [0, 0]; e[d.f === 'navy' ? 0 : 1] += pts; FW.set(d.isl, e); fwDirty = true;
+}
+setInterval(() => { for (const e of FW.values()) { e[0] *= 0.99; e[1] *= 0.99; } fwDirty = true; }, 60000);   // influence fades about 1% a minute
+setInterval(() => { if (fwDirty) { fwDirty = false; broadcastRaw(serverEmit('fctl', { isles: fwSnap() })); } }, 2000);
+
 const env = createEnv();
 
 const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
@@ -172,6 +190,8 @@ wss.on('connection', ws => {
       send(ws, serverEmit('env', env.snapshot()));
       send(ws, hornMsg(players.get(id)));
       send(ws, serverEmit('bounties', { list: bountyList() }));
+      send(ws, serverEmit('fctl', { isles: fwSnap() }));
+      { const ri = sim.raidInfo(); send(ws, serverEmit('raidtier', { tier: ri.tier, mul: ri.mul })); for (const i of ri.subs) send(ws, serverEmit('raidsub', { i, mul: ri.mul })); if (ri.list.length || ri.best.length) send(ws, serverEmit('raidboard', { list: ri.list, best: ri.best })); }
       broadcastRaw({ t: 'join', id, name }, id);
       console.log(`+ ${name} (${id}) — ${players.size} online`);
       return;
@@ -192,6 +212,7 @@ wss.on('connection', ws => {
       }
       if (m.topic === 'hclaim') { hornClaim(me); return; }
       if (m.topic === 'psunk') { onPsunk(id, me, m.data); return; }
+      if (m.topic === 'fgain') { onFgain(me, m.data); return; }
       if (m.topic === 'gift_ack') {                                     // a player's game confirms a gift arrived
         const g = giftsPending.get(String((m.data || {}).id || '')); if (!g) return;
         clearTimeout(g.timer); giftsPending.delete(String(m.data.id));
