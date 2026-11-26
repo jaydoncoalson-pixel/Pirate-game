@@ -4816,7 +4816,7 @@ window.__pgBoot = () => {
       b.disabled = !can; b.onclick = () => buyUpgrade(k);
       row.append(info, b); body.appendChild(row);
     }
-    renderModules(body); renderEscorts(body);
+    renderModules(body); renderEscorts(body); renderIsle(body);
     if (uiOpen) closeUI();
     uiOpen = 'upgr'; el.style.display = 'flex';
   }
@@ -5450,7 +5450,7 @@ window.__pgBoot = () => {
     if (which === 'forge') renderForge();
     for (const k in keys) keys[k] = false;
   }
-  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const trd = document.getElementById('trade'); if (trd) trd.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
+  function closeUI() { uiOpen = null; panel.style.display = qlog.style.display = bigmap.style.display = forgeEl.style.display = acctEl.style.display = adminEl.style.display = 'none'; const trd = document.getElementById('trade'); if (trd) trd.style.display = 'none'; const ih = document.getElementById('isleHall'); if (ih) ih.style.display = 'none'; const kp = document.getElementById('krpick'); if (kp) kp.style.display = 'none'; const ep = document.getElementById('elpick'); if (ep) ep.style.display = 'none'; const up = document.getElementById('upgr'); if (up) up.style.display = 'none'; }
   function toggleUI(w) { if (uiOpen === w) closeUI(); else openUI(w); }
   document.querySelectorAll('[data-ui]').forEach(b => b.addEventListener('click', () => toggleUI(b.dataset.ui)));
   document.querySelectorAll('.ovl .close').forEach(b => b.addEventListener('click', closeUI));
@@ -5644,6 +5644,7 @@ window.__pgBoot = () => {
       ctx.beginPath(); ctx.moveTo(0, -7 * sz); ctx.lineTo(4 * sz, 5 * sz); ctx.lineTo(-4 * sz, 5 * sz); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
     try { if (ABY.built) { const [x, y] = S(ABY.x, ABY.z), [x2] = S(ABY.x + 600, ABY.z), rr = Math.max(5, Math.abs(x2 - x)); ctx.fillStyle = 'rgba(2,10,14,.75)'; ctx.strokeStyle = '#3ff2ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, rr, 0, 7); ctx.fill(); ctx.stroke(); if (big) { ctx.fillStyle = '#bff8ff'; ctx.font = 'italic 13px Georgia'; ctx.textAlign = 'center'; ctx.fillText('The Abyssal Trench', x, y - rr - 6); } } } catch (e) {}
+    try { if (isleOwned()) { const I = isleI(), [x, y] = S(I.c.x, I.c.y); ctx.fillStyle = '#2b4a7a'; ctx.strokeStyle = '#f2ead8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 7, y - 1); ctx.lineTo(x + 5, y - 1); ctx.lineTo(x + 5, y + 6); ctx.lineTo(x - 5, y + 6); ctx.lineTo(x - 5, y - 1); ctx.lineTo(x - 7, y - 1); ctx.closePath(); ctx.fill(); ctx.stroke(); } } catch (e) {}
     try { drawForts(ctx, S, W, H); if (LEG.spot && !legendBeaten()) { const [x, y] = S(LEG.r ? LEG.r.x : LEG.spot.x, LEG.r ? LEG.r.z : LEG.spot.z); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 - Math.PI / 2, rr = k % 2 ? 3.5 : 8; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); } } catch (e) {}
     if (ship && !(sailing || onShip || inInterior)) {
       const [x, y] = S(ship.x, ship.z); ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - ship.heading);
@@ -5764,6 +5765,7 @@ window.__pgBoot = () => {
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
     { const fc = nearFortChest(); if (fc) { openFortChest(fc); return; } }
+    { const is = nearIsleSpot(); if (is) { isleInteract(is); return; } }
     if (GUEST.on && GUEST.raider) { raiderLeave(); return; }
     if (GUEST.on) { guestLeave(); return; }
     { const rb = nearRaiderToBoard(); if (rb && !nearWheel()) { raiderBoard(rb); return; } }
@@ -7540,7 +7542,7 @@ window.__pgBoot = () => {
           if (!F.warned) { F.warned = true; toast(`The guns of the ${F.isl} fort open fire! Shell the four towers to silence them.`); }
           const a = tw.piv.rotation.y, x = tw.x + Math.sin(a) * 4.5, z = tw.z + Math.cos(a) * 4.5, y = tw.g.position.y + 15;
           const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
-          const b = { m, vx: 0, vy: 0, vz: 0, enemy: true, from: tw, life: 7, dmg: 14 }; aimShot(b, x, y, z, tg, (Math.random() - 0.5) * 0.6); balls.push(b);
+          const b = { m, vx: 0, vy: 0, vz: 0, enemy: true, from: tw, life: 7, dmg: 14, noLand: 1.2 }; aimShot(b, x, y, z, tg, (Math.random() - 0.5) * 0.6); balls.push(b);
           puff(x, y, z, { color: 0xdedad2, size: 5, life: 2.5, grow: 2, vy: 1.5, op: 0.75 }); } }
       // a label over the fort while ye're in sight of it
       const d = Math.hypot(F.x - P.pos.x, F.z - P.pos.z);
@@ -7781,6 +7783,116 @@ window.__pgBoot = () => {
     const hb = Math.max(0, LEV.hp / LEV.max); LEV.bossBar.querySelector('#levHp').style.width = hb * 100 + '%'; LEV.bossBar.querySelector('#levName').textContent = `THE LEVIATHAN · phase ${P3}`;
   }
 
+  // ===================== Yer own island =====================
+  // Buy the deed to Palm Key from Hal, then build it up: a dock (sail in to have yer hull mended for free), a warehouse
+  // (earns gold by the hour while ye're away), gun towers (fire on any Blackwater ship that comes near), and a trophy hall
+  // (shows off what ye've conquered, with a trophy outside for each great deed).
+  const ISLE_NAME = 'Palm Key', ISLE_DEED = 250000;
+  const ISLE_BUILD = {
+    dock: { name: 'Dock', desc: 'A deep-water pier. Sail within 150 m and yer shipwrights mend her hull to full, free.', gold: 40000, mats: { wood: 20, iron: 6 } },
+    warehouse: { name: 'Warehouse', desc: 'Traders rent its space: 2,500 gold an hour, piling up for up to a day. Walk up and press E to collect.', gold: 80000, mats: { wood: 25, iron: 10 } },
+    towers: { name: 'Gun towers', desc: 'Two stone towers that fire on any Blackwater ship within 450 m of the island.', gold: 120000, mats: { iron: 20, steel: 10 } },
+    hall: { name: 'Trophy hall', desc: 'A hall to show off yer conquests, with a trophy outside for each great deed. Walk up and press E to look inside.', gold: 150000, mats: { wood: 20, pearl: 8, gem: 4 } },
+  };
+  const ISLE = { built: {}, towers: [] };
+  const isleOwned = () => !!(STATE.isle && STATE.isle.owned);
+  const isleHas = k => !!(STATE.isle && STATE.isle[k]);
+  function isleI() { return ISLANDS.find(i => i.name === ISLE_NAME); }
+  function islePlot(I, a, frac) { for (let f = frac; f > 0.05; f -= 0.05) { const x = I.c.x + Math.sin(a) * I.r * f, z = I.c.y + Math.cos(a) * I.r * f; if (heightAt(x, z) > 1.2) return { x, z, y: heightAt(x, z) }; } return { x: I.c.x, z: I.c.y, y: Math.max(1, heightAt(I.c.x, I.c.y)) }; }
+  function clearAround(I, x, z, r) {
+    const mtx = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0); I.group.updateMatrixWorld(true);
+    I.group.traverse(o => { if (!o.isInstancedMesh) return; let ch = false; for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, mtx); v.setFromMatrixPosition(mtx).applyMatrix4(o.matrixWorld); if (Math.hypot(v.x - x, v.z - z) < r) { o.setMatrixAt(i, zero); ch = true; } } if (ch) o.instanceMatrix.needsUpdate = true; });
+    for (let i = colliders.length - 1; i >= 0; i--) { const c = colliders[i]; if (!c.isle && Math.hypot(c.x - x, c.z - z) < r) colliders.splice(i, 1); }
+  }
+  function buildIslePart(k) {
+    const I = isleI(); if (!I || ISLE.built[k]) return; const face = Math.atan2(I.toHome.x, I.toHome.y);
+    const g = new THREE.Group(); scene.add(g); ISLE.built[k] = g;
+    const wood = lam(0x7a5a38), woodD = lam(0x4a3220), stone = lam(0x9a948a), roof = lam(0x8e2a1f), gold = lam(0xd9b13a);
+    if (k === 'dock') {
+      let best = null;   // the side of the key where deep water comes closest to the shore
+      for (let k = 0; k < 24; k++) { const a = face + k / 24 * 6.28, pp = islePlot(I, a, 1.3), dx = Math.sin(a), dz = Math.cos(a); let len = 20; for (; len < 300; len += 8) if (heightAt(pp.x + dx * len, pp.z + dz * len) < -6) break; if (!best || len < best.len) best = { a, p: pp, len }; }
+      const fa = best.a, p = best.p, dx = Math.sin(fa), dz = Math.cos(fa), len = best.len + 16;
+      g.position.set(p.x, 0, p.z); g.rotation.y = fa;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(8, 0.6, len), wood); deck.position.set(0, 3.2, len / 2); g.add(deck);
+      for (let z = 4; z < len; z += 8) for (const sd of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 9, 6), woodD); post.position.set(sd * 3.6, -0.8, z); g.add(post); }
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); lamp.position.set(3.4, 6, len - 2); g.add(lamp);
+      ISLE.dockPt = { x: p.x + dx * len, z: p.z + dz * len };
+    }
+    const house = (x, z, y, w, d, h, rc, rot) => { const b = new THREE.Group(); b.position.set(x, y, z); b.rotation.y = rot; g.add(b);
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone); walls.position.y = h / 2; b.add(walls);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.62, h * 0.6, 4), rc); rf.rotation.y = Math.PI / 4; rf.scale.set(w / Math.hypot(w, d) * 1.4, 1, d / Math.hypot(w, d) * 1.4); rf.position.y = h + h * 0.3; b.add(rf);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.4, 0.2), woodD); door.position.set(0, 1.7, d / 2 + 0.05); b.add(door);
+      colliders.push({ box: true, isle: true, x, z, hw: w / 2 + 0.2, hd: d / 2 + 0.2, rot }); return b; };
+    if (k === 'warehouse') { const p = islePlot(I, face + 1.4, 0.35); clearAround(I, p.x, p.z, 16); const b = house(p.x, p.z, p.y, 14, 10, 7, roof, face + 1.4 + Math.PI);
+      for (let i = 0; i < 6; i++) { const cr = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), wood); cr.position.set(-5 + (i % 3) * 1.6, 0.7 + Math.floor(i / 3) * 1.4, 6.5); b.add(cr); }
+      ISLE.whPt = b.position.clone().add(new THREE.Vector3(Math.sin(face + 1.4 + Math.PI) * 7, 0, Math.cos(face + 1.4 + Math.PI) * 7)); }
+    if (k === 'hall') { const p = islePlot(I, face - 1.4, 0.35); clearAround(I, p.x, p.z, 20); const rot = face - 1.4 + Math.PI, b = house(p.x, p.z, p.y, 16, 12, 9, gold, rot);
+      for (let i = 0; i < 4; i++) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 8, 10), lam(0xf2ead8)); col.position.set(-6 + i * 4, 4, 7); b.add(col); }
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), gold); dome.position.y = 13; b.add(dome);
+      ISLE.hall = b; ISLE.hallPt = b.position.clone().add(new THREE.Vector3(Math.sin(rot) * 9, 0, Math.cos(rot) * 9)); refreshTrophies(); }
+    if (k === 'towers') { ISLE.towers = [];
+      for (const off of [0.7, -0.7]) { const p = islePlot(I, face + off, 0.85); clearAround(I, p.x, p.z, 8);
+        const tg = new THREE.Group(); tg.position.set(p.x, p.y, p.z); g.add(tg);
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.4, 12, 10), stone); body.position.y = 6; tg.add(body);
+        for (let m = 0; m < 8; m++) { const b2 = m / 8 * 6.28, mer = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.9), stone); mer.position.set(Math.sin(b2) * 4, 12.6, Math.cos(b2) * 4); mer.rotation.y = b2; tg.add(mer); }
+        const piv = new THREE.Group(); piv.position.y = 13; tg.add(piv); const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 3.8, 10), lam(0x1c1c1c)); gun.rotation.x = Math.PI / 2; gun.position.z = 2; piv.add(gun);
+        const fl = new THREE.Mesh(new THREE.PlaneGeometry(3, 2), new THREE.MeshLambertMaterial({ color: 0x2b4a7a, side: THREE.DoubleSide })); fl.position.set(1.6, 17, 0); tg.add(fl);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), woodD); pole.position.y = 15.5; tg.add(pole);
+        colliders.push({ isle: true, x: p.x, z: p.z, r: 4.6 }); ISLE.towers.push({ x: p.x, z: p.z, y: p.y, piv, reload: 2 }); } }
+    enableShadows(g);
+  }
+  function refreshTrophies() {   // a trophy outside the hall for each great deed
+    if (!ISLE.hall) return; if (ISLE.troph) ISLE.hall.remove(ISLE.troph); const t = ISLE.troph = new THREE.Group(); ISLE.hall.add(t);
+    const list = [[(STATE.admiralBeat || 0) > 0, 0x7a1010], [(STATE.legendsSunk || 0) > 0, 0xd9b13a], [(STATE.fortsTaken || 0) > 0, 0x6e6a62], [(STATE.levKills || 0) > 0, 0x3ff2ff], [(STATE.legacy || 0) > 0, 0xffd24a]];
+    list.forEach(([got, col], i) => { const ped = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), lam(0xf2ead8)); ped.position.set(-8 + i * 4, 0.8, 11); t.add(ped);
+      if (got) { const tr = new THREE.Mesh(i === 3 ? new THREE.ConeGeometry(0.7, 2.6, 6) : i === 1 ? new THREE.OctahedronGeometry(0.9) : new THREE.SphereGeometry(0.8, 10, 8), new THREE.MeshLambertMaterial({ color: col, emissive: i === 3 ? 0x0a4a50 : 0x000000 })); tr.position.set(-8 + i * 4, 2.6, 11); t.add(tr); } });
+  }
+  function syncIsle() { if (!isleOwned()) return; for (const k of Object.keys(ISLE_BUILD)) if (isleHas(k)) buildIslePart(k); if (!ISLE.flag) { const I = isleI(); if (!I) return; const p = islePlot(I, 0, 0.05); const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 14, 6), lam(0x4a3220)); pole.position.set(p.x, p.y + 7, p.z); scene.add(pole); const f = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), new THREE.MeshLambertMaterial({ color: 0x2b4a7a, side: THREE.DoubleSide })); f.position.set(p.x + 2.6, p.y + 12.5, p.z); scene.add(f); ISLE.flag = f; } }
+  function buyIsle(k) {
+    STATE.isle = STATE.isle || {};
+    if (!k) { if (STATE.gold < ISLE_DEED) return; addGold(-ISLE_DEED, `The deed to ${ISLE_NAME}`); STATE.isle.owned = true; STATE.isle.lastCollect = Date.now(); save(); syncIsle(); toast(`${ISLE_NAME} is yers! Build on it here at Hal's, and find it just east of Gull Island.`); try { SFX.fanfare(); } catch (e) {} openUpgrades(); return; }
+    const B = ISLE_BUILD[k]; if (isleHas(k) || STATE.gold < B.gold || !Object.entries(B.mats).every(([m, n]) => (STATE.mats[m] || 0) >= n)) return;
+    addGold(-B.gold, `${B.name} on ${ISLE_NAME}`); for (const [m, n] of Object.entries(B.mats)) STATE.mats[m] -= n; STATE.isle[k] = 1; if (k === 'warehouse') STATE.isle.lastCollect = Date.now(); save(); buildIslePart(k); SFX.anvil(); toast(`Builders raise yer ${B.name.toLowerCase()} on ${ISLE_NAME}.`); openUpgrades();
+  }
+  const isleIncome = () => isleHas('warehouse') ? Math.floor(Math.min(24, (Date.now() - (STATE.isle.lastCollect || Date.now())) / 3600000) * 2500) : 0;
+  function renderIsle(body) {
+    const h = document.createElement('div'); h.style.cssText = 'font-weight:bold;margin:14px 0 4px'; h.textContent = `Yer island: ${ISLE_NAME}`; body.appendChild(h);
+    if (!isleOwned()) { const r = document.createElement('div'); r.style.cssText = 'display:flex;align-items:center;gap:10px'; r.innerHTML = `<div style="flex:1;font-size:12px">A palm-fringed key just east of Gull Island, for sale. Build a dock, warehouse, gun towers and a trophy hall on it. <b>${ISLE_DEED.toLocaleString()} gold</b></div>`;
+      const b = document.createElement('button'); b.className = 'ch'; b.textContent = 'Buy the deed'; b.disabled = STATE.gold < ISLE_DEED; b.onclick = () => buyIsle(); r.appendChild(b); body.appendChild(r); return; }
+    for (const [k, B] of Object.entries(ISLE_BUILD)) { const have = isleHas(k), can = !have && STATE.gold >= B.gold && Object.entries(B.mats).every(([m, n]) => (STATE.mats[m] || 0) >= n);
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;border-radius:6px;background:rgba(80,50,20,.08);border:1px solid rgba(80,50,20,.18)';
+      const need = [`${B.gold.toLocaleString()} gold`, ...Object.entries(B.mats).map(([m, n]) => `${n} ${MATS[m].name.toLowerCase()}`)].join(' · ');
+      row.innerHTML = `<div style="flex:1"><div style="font-weight:bold">${B.name}</div><div style="font-size:12px;opacity:.85">${B.desc}</div><div style="font-size:12px">${have ? (k === 'warehouse' ? `<span style="color:#2e7d32">Built · ${isleIncome().toLocaleString()} gold waiting</span>` : '<span style="color:#2e7d32">Built</span>') : need}</div></div>`;
+      const b = document.createElement('button'); b.className = 'ch'; b.textContent = have ? 'Built' : 'Build'; b.disabled = !can; b.onclick = () => buyIsle(k); row.appendChild(b); body.appendChild(row); }
+  }
+  function nearIsleSpot() {
+    if (!isleOwned() || onShip || sailing || inInterior || GUEST.on) return null;
+    if (ISLE.whPt && Math.hypot(ISLE.whPt.x - P.pos.x, ISLE.whPt.z - P.pos.z) < 5) return 'warehouse';
+    if (ISLE.hallPt && Math.hypot(ISLE.hallPt.x - P.pos.x, ISLE.hallPt.z - P.pos.z) < 5) return 'hall';
+    return null;
+  }
+  function isleInteract(k) {
+    if (k === 'warehouse') { const n = isleIncome(); if (n < 1) { toast('Nothing to collect yet: the warehouse earns 2,500 gold an hour.'); return; } STATE.isle.lastCollect = Date.now(); addGold(n, 'Warehouse rents from yer island'); save(); return; }
+    if (k === 'hall') { showIsleHall(); }
+  }
+  function showIsleHall() {
+    let el = document.getElementById('isleHall');
+    if (!el) { el = document.createElement('div'); el.id = 'isleHall'; el.className = 'ovl'; el.innerHTML = '<div class="box"><h2>Yer trophy hall</h2><div id="isleHallBody"></div><div class="foot"><button class="close">Close</button></div></div>'; document.body.appendChild(el); el.querySelector('.close').onclick = closeUI; }
+    const rows = [['The Blackwater Admiral bested', STATE.admiralBeat || 0], ['Weekly legends sunk', STATE.legendsSunk || 0], ['Blackwater forts stormed', STATE.fortsTaken || 0], ['Leviathans slain', STATE.levKills || 0], ['Legacy rank', STATE.legacy || 0], ['Trade profit', (STATE.tradeProfit || 0).toLocaleString() + ' gold'], ['Legendary armour', (STATE.armors || []).map(k => ARMORS[k].name).join(', ') || 'none yet']];
+    el.querySelector('#isleHallBody').innerHTML = rows.map(([a, b]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(80,50,20,.18)"><span>${a}</span><b>${b}</b></div>`).join('');
+    refreshTrophies(); if (uiOpen) closeUI(); uiOpen = 'isleHall'; el.style.display = 'flex';
+  }
+  function updateIsle(dt, t) {
+    if (!isleOwned()) return;
+    if (ISLE.flag) ISLE.flag.rotation.y = Math.sin(t * 1.2) * 0.3;
+    if (isleHas('dock') && ISLE.dockPt && ship && !ship.sinking && ship.hp < ship.maxHp && Math.hypot(ship.x - ISLE.dockPt.x, ship.z - ISLE.dockPt.z) < 150) { ship.hp = Math.min(ship.maxHp, ship.hp + ship.maxHp * 0.25 * dt); if (!ISLE.toldDock) { ISLE.toldDock = true; toast('Yer shipwrights row out from the dock and set to mending her hull.'); } } else if (ship && ship.hp >= ship.maxHp) ISLE.toldDock = false;
+    for (const tw of ISLE.towers) { tw.reload -= dt; let tg = null, td = 450;
+      for (const r of raiders) { if (r.state !== 'patrol' && r.state !== 'attack') continue; const d = Math.hypot(r.x - tw.x, r.z - tw.z); if (d < td) { td = d; tg = r; } }
+      if (!tg) continue; tw.piv.rotation.y = angLerp(tw.piv.rotation.y, Math.atan2(tg.x - tw.x, tg.z - tw.z), Math.min(1, dt * 3));
+      if (tw.reload <= 0) { tw.reload = 3.5; const a = tw.piv.rotation.y, x = tw.x + Math.sin(a) * 4, z = tw.z + Math.cos(a) * 4, y = tw.y + 13; const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
+        const b = { m, vx: 0, vy: 0, vz: 0, enemy: false, from: { isleTower: true }, life: 7, dmg: 30, noLand: 1.2 }; aimShot(b, x, y, z, tg, 0); balls.push(b); puff(x, y, z, { color: 0xdedad2, size: 5, life: 2.5, grow: 2, vy: 1.5, op: 0.75 }); } }
+  }
+
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -7991,7 +8103,8 @@ window.__pgBoot = () => {
         if (heightAt(x, z) < -1) { SFX.splash({ x, z }, true); puff(x, y + 1.5, z, { color: 0xffffff, size: 4, life: 0.9, grow: 1.2, vy: 9, op: 0.9 }); puff(x, y + 0.5, z, { color: 0xeaf6ff, size: 6, life: 1.4, grow: 1.5, op: 0.6 }); }
         else puff(x, y + 1, z, { color: 0xb59a6a, size: 4, life: 1, grow: 1.5, vy: 2, op: 0.8 });
       }
-      if (!hit && heightAt(x, z) > y) { hit = true; puff(x, y + 1, z, { color: 0xb59a6a, size: 4, life: 1, grow: 1.5, vy: 2, op: 0.8 }); }
+      if (b.noLand > 0) b.noLand -= dt;
+      if (!hit && !(b.noLand > 0) && heightAt(x, z) > y) { hit = true; puff(x, y + 1, z, { color: 0xb59a6a, size: 4, life: 1, grow: 1.5, vy: 2, op: 0.8 }); }
       if (hit || b.life <= 0) { scene.remove(m); balls.splice(i, 1); }
     }
   }
@@ -8090,6 +8203,7 @@ window.__pgBoot = () => {
   try { buildPosts(); refreshBountyTags(); } catch (e) { console.error(e); }
   try { FORTS.forEach(buildFort); } catch (e) { console.error(e); }
   try { buildAbyss(); } catch (e) { console.error(e); }
+  try { syncIsle(); } catch (e) { console.error(e); }
   function bob(r, dt, t) {
     const T = r.T, L = T.L, B = T.B, sx = Math.sin(r.heading), sz = Math.cos(r.heading);
     const hC = waveHeight(r.x, r.z, t), hF = waveHeight(r.x + sx * L * 0.4, r.z + sz * L * 0.4, t), hB = waveHeight(r.x - sx * L * 0.4, r.z - sz * L * 0.4, t);
@@ -8192,7 +8306,7 @@ window.__pgBoot = () => {
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
-    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); updateLegend(dt); updateLeviathan(dt, t); } catch (e) { console.error(e); }
+    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); updateLegend(dt); updateLeviathan(dt, t); updateIsle(dt, t); } catch (e) { console.error(e); }
     { const G = gear(); if (G && G.regen && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + G.regen * dt); }
     if ((MODFX.tagT = (MODFX.tagT || 0) - dt) <= 0) { MODFX.tagT = 3; if (window.__mpRetag) window.__mpRetag(); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
@@ -13674,6 +13788,7 @@ window.__pgBoot = () => {
     if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if ((sailing || !nearWheel()) && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip || sailing ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.admiral ? 'Admiral\'s flagship' : rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
       if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight';
       { const fc = nearFortChest(); if (fc) promptHtml = '<b>E</b> Break open the fort\'s treasury'; }
+      { const is = nearIsleSpot(); if (is) promptHtml = is === 'warehouse' ? `<b>E</b> Collect warehouse rents (${isleIncome().toLocaleString()} gold)` : '<b>E</b> Look round yer trophy hall'; }
       if (!GUEST.raider && !SIEGE.on) { const tp = nearTradePost(); if (tp) promptHtml = (promptHtml ? promptHtml + ' &middot; ' : '') + `<b>U</b> Trade at the ${tp.isl} post`; } }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
