@@ -5643,6 +5643,7 @@ window.__pgBoot = () => {
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = r.admiral ? '#141414' : r.bountied ? '#e8c44a' : '#c0392b'; ctx.strokeStyle = r.admiral ? '#e8c44a' : '#1c1c1c'; ctx.lineWidth = r.admiral ? 2.5 : 1.5;
       ctx.beginPath(); ctx.moveTo(0, -7 * sz); ctx.lineTo(4 * sz, 5 * sz); ctx.lineTo(-4 * sz, 5 * sz); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
+    try { if (ABY.built) { const [x, y] = S(ABY.x, ABY.z), [x2] = S(ABY.x + 600, ABY.z), rr = Math.max(5, Math.abs(x2 - x)); ctx.fillStyle = 'rgba(2,10,14,.75)'; ctx.strokeStyle = '#3ff2ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, rr, 0, 7); ctx.fill(); ctx.stroke(); if (big) { ctx.fillStyle = '#bff8ff'; ctx.font = 'italic 13px Georgia'; ctx.textAlign = 'center'; ctx.fillText('The Abyssal Trench', x, y - rr - 6); } } } catch (e) {}
     try { drawForts(ctx, S, W, H); if (LEG.spot && !legendBeaten()) { const [x, y] = S(LEG.r ? LEG.r.x : LEG.spot.x, LEG.r ? LEG.r.z : LEG.spot.z); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 - Math.PI / 2, rr = k % 2 ? 3.5 : 8; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); } } catch (e) {}
     if (ship && !(sailing || onShip || inInterior)) {
       const [x, y] = S(ship.x, ship.z); ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - ship.heading);
@@ -7225,6 +7226,7 @@ window.__pgBoot = () => {
     let h = '<div class="qt">☠ Bounty board<span>sink or capture the ship to collect</span></div><div class="qd">';
     h += STATE.bounties.length ? STATE.bounties.map(b => { const r = raiders[b.i], d = r && (r.state === 'patrol' || r.state === 'attack') ? Math.round(Math.hypot(r.x - P.pos.x, r.z - P.pos.z)) : null;
       return `<div>Captain <b>${b.name}</b>, Blackwater ${b.gal ? 'galleon' : 'raider'}: <b style="color:#9a6400">${b.gold.toLocaleString()} gold</b>${d != null ? ` · ${d.toLocaleString()} m away (gold marker on yer map)` : ' · not at sea right now'}</div>`; }).join('') : '<div>No bounties posted right now. Check back soon.</div>';
+    h += `<div style="margin-top:6px">The Abyssal Trench (dark circle at the edge of yer chart): ${STATE.levCool && Date.now() - STATE.levCool < LEV_COOL ? `the Leviathan sleeps, waking in ${Math.ceil((LEV_COOL - (Date.now() - STATE.levCool)) / 60000)} min` : 'the Leviathan waits in its heart'}. Leviathans slain: ${STATE.levKills || 0}.</div>`;
     if (ADM.r) h += `<div style="margin-top:6px;color:#b71c1c">The Blackwater Admiral is hunting ye! Sink his flagship, or board her and best him in a duel.</div>`;
     else h += `<div style="margin-top:6px;opacity:.8">Blackwater ships sunk toward the Admiral's wrath: ${ADM.wrath}/${ADM.WRATH}</div>`;
     if (window.__mpOnline && window.__mpOnline()) h += '<div style="margin-top:8px"><b>Wanted captains</b> (players who sink other players\' ships): ' + (BNT.players.length ? BNT.players.map(([n, g]) => `${n} <b style="color:#b71c1c">${g.toLocaleString()} gold</b>`).join(' · ') : 'none right now') + '</div>';
@@ -7633,6 +7635,152 @@ window.__pgBoot = () => {
     el.prepend(box);
   }
 
+  // ===================== The Abyss and the Leviathan =====================
+  // Far out past the last islands, the sea floor falls away into the Abyssal Trench. The water goes black, the sky dims
+  // to dusk, drowned pillars of a sunken city break the surface and lantern-lights drift below. Sail into the heart of it
+  // and the Leviathan rises: a serpent of the deep three times the Elder's length, fought in three phases. Its scales make
+  // Abyssal Plate. It sleeps for 20 minutes after it falls.
+  const ABY = { x: 0, z: 0, R: 1500, k: 0, built: false };
+  const LEV = { on: false, hp: 0, max: 6500, phase: 1, t: 0, trail: [], head: new THREE.Vector3(), h: 0, ang: 0, timers: {}, warn: [], dying: 0 };
+  const LEV_N = 46, LEV_COOL = 20 * 60 * 1000;
+  function abyssSite() {
+    let best = null;
+    for (let k = 0; k < 200; k++) { const a = k * 2.399, d = 7000 + (k % 7) * 500, x = Math.sin(a) * d, z = Math.cos(a) * d;
+      if (Math.abs(x) > EDGE - 2200 || Math.abs(z) > EDGE - 2200) continue;
+      const clear = ISLANDS.every(I => Math.hypot(x - I.c.x, z - I.c.y) > I.r + 2600); if (!clear) continue;
+      let ok = true; for (let j = 0; j < 12 && ok; j++) { const b = j / 12 * 6.28; if (heightAt(x + Math.sin(b) * 1200, z + Math.cos(b) * 1200) > -6) ok = false; }
+      if (ok) { best = { x, z }; break; } }
+    return best || { x: -9000, z: 9000 };
+  }
+  function buildAbyss() {
+    Object.assign(ABY, abyssSite()); ABY.built = true;
+    const g = new THREE.Group(); g.position.set(ABY.x, 0, ABY.z); scene.add(g); ABY.g = g;
+    // drowned pillars of the sunken city, in a broken ring round the heart of the trench
+    const stone = lam(0x2a3236), moss = lam(0x1c3a34);
+    for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28 + (k % 3) * 0.12, d = 820 + (k % 4) * 90, x = Math.sin(a) * d, z = Math.cos(a) * d, h = 22 + (k * 37 % 30), tilt = ((k * 53) % 10 - 5) * 0.03;
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.2, h, 8), k % 2 ? stone : moss); p.position.set(x, h / 2 - 6, z); p.rotation.set(tilt, 0, tilt * 0.7); g.add(p);
+      if (k % 3 === 0) { const cap = new THREE.Mesh(new THREE.BoxGeometry(10, 2.4, 10), stone); cap.position.set(x, h - 5, z); cap.rotation.y = a; g.add(cap); }
+      SEA_ROCKS.push({ x: ABY.x + x, z: ABY.z + z, radius: 4.5, hitRadius: 6, lastHit: 0, mesh: p }); }
+    // a broken arch: the gate of the drowned city
+    { const a = 0.4, x = Math.sin(a) * 760, z = Math.cos(a) * 760; for (const sd of [-1, 1]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(4, 5, 46, 8), stone); p.position.set(x + Math.cos(a) * sd * 26, 17, z - Math.sin(a) * sd * 26); g.add(p); SEA_ROCKS.push({ x: ABY.x + p.position.x, z: ABY.z + p.position.z, radius: 5, hitRadius: 7, lastHit: 0, mesh: p }); }
+      const top = new THREE.Mesh(new THREE.BoxGeometry(62, 6, 9), stone); top.position.set(x, 41, z); top.rotation.y = a + Math.PI / 2; g.add(top); }
+    // lantern-lights drifting under the black water
+    ABY.lights = []; for (let k = 0; k < 60; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: k % 3 ? 0x3ff2ff : 0x9a6aff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const a = Math.random() * 6.28, d = Math.random() * 1100; sp.position.set(Math.sin(a) * d, -2 - Math.random() * 4, Math.cos(a) * d); sp.scale.setScalar(2 + Math.random() * 3); sp.userData = { ph: Math.random() * 6.28, a, d }; g.add(sp); ABY.lights.push(sp); }
+    // a slow whirl of black water at the very heart
+    const wh = new THREE.Mesh(new THREE.RingGeometry(20, 260, 48, 1), new THREE.MeshBasicMaterial({ map: canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(60,220,240,.35)'; c.lineWidth = 3; for (let s = 0; s < 6; s++) { c.beginPath(); for (let i = 0; i < 60; i++) { const t = i / 60, a = s / 6 * 6.28 + t * 5, r = t * w / 2; c.lineTo(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } c.stroke(); } }), transparent: true, opacity: 0.55, depthWrite: false }));
+    wh.rotation.x = -Math.PI / 2; wh.position.y = 0.6; g.add(wh); ABY.whirl = wh;
+    const tag = document.createElement('div'); tag.className = 'tag etag'; tag.style.cssText = 'font-size:14px;border:1px solid #3ff2ff;background:rgba(0,20,30,.85)'; tag.style.display = 'none'; tag.innerHTML = 'The Leviathan<div class="ehp"><div style="background:#3ff2ff"></div></div>'; tagLayer.appendChild(tag); LEV.tag = tag; LEV.bar = tag.querySelector('.ehp div');
+    const bb = document.createElement('div'); bb.style.cssText = 'position:absolute;left:50%;top:118px;transform:translateX(-50%);width:min(520px,60vw);display:none;text-align:center;color:#bff8ff;font:15px Georgia,serif;text-shadow:0 1px 4px #000;pointer-events:none';
+    bb.innerHTML = '<div id="levName">THE LEVIATHAN</div><div style="height:12px;border:2px solid #3ff2ff;border-radius:6px;background:rgba(0,0,0,.5);margin-top:3px"><div id="levHp" style="height:100%;width:100%;background:linear-gradient(90deg,#0a7a8a,#3ff2ff);border-radius:4px"></div></div>'; document.body.appendChild(bb); LEV.bossBar = bb;
+  }
+  // darkness falls as ye sail into the trench (applied after the weather each frame)
+  const _abC = new THREE.Color();
+  function applyAbyss(dt) {
+    if (!ABY.built) return;
+    const d = Math.hypot(P.pos.x - ABY.x, P.pos.z - ABY.z), want = inInterior || DUN.on ? 0 : Math.max(0, Math.min(1, (ABY.R - d) / (ABY.R * 0.45)));
+    ABY.k += (want - ABY.k) * Math.min(1, dt * 1.5); const k = ABY.k * (LEV.on && LEV.phase === 3 ? 1 : 0.88);
+    if (k < 0.003) return;
+    _abC.setHex(0x02090c); scene.fog.color.lerp(_abC, k); SKY_HORIZON.lerp(_abC, k * 0.9); SKY_TOP.lerp(_abC.setHex(0x010406), k * 0.95);
+    scene.fog.far += (520 - scene.fog.far) * k; scene.fog.near += (20 - scene.fog.near) * k;
+    oceanMat.uniforms.fogDist.value += (360 - oceanMat.uniforms.fogDist.value) * k;
+    oceanMat.uniforms.deep.value.lerp(_abC.setHex(0x010608), k); oceanMat.uniforms.shallow.value.lerp(_abC.setHex(0x05262c), k);
+    HEMI.intensity *= 1 - 0.7 * k; sunLight.intensity *= 1 - 0.85 * k; skyU.sunK.value *= 1 - 0.9 * k;
+    const t = clock.elapsedTime; for (const s of ABY.lights) { s.material.opacity = 0.35 + 0.35 * Math.sin(t * 1.3 + s.userData.ph); s.userData.a += 0.002; s.position.x = Math.sin(s.userData.a) * s.userData.d; s.position.z = Math.cos(s.userData.a) * s.userData.d; }
+    ABY.whirl.rotation.z = t * 0.12;
+  }
+  // ---- the Leviathan ----
+  function buildLeviathan() {
+    const g = new THREE.Group(); scene.add(g); LEV.g = g;
+    const scale = new THREE.MeshLambertMaterial({ color: 0x0e2228, emissive: 0x020a0c }), belly = lam(0x2a4a48), glow = new THREE.MeshBasicMaterial({ color: 0x3ff2ff });
+    LEV.body = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), scale, LEV_N); LEV.body.frustumCulled = false; g.add(LEV.body);
+    LEV.fins = new THREE.InstancedMesh(new THREE.ConeGeometry(0.35, 1.6, 4), lam(0x081418), LEV_N); LEV.fins.frustumCulled = false; g.add(LEV.fins);
+    LEV.spots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.12, 6, 4), glow, LEV_N * 2); LEV.spots.frustumCulled = false; g.add(LEV.spots);
+    LEV.rad = i => 9.5 * (1 - Math.pow(i / LEV_N, 1.6) * 0.85);
+    const hd = new THREE.Group(); g.add(hd); LEV.hd = hd;
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(10, 18, 12), scale); skull.scale.set(1, 0.75, 1.7); hd.add(skull);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(14, 3, 20), belly); jaw.position.set(0, -6, 8); hd.add(jaw); LEV.jaw = jaw;
+    for (let k = 0; k < 9; k++) { const tth = new THREE.Mesh(new THREE.ConeGeometry(0.7, 3.4, 5), lam(0xe8e2cc)); tth.position.set(-5.6 + k * 1.4, -3.6, 16 - Math.abs(k - 4) * 0.6); tth.rotation.x = Math.PI; hd.add(tth); }
+    for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 8), glow); e.position.set(sd * 6.2, 2.4, 10.5); hd.add(e);
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(1.6, 16, 7), lam(0x1a1a18)); horn.position.set(sd * 5, 8, -4); horn.rotation.set(-0.9, 0, sd * 0.35); hd.add(horn);
+      const fr = new THREE.Mesh(new THREE.ConeGeometry(3, 10, 4), lam(0x0a1a1e)); fr.position.set(sd * 10, 1, -2); fr.rotation.set(0, 0, sd * 1.7); fr.scale.z = 0.25; hd.add(fr); }
+    LEV.light = { intensity: 0 };
+    enableShadows(g);
+  }
+  function levRise() {
+    if (!LEV.g) buildLeviathan();
+    LEV.on = true; LEV.hp = LEV.max; LEV.phase = 1; LEV.t = 0; LEV.dying = 0; LEV.timers = { slam: 6, spit: 9, ram: 16 }; LEV.ang = Math.atan2(ship.x - ABY.x, ship.z - ABY.z) + Math.PI;
+    LEV.head.set(ship.x + Math.sin(LEV.ang) * 260, -40, ship.z + Math.cos(LEV.ang) * 260); LEV.trail = []; for (let i = 0; i < LEV_N * 3; i++) LEV.trail.push(LEV.head.clone().add(new THREE.Vector3(0, -i * 1.2, 0)));
+    LEV.g.visible = true; LEV.bossBar.style.display = 'block'; CMB.shake = 1.2;
+    try { SFX.horn(); setTimeout(() => { try { SFX.horn(); } catch (e) {} }, 900); } catch (e) {}
+    toast('The black water heaves... THE LEVIATHAN rises from the Abyss!');
+  }
+  function levEnd(killed) {
+    LEV.on = false; LEV.tag.style.display = 'none'; LEV.bossBar.style.display = 'none'; for (const w of LEV.warn) scene.remove(w.m); LEV.warn = [];
+    if (!killed) { if (LEV.g) LEV.g.visible = false; return; }
+    STATE.levCool = Date.now(); STATE.levKills = (STATE.levKills || 0) + 1;
+    addGold(50000, 'Ye slew the Leviathan of the Abyss!'); addMat('gem', 8); addMat('pearl', 10); addMat('steel', 12);
+    giveArmor('abyssal'); try { SFX.fanfare(); } catch (e) {} save();
+    toast('The Leviathan sinks back into the trench, its scales glittering as it falls. It will wake again in 20 minutes.');
+  }
+  function levHurt(n) {
+    if (!LEV.on || LEV.dying) return; LEV.hp -= n; dmgNum({ x: LEV.head.x, y: Math.max(4, LEV.head.y + 10), z: LEV.head.z }, `${Math.round(n)}`, n > 40 ? 'heavy' : '');
+    const ph = LEV.hp < LEV.max * 0.33 ? 3 : LEV.hp < LEV.max * 0.66 ? 2 : 1;
+    if (ph !== LEV.phase) { LEV.phase = ph; CMB.shake = 1; toast(ph === 2 ? 'The Leviathan shrieks and spits abyssal fire! Keep moving: it will strike from below.' : 'The Leviathan is enraged! The Abyss goes black around it.'); }
+    if (LEV.hp <= 0) { LEV.dying = 0.01; toast('The Leviathan convulses!'); }
+  }
+  const levTarget = { leviathan: true, x: 0, z: 0, heading: 0, speed: 0, T: { L: 40, B: 24, H: 12 }, group: { position: { y: 0 } }, mortarHit: n => levHurt(n) };
+  TARGET_HOOKS.push(() => LEV.on && !LEV.dying && LEV.head.y > -6 ? [levTarget] : []);
+  BALL_HOOKS.push((x, y, z, b) => { if (!LEV.on || LEV.dying) return false;
+    for (let i = 0; i < LEV_N; i += 2) { const p = LEV.seg && LEV.seg[i]; if (!p || p.y < -LEV.rad(i)) continue; if (Math.hypot(x - p.x, y - p.y, z - p.z) < LEV.rad(i) + 2.5) { levHurt(b.dmg || 11); puff(x, y, z, { color: 0x3ff2ff, size: 3, life: 0.8, grow: 1.5, op: 0.9 }); return true; } }
+    return false; });
+  const _lm = new THREE.Matrix4(), _lq = new THREE.Quaternion(), _ls = new THREE.Vector3(), _lv = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+  function levWarn(x, z, r, life, kind) { const m = new THREE.Mesh(new THREE.RingGeometry(r * 0.85, r, 40), new THREE.MeshBasicMaterial({ color: kind === 'ram' ? 0x3ff2ff : 0xff3a2a, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, waveHeight(x, z, clock.elapsedTime) + 0.8, z); scene.add(m); LEV.warn.push({ m, x, z, r, t: life, life, kind }); }
+  function updateLeviathan(dt, t) {
+    if (!ABY.built) return;
+    const inHeart = ship && !ship.sinking && (sailing || onShip) && Math.hypot(ship.x - ABY.x, ship.z - ABY.z) < 600;
+    if (!LEV.on) { if (inHeart && !(STATE.levCool && Date.now() - STATE.levCool < LEV_COOL)) levRise(); else if (inHeart && !ABY.toldCool) { ABY.toldCool = true; toast(`The trench lies still. The Leviathan sleeps (wakes in ${Math.ceil((LEV_COOL - (Date.now() - STATE.levCool)) / 60000)} min).`); } if (!inHeart) ABY.toldCool = false; return; }
+    if (!ship || ship.sinking || Math.hypot(ship.x - ABY.x, ship.z - ABY.z) > ABY.R * 1.15) { toast('The Leviathan sinks back into the dark. It will be waiting.'); levEnd(false); return; }
+    LEV.t += dt; const P3 = LEV.phase, spd = (P3 === 3 ? 70 : P3 === 2 ? 58 : 48) * (LEV.dying ? 0.3 : 1);
+    // circle the ship, rising and diving in great arcs
+    LEV.ang += dt * (P3 === 3 ? 0.42 : 0.3); const R = 170 + 50 * Math.sin(LEV.t * 0.23);
+    const tx = ship.x + Math.sin(LEV.ang) * R, tz = ship.z + Math.cos(LEV.ang) * R, want = Math.atan2(tx - LEV.head.x, tz - LEV.head.z);
+    LEV.h = angLerp(LEV.h, want, Math.min(1, dt * 1.6));
+    const ty = LEV.dying ? -60 : -4 + 15 * Math.sin(LEV.t * 0.55) * (LEV.rearT > 0 ? 0 : 1) + (LEV.rearT > 0 ? 22 : 0);
+    LEV.head.x += Math.sin(LEV.h) * spd * dt; LEV.head.z += Math.cos(LEV.h) * spd * dt; LEV.head.y += (ty - LEV.head.y) * Math.min(1, dt * 1.4);
+    if (LEV.rearT > 0) LEV.rearT -= dt;
+    // the body follows the path the head has swum
+    const last = LEV.trail[0]; if (LEV.head.distanceTo(last) > 1.2) { LEV.trail.unshift(LEV.head.clone()); if (LEV.trail.length > LEV_N * 3 + 10) LEV.trail.pop(); }
+    LEV.seg = LEV.seg || []; const step = 2.6;
+    for (let i = 0; i < LEV_N; i++) { const p = LEV.trail[Math.min(LEV.trail.length - 1, Math.round(i * step / 1.2) + 1)]; LEV.seg[i] = p;
+      const q = LEV.trail[Math.min(LEV.trail.length - 1, Math.round(i * step / 1.2) + 3)]; _lv.subVectors(p, q); if (_lv.lengthSq() < 1e-4) _lv.set(0, 0, 1); _lv.normalize();
+      _lq.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _lv); const r = LEV.rad(i); _ls.set(r, r * 0.85, r * 1.5); _lm.compose(p, _lq, _ls); LEV.body.setMatrixAt(i, _lm);
+      const fp = p.clone().add(new THREE.Vector3(0, r * 0.95, 0)); _ls.set(r * 0.9, r * 1.3, r * 0.9); _lm.compose(fp, _lq.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.5)), _ls); LEV.fins.setMatrixAt(i, _lm);
+      for (const sd of [-1, 1]) { const side = new THREE.Vector3().crossVectors(_lv, _up).normalize().multiplyScalar(sd * r * 0.92); _ls.setScalar(r * 0.6 * (0.7 + 0.3 * Math.sin(t * 3 + i * 0.7))); _lm.compose(p.clone().add(side), _lq, _ls); LEV.spots.setMatrixAt(i * 2 + (sd > 0 ? 1 : 0), _lm); } }
+    LEV.body.instanceMatrix.needsUpdate = LEV.fins.instanceMatrix.needsUpdate = LEV.spots.instanceMatrix.needsUpdate = true;
+    _lv.subVectors(LEV.trail[0], LEV.trail[Math.min(3, LEV.trail.length - 1)]).normalize(); LEV.hd.position.copy(LEV.head); LEV.hd.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _lv.lengthSq() > 0 ? _lv : new THREE.Vector3(0, 0, 1));
+    LEV.jaw.rotation.x = 0.15 + 0.25 * Math.max(0, Math.sin(t * 2.2));
+    levTarget.x = LEV.head.x; levTarget.z = LEV.head.z; levTarget.heading = LEV.h; levTarget.speed = spd;
+    if (LEV.head.y > -3 && Math.random() < dt * 6) puff(LEV.head.x + (Math.random() - 0.5) * 16, 1, LEV.head.z + (Math.random() - 0.5) * 16, { color: 0xffffff, size: 4, life: 0.8, grow: 2, vy: 3, op: 0.7 });
+    if (LEV.dying) { LEV.dying += dt; if (Math.random() < dt * 10) puff(LEV.head.x + (Math.random() - 0.5) * 30, 2, LEV.head.z + (Math.random() - 0.5) * 30, { color: 0x3ff2ff, size: 6, life: 1.5, grow: 2, vy: 6, op: 0.8 }); if (LEV.dying > 6) { LEV.g.visible = false; levEnd(true); } return; }
+    // attacks
+    const T = LEV.timers; for (const k in T) T[k] -= dt;
+    if (T.slam <= 0) { T.slam = P3 === 3 ? 5 : P3 === 2 ? 7 : 9; const lead = 2.2, sx = ship.x + Math.sin(ship.heading) * ship.speed * lead, sz = ship.z + Math.cos(ship.heading) * ship.speed * lead; levWarn(sx, sz, 48, 2.2, 'slam'); LEV.rearT = 2.2; }
+    if (P3 >= 2 && T.spit <= 0) { T.spit = P3 === 3 ? 4.5 : 6.5;
+      for (let k = 0; k < 3; k++) setTimeout(() => { if (!LEV.on || !ship) return; const x = LEV.head.x, y = Math.max(6, LEV.head.y + 6), z = LEV.head.z; const m = new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: 0x3ff2ff })); m.scale.setScalar(2.4); m.position.set(x, y, z); scene.add(m);
+        const b = { m, vx: 0, vy: 0, vz: 0, enemy: true, from: levTarget, life: 6, dmg: 22 }; aimShot(b, x, y, z, ship, (k - 1) * 0.3); balls.push(b); puff(x, y, z, { color: 0x3ff2ff, size: 6, life: 0.6, grow: 2, op: 0.9 }); }, k * 250); }
+    if (P3 >= 2 && T.ram <= 0) { T.ram = P3 === 3 ? 11 : 15; levWarn(ship.x, ship.z, Math.max(40, ship.T.L * 0.7), 2.6, 'ram'); toast('Bubbles boil up under yer hull... something is coming up from below! Get moving!'); }
+    for (let i = LEV.warn.length - 1; i >= 0; i--) { const w = LEV.warn[i]; w.t -= dt; const f = 1 - w.t / w.life; w.m.material.opacity = 0.3 + 0.5 * f; w.m.scale.setScalar(0.6 + 0.4 * f);
+      if (w.kind === 'ram' && Math.random() < dt * 20) puff(w.x + (Math.random() - 0.5) * w.r * 1.4, 1, w.z + (Math.random() - 0.5) * w.r * 1.4, { color: 0xbff8ff, size: 1.6, life: 0.6, grow: 1, vy: 3, op: 0.8 });
+      if (w.t <= 0) { scene.remove(w.m); LEV.warn.splice(i, 1);
+        for (let k = 0; k < 10; k++) puff(w.x + (Math.random() - 0.5) * w.r, 2, w.z + (Math.random() - 0.5) * w.r, { color: 0xffffff, size: 8, life: 1.4, grow: 2.5, vy: 14, op: 0.9 }); SFX.splash({ x: w.x, z: w.z }, true);
+        if (ship && Math.hypot(ship.x - w.x, ship.z - w.z) < w.r + ship.T.B * 0.5) { const dmg = w.kind === 'ram' ? 90 : 55; damageShip(ship, dmg); CMB.shake = Math.max(CMB.shake, w.kind === 'ram' ? 1.4 : 0.9); ship.krJolt = 1.6; toast(w.kind === 'ram' ? 'The Leviathan bursts up beneath ye and smashes into yer keel!' : 'Its tail comes crashing down on yer deck!'); }
+        for (const e of liveEscorts()) if (Math.hypot(e.x - w.x, e.z - w.z) < w.r + 10) escortHurt(e, 60); } }
+    // labels
+    const hb = Math.max(0, LEV.hp / LEV.max); LEV.bossBar.querySelector('#levHp').style.width = hb * 100 + '%'; LEV.bossBar.querySelector('#levName').textContent = `THE LEVIATHAN · phase ${P3}`;
+  }
+
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -7941,6 +8089,7 @@ window.__pgBoot = () => {
   });
   try { buildPosts(); refreshBountyTags(); } catch (e) { console.error(e); }
   try { FORTS.forEach(buildFort); } catch (e) { console.error(e); }
+  try { buildAbyss(); } catch (e) { console.error(e); }
   function bob(r, dt, t) {
     const T = r.T, L = T.L, B = T.B, sx = Math.sin(r.heading), sz = Math.cos(r.heading);
     const hC = waveHeight(r.x, r.z, t), hF = waveHeight(r.x + sx * L * 0.4, r.z + sz * L * 0.4, t), hB = waveHeight(r.x - sx * L * 0.4, r.z - sz * L * 0.4, t);
@@ -8043,7 +8192,7 @@ window.__pgBoot = () => {
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
-    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); updateLegend(dt); } catch (e) { console.error(e); }
+    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); updateLegend(dt); updateLeviathan(dt, t); } catch (e) { console.error(e); }
     { const G = gear(); if (G && G.regen && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + G.regen * dt); }
     if ((MODFX.tagT = (MODFX.tagT || 0) - dt) <= 0) { MODFX.tagT = 3; if (window.__mpRetag) window.__mpRetag(); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
@@ -13582,6 +13731,7 @@ window.__pgBoot = () => {
     updateSerpents(dt, t);
     updateSeaBeast(dt, t);
     updateEnvironment(dt);
+    try { applyAbyss(dt); } catch (e) { console.error(e); }
     // Underwater atmosphere: short blue-green visibility, subdued daylight,
     // and no above-water sky/cloud dome when the camera is below the surface.
     const underwaterView = camera.position.y < -0.8;
