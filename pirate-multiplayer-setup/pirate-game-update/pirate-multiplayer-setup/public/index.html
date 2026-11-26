@@ -236,7 +236,7 @@
 <div id="menu" class="ovl"><div class="box" style="text-align:center;width:min(420px,calc(100vw - 32px))">
 <h2 id="mTitle" style="font-size:30px;margin-bottom:4px"></h2><p class="note" id="mSub" style="margin:0 0 16px"></p>
 <button class="mbtn" id="mPlay"></button><button class="mbtn" id="mSave">Save game</button><button class="mbtn" id="mAcct">Accounts and save codes</button><button class="mbtn" id="mSet">Settings</button><button class="mbtn" id="mSnd"></button><button class="mbtn" id="mCtl">Controls</button>
-<div id="mCtlBox" class="note" style="display:none;text-align:left;line-height:1.7"><b>WASD</b> walk &middot; <b>Shift</b> run &middot; <b>Space</b> jump &middot; <b>F</b> attack &middot; <b>1 / 2</b> switch weapon &middot; <b>E</b> talk and interact &middot; <b>Drag</b> to look around<br><b>C</b> customize &middot; <b>Q</b> quests &middot; <b>M</b> map &middot; <b>I</b> swords &middot; <b>N</b> sound &middot; <b>Esc</b> this menu</div>
+<div id="mCtlBox" class="note" style="display:none;text-align:left;line-height:1.7"><b>WASD</b> walk &middot; <b>Shift</b> run &middot; <b>Space</b> jump &middot; <b>F</b> attack (hold and release: charged slam &middot; <b>Shift</b>+<b>F</b> running: dash strike &middot; in the air: plunging strike) &middot; <b>1 / 2</b> switch weapon &middot; <b>E</b> talk and interact &middot; <b>Drag</b> to look around<br><b>C</b> customize &middot; <b>Q</b> quests &middot; <b>M</b> map &middot; <b>I</b> swords &middot; <b>N</b> sound &middot; <b>Esc</b> this menu</div>
 </div></div>
 <div id="prompt"></div>
 <div id="dialog"><div id="dname"></div><div id="dtext"></div><div id="dopts"></div><div id="dhint">E or click to continue</div></div>
@@ -2108,6 +2108,12 @@ window.__pgBoot = () => {
     1: { w: 0.26, s: 0.54, dep: 0.8,   // backhand: drawn across the body, then a flat sweep out to the right
       wind: { shR: -1.55, elR: -1.75, shRz: -1.0, shL: -0.3, elL: -0.85, shLz: -0.15, twist: -0.85, yaw: -0.32, lean: 0.06, bob: -0.01, headY: 0.32, headX: 0.04, wrX: 0.9, wrY: 0.5 },
       hit:  { shR: -1.5, elR: -0.1, shRz: 0.9, shL: -0.65, elL: -1.05, shLz: -0.5, twist: 0.75, yaw: 0.32, lean: 0.22, bob: -0.07, headY: -0.22, headX: 0.06, wrX: 1.2, wrY: 0 } },
+    3: { w: 0.4, s: 0.62, dep: 1.8,   // charged slam: everything behind the head, then the whole body driven down into the ground
+      wind: { shR: -3.15, elR: -1.35, shRz: 0.05, shL: -3.1, elL: -1.3, shLz: -0.05, twist: 0.3, yaw: 0.1, lean: -0.42, bob: 0.06, headY: 0, headX: -0.25, wrX: -1.1, wrY: 0 },
+      hit:  { shR: -0.15, elR: -0.05, shRz: -0.05, shL: -0.25, elL: -0.2, shLz: 0.15, twist: -0.1, yaw: -0.05, lean: 0.85, bob: -0.32, headY: 0, headX: 0.4, wrX: 0.75, wrY: 0 } },
+    4: { w: 0.22, s: 0.5, dep: 1.2,   // dash thrust: blade drawn back level at the hip, then driven straight out at arm's length
+      wind: { shR: -1.0, elR: -2.1, shRz: 0.15, shL: -0.2, elL: -0.6, shLz: -0.5, twist: 0.75, yaw: 0.35, lean: 0.15, bob: -0.05, headY: -0.2, headX: 0.05, wrX: 1.45, wrY: 0.1 },
+      hit:  { shR: -1.6, elR: -0.04, shRz: -0.05, shL: 0.35, elL: -0.4, shLz: -0.35, twist: -0.55, yaw: -0.3, lean: 0.55, bob: -0.12, headY: 0.15, headX: 0.12, wrX: 1.55, wrY: 0 } },
     2: { w: 0.36, s: 0.6, dep: 1.4,   // overhead finisher: both hands high behind the head, then brought down with the whole body
       wind: { shR: -3.05, elR: -1.15, shRz: 0.12, shL: -3.0, elL: -1.15, shLz: -0.08, twist: 0.18, yaw: 0.05, lean: -0.3, bob: 0.03, headY: 0, headX: -0.18, wrX: -0.95, wrY: 0 },
       hit:  { shR: -0.38, elR: -0.08, shRz: -0.06, shL: -0.5, elL: -0.3, shLz: 0.18, twist: -0.12, yaw: -0.05, lean: 0.62, bob: -0.16, headY: 0, headX: 0.28, wrX: 0.55, wrY: 0 } },
@@ -2549,7 +2555,7 @@ window.__pgBoot = () => {
             // keyframed swing: a gathering wind-up, a fast whipping strike that decelerates through the target, then a
             // follow-through and an unhurried recovery to guard. The hips and torso lead, the arm follows, the wrist snaps last,
             // the off arm counterbalances and the feet step into it.
-            const sea = !!ch.seaSwing, F = (sea ? SWING_KF.sea[kd] : SWING_KF[kd]) || SWING_KF[0], R = SWING_KF.ready;
+            const sea = !!ch.seaSwing && kd < 3, F = (sea ? SWING_KF.sea[kd] : SWING_KF[kd]) || SWING_KF[0], R = SWING_KF.ready;
             const from = sea && kd > 0 ? SWING_KF.sea[kd - 1].hit : R;   // the sea blade's next cut flows straight on from the last
             const eIO = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2, eOut = x => 1 - Math.pow(1 - x, 3.2), eIn = x => x * x * x;
             const wA = F.w, wB = F.s;   // where the wind-up ends and the strike ends
@@ -6062,9 +6068,85 @@ window.__pgBoot = () => {
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves.', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
-    admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'saber', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
+    admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
+  // each blade's own passive (the magic blades keep the ones in their descriptions)
+  const SWORD_PASSIVE = {
+    rusty: ['Scrapper', '+25% damage while ye\'re below 40% health.'],
+    steel: ['Balanced', 'Yer parry window is half again as long.'],
+    axe: ['Cleave', 'Every hit staggers; heavy blows send foes flying.'],
+    rapier: ['Riposte', '+15% crit chance, and a parry makes yer next three strikes certain crits.'],
+    scimitar: ['Bleed', 'Hits open wounds that bleed for 4 s (8 damage a second).'],
+    saber: ['Discipline', 'Each hit in an unbroken combo adds +10% damage (up to +40%).'],
+    golden: ['Plunder', 'Foes ye defeat drop extra gold, and crits shake coins loose.'],
+    flame: ['Burn', 'Hits set foes alight: 12 damage a second for 3 s.'],
+    admiral: ['Command', 'Each kill heals 15 and adds +8% damage for 10 s (stacks to +40%).'],
+  };
+  const SWORD_MOVES = '<b>F</b> combo (slash, backhand, overhead) · hold <b>F</b> and release: charged slam (hits all round ye) · <b>Shift</b>+<b>F</b> while running: dash strike · <b>F</b> in mid-air: plunging strike · <b>X</b> or right-click: block (just before a blow lands: parry)';
+  const SWP = { chain: 0, cmdN: 0, cmdT: 0, ripN: 0, dotT: 0 };
+  function swordPassiveMul() {
+    const id = STATE.sword; let m = 1;
+    if (id === 'rusty' && PLAYER.hp < PLAYER.max * 0.4) m *= 1.25;
+    if (id === 'saber') m *= 1 + 0.1 * Math.min(4, SWP.chain);
+    if (id === 'admiral') m *= 1 + 0.08 * SWP.cmdN;
+    return m;
+  }
+  function swordOnHit(tg, dm, crit, pos) {
+    const id = STATE.sword;
+    if (id === 'scimitar') tg.bleed = { t: 4, dps: 8 };
+    if (id === 'flame') tg.burn = { t: 3, dps: 12 };
+    if (id === 'saber') SWP.chain++;
+    if (id === 'golden' && crit) { addGold(5 + Math.floor(Math.random() * 10), 'Coins shaken loose'); for (let k = 0; k < 5; k++) puff(pos.x, pos.y + 1.2, pos.z, { color: 0xffd24a, size: 0.12, life: 0.6, grow: 0.1, vx: (Math.random() - 0.5) * 5, vy: 3 + Math.random() * 3, vz: (Math.random() - 0.5) * 5, op: 1 }); }
+  }
+  function swordOnKill() {
+    if (STATE.sword === 'admiral') { SWP.cmdN = Math.min(5, SWP.cmdN + 1); SWP.cmdT = 10; PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 15); dmgNum(P.pos, `Command +${SWP.cmdN * 8}%`, 'heavy'); }
+    if (STATE.sword === 'golden') addGold(20 + Math.floor(Math.random() * 25), 'Plunder');
+  }
+  const parryWin = () => STATE.sword === 'steel' ? 0.45 : 0.3;
+  // a shockwave where a slam or plunge lands: a ring of dust and spray racing out across the ground
+  function slamWave(x, y, z, r) {
+    const gy = onShip || GUEST.on ? y : groundAt(x, z);
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: STATE.sword === 'flame' ? 0xffa050 : STATE.sword === 'seasword' || STATE.sword === 'tidecaller' ? 0x9ff6ff : 0xfff1c8, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, gy + 0.12, z); scene.add(m); const t0 = performance.now();
+    const step = () => { const u = (performance.now() - t0) / 450; if (u >= 1) { scene.remove(m); m.geometry.dispose(); return; } m.scale.setScalar(0.5 + u * r * 1.2); m.material.opacity = 0.8 * (1 - u); requestAnimationFrame(step); }; step();
+    for (let k = 0; k < 16; k++) { const a = k / 16 * 6.28; puff(x + Math.sin(a) * 1.2, gy + 0.3, z + Math.cos(a) * 1.2, { color: 0xd8c8a8, size: 0.9, life: 0.7, grow: 1.6, vx: Math.sin(a) * 9, vz: Math.cos(a) * 9, vy: 1.5, op: 0.75 }); }
+    try { SFX.crash({ x, z }); } catch (e) {}
+  }
+  // holding F after a swing gathers power; letting go unleashes a slam that hits everything round ye
+  function chargedSlam(power) {
+    if (PLAYER.weapon !== 'cutlass' || PLAYER.hp <= 0 || CMB.blocking || PLAYER.plunge) return;
+    PLAYER.swingKind = 3; PLAYER.slashDur = 0.62; PLAYER.slashT = 0.62; PLAYER.cool = 0.95; PLAYER.hitPending = 0.62 * 0.5;
+    PLAYER.move = { mul: 2.1 + power * 1.3, reach: 1.25 + power * 0.25, arc: -1, heavy: true, slam: true, kb: 10 + power * 6 }; CMB.comboT = 0;
+    SFX.swing(); setTimeout(() => SFX.swing(), 90); if (window.__mpSlash) window.__mpSlash(0.3);
+  }
+  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a };
+  function updateSwordExtras(dt) {
+    SWP.dashCd = Math.max(0, (SWP.dashCd || 0) - dt);
+    if (SWP.cmdT > 0) { SWP.cmdT -= dt; if (SWP.cmdT <= 0) SWP.cmdN = 0; }
+    // the plunge lands
+    if (PLAYER.plunge && (P.grounded || onShip || GUEST.on || sailing || inInterior)) { PLAYER.plunge = false; PLAYER.hitPending = 0.0001; PLAYER.slashT = Math.min(PLAYER.slashT, 0.25); }
+    // charging
+    if (CMB.fHeld && PLAYER.weapon === 'cutlass' && !CMB.blocking && PLAYER.hp > 0) { CMB.fT += dt; CMB.charge = Math.max(0, Math.min(1, (CMB.fT - 0.4) / 0.8));
+      if (CMB.charge > 0 && player.props.blade) { const g = player.props.blade, L = bladeLen(player), tip = new THREE.Vector3(0, 0, L * (0.3 + Math.random() * 0.7)).applyMatrix4(g.matrixWorld);
+        if (Math.random() < dt * (10 + CMB.charge * 30)) puff(tip.x, tip.y, tip.z, { color: SWCOL[STATE.sword] || 0xffffff, size: 0.12 + CMB.charge * 0.2, life: 0.35, grow: 0.3, vy: 1.5, op: 0.9 });
+        if (CMB.charge >= 1 && !CMB.fullTold) { CMB.fullTold = true; try { SFX.parry(); } catch (e) {} dmgNum(P.pos, 'CHARGED', 'parry'); } } }
+    else CMB.charge = 0;
+    // wounds and flames ticking on foes
+    SWP.dotT -= dt; if (SWP.dotT <= 0) { SWP.dotT = 0.5;
+      const tick = (tg, isB) => { for (const k of ['bleed', 'burn']) { const e = tg[k]; if (!e) continue; e.t -= 0.5; if (e.t <= 0) { tg[k] = null; continue; } const n = Math.round(e.dps * 0.5);
+        if (isB) { if (tg.state === 'dead' || tg.state === 'gone') { tg[k] = null; continue; } hitBandit(tg, n); } else { if (tg.st !== 'fight') { tg[k] = null; continue; } hitFighter(tg, n, false); if (tg.st === 'dead') swordOnKill(); }
+        dmgNum(tg.pos, `${n}`, 'hurt'); puff(tg.pos.x, tg.pos.y + 1.2, tg.pos.z, { color: k === 'burn' ? 0xff8a2a : 0xa01818, size: 0.4, life: 0.5, grow: 0.8, vy: 1.5, op: 0.8 }); } };
+      for (const b of bandits) if (b.bleed || b.burn) tick(b, true);
+      for (const c of activeFighters()) if (c.bleed || c.burn) tick(c, false); }
+    // a glint of light running down the blade now and then
+    const bl = player.props && player.props.blade; if (bl && bl.visible && STATE.sword !== 'seasword') {
+      if (!SWP.glint) { SWP.glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 })); SWP.glintT = 2; }
+      if (SWP.glint.parent !== bl) bl.add(SWP.glint);
+      SWP.glintT -= dt; const L = bladeLen(player), u = -SWP.glintT / 0.4;
+      if (SWP.glintT <= 0 && u < 1) { SWP.glint.position.set(0.02, 0, 0.1 + u * (L - 0.1)); SWP.glint.scale.setScalar(0.22 * Math.sin(u * Math.PI) + 0.02); SWP.glint.material.opacity = Math.sin(u * Math.PI); }
+      else if (u >= 1) { SWP.glint.material.opacity = 0; SWP.glintT = 3 + Math.random() * 4; } }
+  }
   const curSword = () => { const s0 = curSword0(), m = gearDmg(); return m === 1 ? s0 : Object.assign({}, s0, { dmg: Math.round(s0.dmg * m) }); };
   const curSword0 = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
     return (STATE.sword === 'tidecaller' || STATE.sword === 'ghost') && night ? Object.assign({}, s, { dmg: Math.round(s.dmg * (STATE.sword === 'ghost' ? 1.4 : 1.3)) }) : s; };   // moonlit edge   // Tidecaller: moonlit edge
@@ -6158,18 +6240,37 @@ window.__pgBoot = () => {
   const metal = (c, sh = 110, em = 0x000000) => new THREE.MeshPhongMaterial({ color: c, specular: 0xffffff, shininess: sh, emissive: em });
   const matte = c => new THREE.MeshLambertMaterial({ color: c });
   function bladeKit(g, o) {
-    // o: len, curve, w(t) width along the blade, body/edge/fuller materials, z0, tipLen, segs
-    const n = o.segs || 12, z0 = o.z0 ?? 0.07, at = t => ({ y: o.curve * 0.35 * t * t, z: z0 + t * o.len }), parts = [];
-    for (let i = 0; i < n; i++) {
-      const t0 = i / n, t1 = (i + 1) / n, a = at(t0), b = at(t1), tm = (t0 + t1) / 2, L = Math.hypot(b.z - a.z, b.y - a.y) * 1.04, rx = -Math.atan2(b.y - a.y, b.z - a.z);
-      const w = o.w(tm), cy = (a.y + b.y) / 2, cz = (a.z + b.z) / 2;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(o.thick || 0.022, w, L), o.body); body.position.set(0, cy, cz); body.rotation.x = rx; g.add(body); parts.push(body);
-      if (o.edge) { const e = new THREE.Mesh(new THREE.BoxGeometry((o.thick || 0.022) * 0.55, Math.max(0.008, w * 0.16), L), o.edge); e.position.set(0, cy - w / 2 + Math.max(0.008, w * 0.16) / 2, cz); e.rotation.x = rx; g.add(e); }
-      if (o.fuller && tm < (o.fullerEnd || 0.7)) [-1, 1].forEach(sd => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.003, w * 0.18, L), o.fuller); f.position.set(sd * ((o.thick || 0.022) / 2 + 0.0008), cy + w * 0.18, cz); f.rotation.x = rx; g.add(f); });
-      if (o.each) o.each(i, tm, cy, cz, rx, w, L);
+    // o: len, curve, w(t) width along the blade, body/edge/fuller materials, z0, tipLen, segs, thick
+    // One smooth swept blade instead of a stack of boxes: a lens-shaped section (a flat spine, faces tapering to a
+    // honed bevel that catches the light along the cutting edge) following the curve and running out to a clean point.
+    const n = Math.max(16, (o.segs || 12) * 2), z0 = o.z0 ?? 0.07, th = o.thick || 0.022, tipL = o.tipLen || 0.12;
+    const at = t => ({ y: o.curve * 0.35 * t * t, z: z0 + t * o.len });
+    const pos = [], idxB = [], idxE = [], ring = [];
+    const N1 = n + 3;   // the blade, then three rings drawing in to the point
+    for (let i = 0; i <= N1; i++) {
+      let t = i / n, w, y, z;
+      if (i <= n) { const p = at(t); w = o.w(t); y = p.y; z = p.z; }
+      else { const k = (i - n) / 3, p = at(1), wEnd = o.w(1); w = wEnd * (1 - k) * (1 - k * 0.15); y = p.y - wEnd * 0.5 * k * k * 0.7 + o.curve * 0.25 * k; z = p.z + tipL * k; }
+      const d = at(Math.min(1, t + 0.01)), d0 = at(Math.max(0, t - 0.01)), ty = d.y - d0.y, tz = d.z - d0.z, tl = Math.hypot(ty, tz) || 1, ny = tz / tl, nz = -ty / tl;   // the blade's "up" across its width
+      const thk = th * (i <= n ? 1 - 0.35 * Math.min(1, t) : 0.6 * (1 - (i - n) / 3));
+      const pts = [[thk / 2, w / 2], [thk * 0.42, -w * 0.18], [0, -w / 2], [-thk * 0.42, -w * 0.18], [-thk / 2, w / 2]];   // spine, flat, edge, flat, spine
+      const base = pos.length / 3; for (const [x, v] of pts) pos.push(x, y + ny * v, z + nz * v); ring.push(base);
     }
-    const end = at(1), tip = new THREE.Mesh(new THREE.ConeGeometry(o.w(1) * 0.55 + 0.01, o.tipLen || 0.12, 4), o.tipMat || o.body);
-    tip.rotation.x = Math.PI / 2 - Math.atan(o.curve * 0.7); tip.scale.set(0.4, 1, 1); tip.position.set(0, end.y, end.z + (o.tipLen || 0.12) / 2 - 0.01); g.add(tip);
+    for (let i = 0; i < N1; i++) { const a0 = ring[i], a1 = ring[i + 1];
+      const quad = (p, q, list) => list.push(a0 + p, a1 + p, a1 + q, a0 + p, a1 + q, a0 + q);
+      quad(0, 1, idxB); quad(3, 4, idxB); quad(4, 0, idxB); quad(1, 2, idxE); quad(2, 3, idxE); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idxB.concat(idxE)); geo.addGroup(0, idxB.length, 0); geo.addGroup(idxB.length, idxE.length, 1); geo.computeVertexNormals();
+    const blade = new THREE.Mesh(geo, [o.body, o.edge || o.tipMat || o.body]); g.add(blade); const parts = [blade];
+    if (o.fuller) {   // the fuller: a groove down each face
+      const fp = [], fi = []; const m = Math.round(n * (o.fullerEnd || 0.7));
+      for (const sd of [-1, 1]) { const b0 = fp.length / 3;
+        for (let i = 0; i <= m; i++) { const t = i / n, p = at(t), w = o.w(t), x = sd * (th * (1 - 0.35 * t) * 0.47 + 0.0006); fp.push(x, p.y + w * 0.1, p.z, x, p.y + w * 0.27, p.z); }
+        for (let i = 0; i < m; i++) { const a0 = b0 + i * 2; fi.push(a0, a0 + 2, a0 + 3, a0, a0 + 3, a0 + 1); } }
+      const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); fg.setIndex(fi); fg.computeVertexNormals();
+      const fm = o.fuller.clone(); fm.side = THREE.DoubleSide; g.add(new THREE.Mesh(fg, fm)); }
+    if (o.each) for (let i = 0; i < (o.segs || 12); i++) { const nn = o.segs || 12, t0 = i / nn, t1 = (i + 1) / nn, a = at(t0), b = at(t1), tm = (t0 + t1) / 2;
+      o.each(i, tm, (a.y + b.y) / 2, (a.z + b.z) / 2, -Math.atan2(b.y - a.y, b.z - a.z), o.w(tm), Math.hypot(b.z - a.z, b.y - a.y)); }
     return { at, parts };
   }
   function gripKit(g, o) {   // o: len, r, wrap material, band material, bands
@@ -6245,6 +6346,18 @@ window.__pgBoot = () => {
       bladeKit(g, { len: lk.len, curve: lk.curve * 1.15, body: st, edge: metal(0xffffff, 230), segs: 14,
         w: t => (0.14 * (1 - 0.35 * t) + (t > 0.62 ? 0.07 * Math.sin((t - 0.62) / 0.38 * Math.PI) : 0)) + 0.01,
         each: (i, tm, cy, cz, rx, w, L) => { if (tm < 0.55) [-1, 1].forEach(sd => { const ar = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.006, L * 0.9), gold); ar.position.set(sd * 0.0118, cy + w * 0.28 + Math.sin(tm * 30) * w * 0.08, cz); ar.rotation.x = rx; g.add(ar); }); } });
+      return g;
+    }
+    if (S === 'admiral') {
+      // The Admiral's Cutlass: a blade of blackened steel with a bright honed edge and a line of gold inlay, a gilt basket
+      // hilt with a scallop shell, a grip bound in red leather and gold wire, and a ruby set in the pommel
+      const black = metal(0x22252b, 140), edge = metal(0xf4f6f8, 240), gold = metal(0xe2b84a, 130, 0x2a1a02), ruby = metal(0xc0102a, 200, 0x3a0008);
+      gripKit(g, { len: 0.21, r: 0.031, mat: matte(0x7a1010), band: gold, bands: 8 });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), gold), 0, 0, -0.225)); g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.024, 0), ruby), 0, 0, -0.262)).scale.set(1, 1, 1.4);
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.09, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), Object.assign(gold.clone(), { side: THREE.DoubleSide })); cup.rotation.x = Math.PI / 2; cup.position.z = 0.05; g.add(cup);
+      knuckleBow(g, gold, 0.115, 0.012); for (let k = 0; k < 2; k++) { const bar = knuckleBow(g, gold, 0.1 - k * 0.012, 0.007); bar.rotation.y += (k ? -0.45 : 0.45); }
+      for (let k = 0; k < 7; k++) { const a = (k - 3) * 0.32, rib = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.08, 4), gold); rib.position.set(Math.sin(a) * 0.05, Math.cos(a) * 0.05 * 0.6 + 0.01, 0.06); rib.rotation.set(Math.PI / 2, 0, a); g.add(rib); }   // the scallop shell
+      const bk = bladeKit(g, { len: lk.len, curve: lk.curve, body: black, edge, fuller: gold, fullerEnd: 0.8, w: t => 0.12 * (1 - 0.42 * t) + 0.014, thick: 0.024 });
       return g;
     }
     if (S === 'saber' || S === 'golden') {
@@ -6499,7 +6612,7 @@ window.__pgBoot = () => {
     const tom = npcs.find(n => n.def.name === 'Tom the smith');
     const atForge = !!tom && !inInterior && Math.hypot(tom.pos.x - P.pos.x, tom.pos.z - P.pos.z) < 8;
     matsEl.innerHTML = Object.entries(MATS).map(([k, m]) => `<span class="mat"><i style="background:${m.color}"></i>${m.name}: <b>${STATE.mats[k] || 0}</b></span>`).join('') + `<span class="mat"><i class="coin"></i>Gold: <b>${STATE.gold}</b></span>`;
-    swordList.innerHTML = atForge ? '' : '<p class="note" style="margin:0 0 10px">Visit Tom the smith on Gull Island to forge new blades. Ye can switch between the blades ye own from anywhere.</p>';
+    swordList.innerHTML = (atForge ? '' : '<p class="note" style="margin:0 0 10px">Visit Tom the smith on Gull Island to forge new blades. Ye can switch between the blades ye own from anywhere.</p>') + `<p class="note" style="margin:0 0 12px;opacity:.9"><b>Sword moves:</b> ${SWORD_MOVES}</p>`;
     Object.entries(SWORDS).forEach(([id, S]) => {
       const owned = STATE.swords.includes(id), eq = STATE.sword === id;
       if (S.admin && !owned) return;
@@ -6509,7 +6622,8 @@ window.__pgBoot = () => {
       const info = document.createElement('div');
       const speed = S.cool < 0.35 ? 'Very fast' : S.cool < 0.55 ? 'Normal' : 'Slow', arc = S.arc < 0 ? 'Very wide' : S.arc < 0.12 ? 'Wide' : S.arc > 0.4 ? 'Narrow' : 'Normal';
       const reqs = owned ? '<span>Owned</span>' : S.legendary ? `<span>${S.claim || 'Only the worthy may claim it. Seek the sword in the stone at Mermaid Cove.'}</span>` : [...Object.entries(S.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= S.gold ? '' : 'no'}">${S.gold} gold</span>`].join(' · ');
-      info.innerHTML = `<h3>${S.name}</h3><p>${S.desc}</p><div class="stats"><span>Damage <b>${S.dmg}</b></span><span>Speed <b>${speed}</b></span><span>Reach <b>${S.reach.toFixed(1)}</b></span><span>Arc <b>${arc}</b></span></div><div class="req">${reqs}</div>`;
+      const pv = SWORD_PASSIVE[id];
+      info.innerHTML = `<h3>${S.name}</h3><p>${S.desc}</p>${pv ? `<p style="opacity:1;margin:2px 0 4px"><b style="color:#7a3a1a">Passive · ${pv[0]}:</b> ${pv[1]}</p>` : ''}<div class="stats"><span>Damage <b>${S.dmg}</b></span><span>Speed <b>${speed}</b></span><span>Reach <b>${S.reach.toFixed(1)}</b></span><span>Arc <b>${arc}</b></span></div><div class="req">${reqs}</div>`;
       card.appendChild(info);
       const b = document.createElement('button');
       if (eq) { b.textContent = 'Equipped'; b.disabled = true; }
@@ -7044,14 +7158,14 @@ window.__pgBoot = () => {
     const g = player.props && player.props.blade, live = g && g.visible && PLAYER.slashT > 0 && q > F.w - 0.04 && q < F.s + 0.12 && STATE.sword !== 'seasword';
     for (const p of TRAIL.pts) p.age += dt;
     while (TRAIL.pts.length && TRAIL.pts[0].age > 0.14) TRAIL.pts.shift();
-    if (live) { const L = bladeLen(player), tip = new THREE.Vector3(0, 0, L).applyMatrix4(g.matrixWorld), base = new THREE.Vector3(0, 0, L * 0.4).applyMatrix4(g.matrixWorld);
+    if (live) { const L = bladeLen(player), tip = new THREE.Vector3(0, 0, L).applyMatrix4(g.matrixWorld), base = new THREE.Vector3(0, 0, L * ({ scimitar: 0.22, axe: 0.55, admiral: 0.25, golden: 0.28, rapier: 0.6 }[STATE.sword] ?? 0.4)).applyMatrix4(g.matrixWorld);
       const last = TRAIL.pts[TRAIL.pts.length - 1];
       if (last) for (let k = 1; k <= 2; k++) { const f = k / 3; TRAIL.pts.push({ tip: last.tip.clone().lerp(tip, f), base: last.base.clone().lerp(base, f), age: last.age * (1 - f) }); }   // fill in between frames so the arc stays smooth
       TRAIL.pts.push({ tip, base, age: 0 }); while (TRAIL.pts.length > TRAIL.N) TRAIL.pts.shift(); }
     const pos = TRAIL.mesh.geometry.attributes.position, col = TRAIL.mesh.geometry.attributes.alpha, n = TRAIL.pts.length;
     TRAIL.mesh.visible = n > 1;
     if (n < 2) return;
-    TRAIL.mesh.material.uniforms.tint.value.setHex(STATE.sword === 'flame' ? 0xffb070 : STATE.sword === 'ghost' ? 0xaaffd8 : 0xf2f6ff);
+    TRAIL.mesh.material.uniforms.tint.value.setHex(SWCOL[STATE.sword] || 0xf2f6ff);
     for (let i = 0; i < TRAIL.N; i++) { const p = TRAIL.pts[Math.min(n - 1, Math.max(0, i - (TRAIL.N - n)))], a = Math.max(0, 1 - p.age / 0.14) * (i >= TRAIL.N - n ? (i - (TRAIL.N - n)) / Math.max(1, n - 1) : 0);
       pos.setXYZ(i * 2, p.tip.x, p.tip.y, p.tip.z); pos.setXYZ(i * 2 + 1, p.base.x, p.base.y, p.base.z);
       col.setX(i * 2, a * 0.85); col.setX(i * 2 + 1, a * 0.08); }
@@ -8321,8 +8435,8 @@ window.__pgBoot = () => {
       if (src) { const dx = src.pos.x - P.pos.x, dz = src.pos.z - P.pos.z, d = Math.hypot(dx, dz) || 1, PF = plFacing(); facing = (dx * Math.sin(PF) + dz * Math.cos(PF)) / d > 0.1; }
       if (facing) {
         const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const sx = wp.x + Math.sin(P.facing) * 0.7, sz = wp.z + Math.cos(P.facing) * 0.7;
-        if (CMB.blockT < 0.3) {   // parried!
-          SFX.parry(); CMB.riposteT = 1.6; CMB.shake = Math.max(CMB.shake, 0.3); CMB.stop = 0.1; dmgNum(wp, 'PARRY!', 'parry');
+        if (CMB.blockT < parryWin()) {   // parried!
+          SFX.parry(); CMB.riposteT = 1.6; if (STATE.sword === 'rapier') SWP.ripN = 3; CMB.shake = Math.max(CMB.shake, 0.3); CMB.stop = 0.1; dmgNum(wp, 'PARRY!', 'parry');
           for (let k = 0; k < 10; k++) puff(sx, wp.y + 1.5, sz, { color: k % 2 ? 0xfff6c0 : 0x9ff6ff, size: 0.18 + Math.random() * 0.2, life: 0.35, grow: 0.2, vx: (Math.random() - 0.5) * 9, vy: Math.random() * 5, vz: (Math.random() - 0.5) * 9, op: 1 });
           if (src) { src.stagT = 1.4; src.windT = 0; src.slashT = 0; src.hitAt = 0; src.atkT = 2; }
           return;
@@ -8335,7 +8449,7 @@ window.__pgBoot = () => {
     hurtPlayer(dm);
   }
   function updateCombatFeel(dt, t) {
-    CMB.comboT = Math.max(0, CMB.comboT - dt); if (CMB.comboT <= 0) CMB.combo = 2;   // (so the next swing starts the chain again)
+    CMB.comboT = Math.max(0, CMB.comboT - dt); if (CMB.comboT <= 0) { CMB.combo = 2; SWP.chain = 0; }   // (so the next swing starts the chain again)
     CMB.riposteT = Math.max(0, CMB.riposteT - dt);
     const want = (keys['x'] || CMB.rmb) && PLAYER.weapon === 'cutlass' && PLAYER.hp > 0 && PLAYER.slashT <= 0 && !RIDE.on && !sailing && !uiOpen && !talk;
     if (want && !CMB.blocking) { CMB.blocking = true; CMB.blockT = 0; }
@@ -8358,6 +8472,7 @@ window.__pgBoot = () => {
     if (b.hp <= 0) { b.state = 'dead'; b.deadT = 0; b.slashT = 0; if (!window.__mpNear || window.__mpNear(b)) banditReward(b); }
   }
   function banditReward(b) {
+    try { swordOnKill(); } catch (e) {}
     questEvent('bandit', b.name);
     addGold(20 + Math.floor(crand() * 26), `Defeated a ${b.name.toLowerCase()}`); addMat('iron', 1 + (crand() < 0.4 ? 1 : 0));
   }
@@ -8384,6 +8499,16 @@ window.__pgBoot = () => {
     if ((!playerTargetable() && !STOM.on && !krDeckFight) || PLAYER.cool > 0 || PLAYER.hp <= 0) return;
     if (!STOM.on && !onShip && !GUEST.on && !KR.heldPlayer && !seaRunning() && !onDock(P.pos.x, P.pos.z) && groundAt(P.pos.x, P.pos.z) < waveHeight(P.pos.x, P.pos.z, clock.elapsedTime) - 1.3) return; // not while swimming
     if (PLAYER.weapon === 'cutlass') { if (CMB.blocking) return; if (STATE.sword === 'seasword') SFX.splash(null, false); const sw = curSword();
+      const landFoot = !onShip && !GUEST.on && !sailing && !inInterior && !seaRunning();
+      if (landFoot && !P.grounded && P.pos.y - groundAt(P.pos.x, P.pos.z) > 1.0 && !PLAYER.plunge) {   // plunging strike: dive blade-first and smash down where ye land
+        PLAYER.plunge = true; P.vy = -24; PLAYER.swingKind = 3; PLAYER.slashDur = 0.9; PLAYER.slashT = 0.9; PLAYER.hitPending = 99; PLAYER.cool = 0.9; PLAYER.move = { mul: 2.2, reach: 1.25, arc: -1, heavy: true, slam: true, kb: 12 };
+        SFX.swing(); setTimeout(() => SFX.swing(), 80); return; }
+      if (keys['shift'] && P.speed > 6 && (SWP.dashCd || 0) <= 0) {   // dash strike: a lunge of several paces ending in a thrust
+        SWP.dashCd = 2.4; PLAYER.swingKind = 4; PLAYER.slashDur = 0.42; PLAYER.slashT = 0.42; PLAYER.cool = 0.5; PLAYER.hitPending = 0.07; PLAYER.move = { mul: 1.7, reach: 2.0, arc: 0.45, heavy: true, kb: 8 };
+        CMB.lungeT = 0.26; CMB.lungeV = 24; CMB.comboT = 0; SFX.swing(); if (window.__mpSlash) window.__mpSlash(0.2);
+        for (let k = 0; k < 6; k++) puff(P.pos.x, P.pos.y + 0.3, P.pos.z, { color: 0xd8c8a8, size: 0.6, life: 0.5, grow: 1.4, vx: -Math.sin(P.facing) * 4 + (Math.random() - 0.5) * 2, vz: -Math.cos(P.facing) * 4 + (Math.random() - 0.5) * 2, vy: 0.8, op: 0.6 });
+        return; }
+      PLAYER.move = null;
       CMB.combo = CMB.comboT > 0 ? (CMB.combo + 1) % 3 : 0; const fin = CMB.combo === 2; PLAYER.swingKind = CMB.combo;   // chain swings: slash, backhand, then a heavy overhead
       const SEA = STATE.sword === 'seasword', KF = SEA ? SWING_KF.sea[CMB.combo] : SWING_KF[CMB.combo];
       if (SEA) { PLAYER.slashDur = fin ? 0.46 : 0.3; PLAYER.cool = fin ? 0.42 : 0.24; }   // its own rhythm: each cut gets to finish before the next flows on
@@ -8688,29 +8813,37 @@ window.__pgBoot = () => {
 
   function updateCombat(dt, t) {
     for (const k of ['slashT', 'aimT', 'cool', 'reload']) PLAYER[k] = Math.max(0, PLAYER[k] - dt);
+    try { updateSwordExtras(dt); } catch (e) { console.error(e); }
     { const want = (STATE.sword === 'seasword' ? TYRANT.hp : 100) + ((gear() && gear().hp) || 0); if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
     updateCombatFeel(dt, t);
     if (PLAYER.hitPending > 0) {
       PLAYER.hitPending -= dt;
       if (PLAYER.hitPending <= 0) {
         const PF = plFacing(), fx = Math.sin(PF), fz = Math.cos(PF); let hits = 0, critHit = false;
+        const sw = curSword(), mv = PLAYER.move || {}, fin = PLAYER.swingKind === 2 || !!mv.heavy, axe = STATE.sword === 'axe';
+        const reachB = sw.reach * (mv.reach || (fin ? 1.15 : 1)), arcB = mv.arc != null ? mv.arc : fin ? Math.min(sw.arc, -0.25) : sw.arc, mulB = (mv.mul || (fin ? 1.6 : 1)) * swordPassiveMul();
+        const critCh = 0.12 + (STATE.sword === 'rapier' ? 0.15 : 0), rollCrit = () => { if (SWP.ripN > 0) { SWP.ripN--; return true; } return CMB.riposteT > 0 || Math.random() < critCh; };
+        if (mv.slam) slamWave(P.pos.x, P.pos.y, P.pos.z, reachB);
         for (const b of bandits) {
           if (b.state === 'dead' || b.state === 'gone') continue;
           const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-          const sw = curSword(), fin = PLAYER.swingKind === 2, reach = sw.reach * (fin ? 1.15 : 1), arc = fin ? Math.min(sw.arc, -0.25) : sw.arc;
-          if (d < reach && (dx * fx + dz * fz) / Math.max(d, 0.01) > arc) {
-            const crit = CMB.riposteT > 0 || Math.random() < 0.12, dm = Math.round(sw.dmg * (fin ? 1.6 : 1) * (crit ? 1.8 : 1) * (b.stagT > 0 ? 1.3 : 1));
-            hitBandit(b, dm); dmgNum(b.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : ''); banditFlinch(b, fin, fx, fz); hits++; if (crit) critHit = true;
+          if (d < reachB && (arcB <= -1 || (dx * fx + dz * fz) / Math.max(d, 0.01) > arcB)) {
+            const crit = rollCrit(), dm = Math.round(sw.dmg * mulB * (crit ? 1.8 : 1) * (b.stagT > 0 ? 1.3 : 1));
+            hitBandit(b, dm); dmgNum(b.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : '');
+            const kx = mv.slam ? dx / Math.max(d, 0.01) : fx, kz = mv.slam ? dz / Math.max(d, 0.01) : fz; banditFlinch(b, fin || axe, kx * (mv.kb ? mv.kb / 9 : 1) * (axe ? 1.4 : 1), kz * (mv.kb ? mv.kb / 9 : 1) * (axe ? 1.4 : 1)); if (axe) b.stagT = Math.max(b.stagT || 0, 0.5);
+            swordOnHit(b, dm, crit, b.pos); hits++; if (crit) critHit = true;
             if (STATE.sword === 'ghost') ghostDrain(b.pos); if (STATE.sword === 'seasword') seaImpact(b.pos.x, b.pos.y + 1.2, b.pos.z); }
         }
         for (const c of activeFighters()) {   // deck fights: a boarded raider's crew, or boarders on yer own deck
-          const dx = c.pos.x - P.pos.x, dz = c.pos.z - P.pos.z, d = Math.hypot(dx, dz), sw = curSword(), fin = PLAYER.swingKind === 2, reach = Math.min(sw.reach, 4.5) * (fin ? 1.15 : 1), arc = fin ? Math.min(sw.arc, -0.25) : sw.arc;
-          if (d < reach && Math.abs(c.pos.y - P.pos.y) < 2.5 && (dx * fx + dz * fz) / Math.max(d, 0.01) > arc) {
-            const crit = CMB.riposteT > 0 || Math.random() < 0.12, dm = Math.round(sw.dmg * (fin ? 1.6 : 1) * (crit ? 1.8 : 1) * (c.stagT > 0 ? 1.3 : 1));
-            hitFighter(c, dm, fin); dmgNum(c.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : ''); hits++; if (crit) critHit = true;
+          const dx = c.pos.x - P.pos.x, dz = c.pos.z - P.pos.z, d = Math.hypot(dx, dz), reach = Math.min(reachB, 4.5 * (mv.reach || 1));
+          if (d < reach && Math.abs(c.pos.y - P.pos.y) < 2.5 && (arcB <= -1 || (dx * fx + dz * fz) / Math.max(d, 0.01) > arcB)) {
+            const crit = rollCrit(), dm = Math.round(sw.dmg * mulB * (crit ? 1.8 : 1) * (c.stagT > 0 ? 1.3 : 1));
+            hitFighter(c, dm, fin || axe); dmgNum(c.pos, crit ? `${dm}!` : `${dm}`, crit ? 'crit' : fin ? 'heavy' : ''); if (axe && !c.boss) c.stagT = Math.max(c.stagT || 0, 0.5);
+            swordOnHit(c, dm, crit, c.pos); if (c.st === 'dead') swordOnKill(); hits++; if (crit) critHit = true;
             if (STATE.sword === 'ghost') ghostDrain(c.pos); if (STATE.sword === 'seasword') seaImpact(c.pos.x, c.pos.y + 1.2, c.pos.z); }
         }
-        if (hits) { const fin = PLAYER.swingKind === 2; CMB.shake = Math.max(CMB.shake, (fin ? 0.45 : 0.22) + (critHit ? 0.2 : 0)); CMB.stop = fin || critHit ? 0.09 : 0.05; if (critHit) CMB.riposteT = 0; if (fin) SFX.hit(); }
+        if (mv.slam || PLAYER.swingKind === 3) CMB.shake = Math.max(CMB.shake, 0.8);
+        if (hits) { const fin = PLAYER.swingKind === 2 || !!mv.heavy; CMB.shake = Math.max(CMB.shake, (fin ? 0.45 : 0.22) + (critHit ? 0.2 : 0)); CMB.stop = fin || critHit ? 0.09 : 0.05; if (critHit) CMB.riposteT = 0; if (fin) SFX.hit(); }
         krSwordHit(curSword());
         serpentSwordHit(curSword());
         if (STATE.sword === 'seasword') { seaSlash(); const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const rx = wp.x + fx * 2.2, rz = wp.z + fz * 2.2; for (let k = 0; k < 8; k++) { const a = P.facing + (k - 3.5) * 0.28; puff(rx, wp.y + 1.1, rz, { color: 0xbff8ff, size: 0.7, life: 0.5, grow: 2.2, vx: Math.sin(a) * 10, vz: Math.cos(a) * 10, vy: 1.5, op: 0.75 }); } }   // the swing throws a fan of spray
@@ -8748,10 +8881,11 @@ window.__pgBoot = () => {
     const pl = PLAYER.reload > 0 ? '2 · Pistol (reloading)' : '2 · Pistol';
     if (weaponEls[1].textContent !== pl) weaponEls[1].textContent = pl;
   }
+  addEventListener('keyup', e => { if (e.key.toLowerCase() !== 'f') return; const c = CMB.charge; CMB.fHeld = false; CMB.charge = 0; if (c > 0.05 && !uiOpen && !talk) chargedSlam(c); });
   addEventListener('keydown', e => {
     if (e.repeat || uiOpen || talk) return;
     const k = e.key.toLowerCase();
-    if (k === 'f' && !RIDE.on) playerAttack();
+    if (k === 'f' && !RIDE.on) { playerAttack(); CMB.fHeld = true; CMB.fT = 0; CMB.fullTold = false; }
     if (k === '1') setWeapon('cutlass');
     if (k === '2') setWeapon('pistol');
     if (k === ' ' && sailing) playerBroadside();
