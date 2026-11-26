@@ -1453,7 +1453,8 @@ window.__pgBoot = () => {
   // Layered like the real thing: giant emergent trees with buttress roots and broad flat crowns, lianas hanging from
   // them, a mid-storey of broad-leaved banana and elephant-ear plants, ferns carpeting the floor, splashes of flowers,
   // mist lying in the hollows, parrots wheeling over the canopy and birdsong and insects underneath.
-  const JG = { mist: [], parrots: [], I: null };
+  const JG = { mist: [], parrots: [], I: null, cells: [] };
+  const JCROWN0 = new THREE.IcosahedronGeometry(1, 0);
   const JLEAF_GEO = (() => { const g = new THREE.PlaneGeometry(1, 1, 1, 5); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i) + 0.5, x = p.getX(i); p.setXYZ(i, x * (0.25 + Math.sin(y * Math.PI) * 0.75), y, -y * y * 0.45 + Math.abs(x) * 0.08); } g.computeVertexNormals(); return g; })();
   const JTRUNK_GEO = new THREE.CylinderGeometry(0.45, 0.75, 1, 7).translate(0, 0.5, 0), JBUTT_GEO = new THREE.BoxGeometry(0.18, 1, 1).translate(0, 0.5, 0.5);
   const JVINE_GEO = new THREE.CylinderGeometry(0.06, 0.05, 1, 4).translate(0, -0.5, 0), JFLOWER_GEO = new THREE.IcosahedronGeometry(0.28, 0);
@@ -1466,34 +1467,42 @@ window.__pgBoot = () => {
     const D = n => Math.round(n * JDENS);
     const spot = (minH, maxH, rr = 1.15) => { for (let k = 0; k < 30; k++) { const a = rand() * 6.2832, r = Math.sqrt(rand()) * I.r * rr, x = I.c.x + Math.cos(a) * r, z = I.c.y + Math.sin(a) * r, h = heightAt(x, z); if (h > minH && h < maxH && clear(x, z)) return { x, z, h }; } return null; };
     // emergent giants
-    for (let n = 0; n < D(950); n++) { const s = spot(6, top); if (!s) continue; const ht = 18 + rand() * 16, cr = 7 + rand() * 6;
+    for (let n = 0; n < D(2100); n++) { const s = spot(6, top); if (!s) continue; const ht = 18 + rand() * 16, cr = 7 + rand() * 6;
       L.trunk.push(placed(s.x, s.h - 0.5, s.z, 1.6, ht, 1.6, (rand() - 0.5) * 0.06, rand() * 6, (rand() - 0.5) * 0.06));
       for (let b = 0; b < 4; b++) { const a = b * 1.57 + rand() * 0.4; L.butt.push(placed(s.x, s.h - 0.4, s.z, 1, 2.5 + rand() * 2, 1.8 + rand() * 1.2, 0, a, 0)); }
-      for (let k = 0; k < 6; k++) { const ox = (rand() - 0.5) * cr * 1.1, oz = (rand() - 0.5) * cr * 1.1; [L.crownA, L.crownB, L.crownC][k % 3].push(placed(s.x + ox, s.h + ht + (rand() - 0.2) * cr * 0.5, s.z + oz, cr * (0.55 + rand() * 0.35), cr * (0.42 + rand() * 0.2), cr * (0.55 + rand() * 0.35), rand(), rand() * 6, rand())); }
+      for (let k = 0; k < 5; k++) { const ox = (rand() - 0.5) * cr * 1.1, oz = (rand() - 0.5) * cr * 1.1; [L.crownA, L.crownB, L.crownC][k % 3].push(placed(s.x + ox, s.h + ht + (rand() - 0.2) * cr * 0.5, s.z + oz, cr * (0.55 + rand() * 0.35), cr * (0.42 + rand() * 0.2), cr * (0.55 + rand() * 0.35), rand(), rand() * 6, rand())); }
       for (let v = 0; v < 3 + (rand() * 4 | 0); v++) { const a = rand() * 6.28, d = cr * (0.3 + rand() * 0.6), len = ht * (0.45 + rand() * 0.5); L.vine.push(placed(s.x + Math.cos(a) * d, s.h + ht - 1, s.z + Math.sin(a) * d, 1, len, 1, (rand() - 0.5) * 0.15, 0, (rand() - 0.5) * 0.15)); }
       colliders.push({ x: s.x, z: s.z, r: 1.6 }); }
     // the understorey trees: slimmer trunks under the giants, one dark rounded crown each
-    for (let n = 0; n < D(1100); n++) { const s = spot(5, top); if (!s) continue; const ht = 7 + rand() * 6, cr = 2.8 + rand() * 2.2;
+    for (let n = 0; n < D(2700); n++) { const s = spot(5, top); if (!s) continue; const ht = 7 + rand() * 6, cr = 2.8 + rand() * 2.2;
       L.midT.push(placed(s.x, s.h - 0.3, s.z, 0.6, ht, 0.6, (rand() - 0.5) * 0.12, 0, (rand() - 0.5) * 0.12)); L.midC.push(placed(s.x, s.h + ht + cr * 0.2, s.z, cr, cr * 0.75, cr, 0, rand() * 6, 0)); colliders.push({ x: s.x, z: s.z, r: 0.6 }); }
     // a carpet of leaf litter and low growth, so the floor is never bare grass
-    for (let n = 0; n < D(4200); n++) { const s = spot(3.8, top); if (!s) continue; const sc = 3 + rand() * 4; (n % 2 ? L.litA : L.litB).push(placed(s.x, s.h + 0.05, s.z, sc, 0.3 + rand() * 0.3, sc * (0.7 + rand() * 0.6), 0, rand() * 6, 0)); }
+    for (let n = 0; n < D(9000); n++) { const s = spot(3.8, top); if (!s) continue; const sc = 3 + rand() * 4; (n % 2 ? L.litA : L.litB).push(placed(s.x, s.h + 0.05, s.z, sc, 0.3 + rand() * 0.3, sc * (0.7 + rand() * 0.6), 0, rand() * 6, 0)); }
     // thick low shrubs
-    for (let n = 0; n < D(1800); n++) { const s = spot(4.5, top); if (!s) continue; const sc = 1.6 + rand() * 2.6; L.bush.push(placed(s.x, s.h + sc * 0.25, s.z, sc, sc * 0.6, sc, 0, rand() * 6, 0)); }
+    for (let n = 0; n < D(4200); n++) { const s = spot(4.5, top); if (!s) continue; const sc = 1.6 + rand() * 2.6; L.bush.push(placed(s.x, s.h + sc * 0.25, s.z, sc, sc * 0.6, sc, 0, rand() * 6, 0)); }
     // banana and elephant-ear plants: clumps of big leaves
-    for (let n = 0; n < D(1900); n++) { const s = spot(4.5, top); if (!s) continue; const sz = 2.2 + rand() * 2.8, nl = 5 + (rand() * 4 | 0), list = rand() < 0.5 ? L.leafA : L.leafB;
+    for (let n = 0; n < D(4300); n++) { const s = spot(4.5, top); if (!s) continue; const sz = 2.2 + rand() * 2.8, nl = 5 + (rand() * 4 | 0), list = rand() < 0.5 ? L.leafA : L.leafB;
       for (let k = 0; k < nl; k++) { const a = k / nl * 6.28 + rand() * 0.5; list.push(placed(s.x, s.h + 0.2, s.z, sz * 0.7, sz * (1.1 + rand() * 0.6), sz, -0.55 - rand() * 0.5, a, 0)); } }
     // ferns carpeting the floor
-    for (let n = 0; n < D(5200); n++) { const s = spot(4, top); if (!s) continue; const sz = 1.9 + rand() * 2.0, list = rand() < 0.55 ? L.fernA : L.fernB;
+    for (let n = 0; n < D(11500); n++) { const s = spot(4, top); if (!s) continue; const sz = 1.9 + rand() * 2.0, list = rand() < 0.55 ? L.fernA : L.fernB;
       for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28 + rand() * 0.4; list.push(placed(s.x, s.h + 0.05, s.z, sz * 0.35, sz * 1.4, sz * 0.8, -1.0 - rand() * 0.35, a, 0)); } }
     // flowers
-    for (let n = 0; n < D(1100); n++) { const s = spot(4, top); if (!s) continue; const c = rand(); (c < 0.4 ? L.flowerR : c < 0.7 ? L.flowerO : L.flowerP).push(placed(s.x, s.h + 0.3 + rand() * 0.6, s.z, 1, 0.8, 1, rand(), rand() * 6, 0)); }
-    const mk = (geo, mat, list) => { if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; I.group.add(im); };
+    for (let n = 0; n < D(2400); n++) { const s = spot(4, top); if (!s) continue; const c = rand(); (c < 0.4 ? L.flowerR : c < 0.7 ? L.flowerO : L.flowerP).push(placed(s.x, s.h + 0.3 + rand() * 0.6, s.z, 1, 0.8, 1, rand(), rand() * 6, 0)); }
+    // each layer is split into 400 m cells with true bounds, so the camera skips what it can't see, and the floor
+    // layers only draw near ye (the canopy carries the view from further off)
+    const CELLJ = 400, _v = new THREE.Vector3();
+    let tierNow = 'canopy';
+    const mk = (geo, mat, list) => { if (!list.length) return; const cells = new Map();
+      for (const m of list) { _v.setFromMatrixPosition(m); const k = Math.floor(_v.x / CELLJ) + ',' + Math.floor(_v.z / CELLJ); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(m); }
+      for (const [k, ms] of cells) { const [cx, cz] = k.split(',').map(Number), g = geo.clone(); g.boundingSphere = new THREE.Sphere(new THREE.Vector3((cx + 0.5) * CELLJ, 40, (cz + 0.5) * CELLJ), CELLJ * 0.75 + 40);
+        const im = new THREE.InstancedMesh(g, mat, ms.length); ms.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = true; I.group.add(im);
+        JG.cells.push({ im, x: (cx + 0.5) * CELLJ, z: (cz + 0.5) * CELLJ, range: { canopy: 1e9, mid: 1500, ground: 650 }[tierNow] }); } };
     const bark = lam(0x3a3022), barkL = lam(0x54483a);
-    mk(JTRUNK_GEO, barkL, L.trunk); mk(JBUTT_GEO, bark, L.butt);
+    tierNow = 'canopy'; mk(JTRUNK_GEO, barkL, L.trunk); tierNow = 'mid'; mk(JBUTT_GEO, bark, L.butt); tierNow = 'canopy';
     mk(CROWN_GEO, lam(0x18491e), L.crownA); mk(CROWN_GEO, lam(0x24622a), L.crownB); mk(CROWN_GEO, lam(0x357a2e), L.crownC);
-    mk(JVINE_GEO, lam(0x2e4a1c), L.vine);
+    tierNow = 'mid'; mk(JVINE_GEO, lam(0x2e4a1c), L.vine); tierNow = 'ground';
     mk(JLEAF_GEO, jl(0x3c8f2e), L.leafA); mk(JLEAF_GEO, jl(0x2a6e26), L.leafB); mk(JFERN_GEO, jl(0x4a9a34), L.fernA); mk(JFERN_GEO, jl(0x2f7a30), L.fernB);
-    mk(OAK_TRUNK_GEO, bark, L.midT); mk(CROWN_GEO, lam(0x1a4a22), L.midC); mk(CROWN_GEO, lam(0x24602a), L.bush); mk(CROWN_GEO, lam(0x1e4a1e), L.litA); mk(CROWN_GEO, lam(0x2c5a22), L.litB);
+    tierNow = 'mid'; mk(OAK_TRUNK_GEO, bark, L.midT); mk(CROWN_GEO, lam(0x1a4a22), L.midC); tierNow = 'ground'; mk(JCROWN0, lam(0x24602a), L.bush); mk(JCROWN0, lam(0x1e4a1e), L.litA); mk(JCROWN0, lam(0x2c5a22), L.litB);
     mk(JFLOWER_GEO, lam(0xe0303a), L.flowerR); mk(JFLOWER_GEO, lam(0xff9a2a), L.flowerO); mk(JFLOWER_GEO, lam(0xd04ad0), L.flowerP);
     // mist lying in the hollows under the canopy
     for (let n = 0; n < 40; n++) { const s = spot(4, 60, 0.9); if (!s) continue; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xdfeee4, transparent: true, opacity: 0.22, depthWrite: false })); const sc = 30 + rand() * 30; sp.scale.set(sc, sc * 0.35, 1); sp.position.set(s.x, s.h + 3 + rand() * 4, s.z); sp.userData = { x: s.x, ph: rand() * 6.28 }; I.group.add(sp); JG.mist.push(sp); }
@@ -1508,6 +1517,7 @@ window.__pgBoot = () => {
   }
   function updateJungle(dt, t) {
     const I = JG.I; if (!I) return;
+    if ((JG.cullT = (JG.cullT || 0) - dt) <= 0) { JG.cullT = 0.25; for (const c of JG.cells) c.im.visible = Math.hypot(camera.position.x - c.x, camera.position.z - c.z) < c.range + 300; }
     const d = Math.hypot(camera.position.x - I.c.x, camera.position.z - I.c.y); if (d > I.r * 4) return;
     for (const p of JG.parrots) { const u = p.userData; u.a += u.sp * dt; p.position.set(u.cx + Math.cos(u.a) * u.r, u.cy + Math.sin(u.a * 2.3) * 3, u.cz + Math.sin(u.a) * u.r); p.rotation.set(0, Math.atan2(-Math.sin(u.a) * u.sp, Math.cos(u.a) * u.sp), Math.sign(u.sp) * -0.35); const f = Math.sin(t * 14 + u.a * 7) * 0.7; u.wings[0].rotation.z = f; u.wings[1].rotation.z = -f; }
     for (const m of JG.mist) { m.material.opacity = 0.16 + 0.08 * Math.sin(t * 0.3 + m.userData.ph); m.position.x = m.userData.x + Math.sin(t * 0.05 + m.userData.ph) * 8; }
