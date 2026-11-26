@@ -2397,7 +2397,17 @@ window.__pgBoot = () => {
     const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x9fffd0, transparent: true, depthWrite: false, opacity: 0.35 })); aura.scale.set(3.2, 4.4, 1); aura.position.y = 1.4; ch.root.add(aura);
     ch.ghost = true; return ch;
   }
-  const playerLook = () => { if (STATE.sword !== 'seasword') return lookToChar(STATE.look); const c = lookToChar(Object.assign({}, STATE.look, MARINE_LOOK)); c.marine = true; c.tyrant = true; return c; };
+  // legendary armour (see the armour section further down): defined early because the player is dressed at load
+  const ARMORS = {
+    admiral: { name: "Admiral's Greatcoat", how: 'Taken from the Blackwater Admiral when ye best him in a duel.', bonus: '+20% sword damage, 15% less damage taken', look: { coat: 0x7a1010, shirt: 0x1a1a1a, pants: 0x111111, coatTrim: true, hat: 'bicorne', hatColor: 0x0c0c0c, feather: 0x8e1414, boots: 0x0a0a0a, sash: 0x111111 }, dmg: 1.2, dr: 0.85 },
+    kraken: { name: 'Kraken-hide', how: "Cut from the hide of the deep: the first week's legend ye sink carries a suit.", bonus: '25% less damage taken, and ye heal 2 health a second', look: { coat: 0x24453c, shirt: 0x3a5a50, pants: 0x1c302a, coatTrim: false, boots: 0x16241f, sash: 0x5a7a40 }, dr: 0.75, regen: 2 },
+    fortlord: { name: "Fort-breaker's Harness", how: 'Earned by storming three Blackwater forts.', bonus: '+25% cannon damage, 10% less damage taken', look: { coat: 0x4a4a48, shirt: 0x8a7a5a, pants: 0x2a2a28, coatTrim: true, boots: 0x1a1a1a, sash: 0x8e1f1f }, dr: 0.9, guns: 1.25 },
+    abyssal: { name: 'Abyssal Plate', how: 'Forged from the scales of the Leviathan of the Abyss.', bonus: '40% less damage taken, +50 max health', look: { coat: 0x101a22, shirt: 0x1f6f80, pants: 0x0c1418, coatTrim: true, boots: 0x080c10, sash: 0x2fd8e8 }, dr: 0.6, hp: 50 },
+  };
+  const gear = () => (STATE.armor && ARMORS[STATE.armor] && (STATE.armors || []).includes(STATE.armor)) ? ARMORS[STATE.armor] : null;
+  const gearDR = () => (gear() && gear().dr) || 1, gearDmg = () => (gear() && gear().dmg) || 1, gearGuns = () => (gear() && gear().guns) || 1;
+  const gearLook = () => gear() ? Object.assign({}, STATE.look, gear().look) : STATE.look;
+  const playerLook = () => { if (STATE.sword !== 'seasword') return lookToChar(gearLook()); const c = lookToChar(Object.assign({}, STATE.look, MARINE_LOOK)); c.marine = true; c.tyrant = true; return c; };
   let player = makeCharacter(playerLook()); if (STATE.sword === 'ghost') ghostify(player, 0.45);
   scene.add(player.root);
   const startP = dockWorld(0, DOCK_LEN - 6);
@@ -2582,6 +2592,11 @@ window.__pgBoot = () => {
         if (kind === 'skullswords') { g.strokeStyle = '#eee'; g.lineWidth = 4; g.beginPath(); g.moveTo(w / 2 - 34, h - 6); g.lineTo(w / 2 + 30, 10); g.moveTo(w / 2 + 34, h - 6); g.lineTo(w / 2 - 30, 10); g.stroke(); }
       }
       else if (kind === 'hourglass') { g.fillStyle = '#111'; g.fillRect(0, 0, w, h); g.fillStyle = '#eee'; g.beginPath(); g.moveTo(w / 2 - 16, 14); g.lineTo(w / 2 + 16, 14); g.lineTo(w / 2, h / 2); g.lineTo(w / 2 + 16, h - 14); g.lineTo(w / 2 - 16, h - 14); g.lineTo(w / 2, h / 2); g.fill(); g.fillRect(w / 2 - 20, 10, 40, 4); g.fillRect(w / 2 - 20, h - 14, 40, 4); }
+      else if (kind === 'pale') { g.fillStyle = '#7a8488'; g.fillRect(0, 0, w, h); g.fillStyle = '#f2f6f8'; g.beginPath(); g.arc(w / 2, h / 2 - 6, 14, 0, 7); g.fill(); g.fillRect(w / 2 - 7, h / 2 + 4, 14, 8); g.fillStyle = '#7a8488'; g.beginPath(); g.arc(w / 2 - 5, h / 2 - 6, 4, 0, 7); g.arc(w / 2 + 5, h / 2 - 6, 4, 0, 7); g.fill(); g.strokeStyle = 'rgba(242,246,248,.6)'; g.lineWidth = 3; for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(w / 2 + 18, h / 2 - 10 + k * 9); g.quadraticCurveTo(w - 20, h / 2 - 20 + k * 9, w - 4, h / 2 - 6 + k * 9); g.stroke(); } }
+      else if (kind === 'widow') { g.fillStyle = '#7a0e12'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; g.beginPath(); g.ellipse(w / 2, h / 2 + 4, 9, 12, 0, 0, 7); g.fill(); g.beginPath(); g.arc(w / 2, h / 2 - 10, 6, 0, 7); g.fill(); g.strokeStyle = '#111'; g.lineWidth = 3; for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(w / 2, h / 2 + k * 3 - 2); g.lineTo(w / 2 + sd * 16, h / 2 - 8 + k * 7); g.lineTo(w / 2 + sd * 22, h / 2 + 2 + k * 7); g.stroke(); } g.fillStyle = '#c81e24'; g.fillRect(w / 2 - 3, h / 2 + 2, 6, 6); }
+      else if (kind === 'duke') { g.fillStyle = '#3a3e42'; g.fillRect(0, 0, w, h); g.fillStyle = '#b8bcc0'; g.beginPath(); g.moveTo(w / 2 - 20, h / 2 + 10); g.lineTo(w / 2 - 20, h / 2 - 10); g.lineTo(w / 2 - 10, h / 2); g.lineTo(w / 2, h / 2 - 14); g.lineTo(w / 2 + 10, h / 2); g.lineTo(w / 2 + 20, h / 2 - 10); g.lineTo(w / 2 + 20, h / 2 + 10); g.closePath(); g.fill(); g.fillRect(w / 2 - 22, h / 2 + 12, 44, 5); }
+      else if (kind === 'bone') { g.fillStyle = '#111'; g.fillRect(0, 0, w, h); g.strokeStyle = '#cfc4a8'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(w / 2 - 22, h / 2 - 16); g.lineTo(w / 2 + 22, h / 2 + 16); g.moveTo(w / 2 + 22, h / 2 - 16); g.lineTo(w / 2 - 22, h / 2 + 16); g.stroke(); g.fillStyle = '#cfc4a8'; for (const [a, b] of [[-1, -1], [1, 1], [1, -1], [-1, 1]]) { g.beginPath(); g.arc(w / 2 + a * 24, h / 2 + b * 18, 4, 0, 7); g.fill(); } }
+      else if (kind === 'legacy') { g.fillStyle = '#c9a646'; g.fillRect(0, 0, w, h); g.fillStyle = '#1a1206'; g.beginPath(); for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 - Math.PI / 2, rr = k % 2 ? 7 : 17; g.lineTo(w / 2 + Math.cos(a) * rr, h / 2 + Math.sin(a) * rr); } g.closePath(); g.fill(); g.fillStyle = '#7a1010'; g.fillRect(0, h - 7, w, 7); }
       else if (kind === 'yellow') { g.fillStyle = '#e8b931'; g.beginPath(); g.moveTo(0, 8); g.lineTo(w, h / 2); g.lineTo(0, h - 8); g.fill(); }
     }));
   }
@@ -3537,7 +3552,7 @@ window.__pgBoot = () => {
   const ownKey = () => STATE.shipKey || (ship && ship.key) || 'sloop';
   const hullMul = key => 1 + 0.2 * upgL(key, 'hull'), speedMul = key => 1 + 0.08 * upgL(key, 'sails'), turnMul = key => 1 + 0.05 * upgL(key, 'sails');
   const isTitan = () => ownKey() === 'titan';   // her guns hit two and a half times as hard, and her timbers shrug off most of what hits her
-  const gunMul = () => (1 + 0.15 * upgL(ownKey(), 'cannons')) * (isTitan() ? 2.5 : 1), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => (1 - 0.1 * upgL(ownKey(), 'plating')) * (isTitan() ? 0.4 : 1);
+  const gunMul = () => (1 + 0.15 * upgL(ownKey(), 'cannons')) * (isTitan() ? 2.5 : 1) * gearGuns(), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => (1 - 0.1 * upgL(ownKey(), 'plating')) * (isTitan() ? 0.4 : 1);
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key) * (STATE.mods && STATE.mods[key] && STATE.mods[key].keel ? 1.3 : 1));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
@@ -4776,6 +4791,7 @@ window.__pgBoot = () => {
   function toast(msg) { toastEl.textContent = toastT > 2.6 ? toastEl.textContent + '   ·   ' + msg : msg; toastEl.style.opacity = 1; toastT = 3.4; }
   function updateGold() { goldEl.textContent = STATE.gold.toLocaleString(); }
   function addGold(n, why) {
+    if (n > 0 && (STATE.legacy || 0) > 0 && !/admin|gift/i.test(why || '')) n = Math.round(n * legacyMul());   // Captain's Legacy
     STATE.gold = Math.max(0, STATE.gold + n); updateGold(); if (n > 0) SFX.coins(); else if (n < 0) SFX.spend();
     if (n > 0) toast(`+${n} gold  ·  ${why || ''}`); else if (why) toast(`${n} gold  ·  ${why}`);
     save();
@@ -5498,7 +5514,7 @@ window.__pgBoot = () => {
     { key: 'deck', label: 'Deck planks', type: 'swatch', set: 'deck' },
     { key: 'fig', label: 'Figurehead', type: 'choice', choices: [['none', 'Ship\'s own'], ['mermaid', 'Mermaid'], ['dragon', 'Dragon'], ['skull', 'Skull'], ['eagle', 'Eagle'], ['lion', 'Lion']] },
     { key: 'lamps', label: 'Hull lanterns', type: 'toggle' },
-    { key: 'flag', label: 'Flag', type: 'choice', choices: [['jolly', 'Jolly Roger'], ['skullswords', 'Skull & cutlasses'], ['redskull', 'Red skull'], ['hourglass', 'Hourglass'], ['red', 'Red banner'], ['black', 'Plain black'], ['white', 'White'], ['green', 'Green'], ['blue', 'Blue'], ['purple', 'Purple']] },
+    { key: 'flag', label: 'Flag', type: 'choice', choices: [['jolly', 'Jolly Roger'], ['skullswords', 'Skull & cutlasses'], ['redskull', 'Red skull'], ['hourglass', 'Hourglass'], ['red', 'Red banner'], ['black', 'Plain black'], ['white', 'White'], ['green', 'Green'], ['blue', 'Blue'], ['purple', 'Purple'], ['pale', 'Pale Ghost', 'flag_pale'], ['widow', 'Crimson Widow', 'flag_widow'], ['duke', 'Iron Duke', 'flag_duke'], ['bone', 'Bone Galleon', 'flag_bone'], ['legacy', 'Legacy', 'flag_legacy']] },
   ];
   const SERP_SW = {
     scale: [0x0c1412, 0x1f6e5e, 0x0e3a2a, 0x123c6e, 0x0a2440, 0x5a0a0e, 0x2a0a3a, 0x3a3a3a, 0xd8d2c0, 0x8a6a10, 0x101010, 0x2a5a1a],
@@ -5561,7 +5577,7 @@ window.__pgBoot = () => {
         b.addEventListener('click', () => { if (locked) { toast("Gold is locked. Finish Tom the smith's quest to unlock it."); return; } choose(col); });
         ctl.appendChild(b);
       });
-      if (o.type === 'choice') o.choices.forEach(([v, t]) => { const b = document.createElement('button'); b.className = 'ch' + (obj[o.key] === v ? ' on' : ''); b.textContent = t; b.addEventListener('click', () => choose(v)); ctl.appendChild(b); });
+      if (o.type === 'choice') o.choices.forEach(([v, t, need]) => { if (need && !(STATE.unlocked && STATE.unlocked[need])) return; const b = document.createElement('button'); b.className = 'ch' + (obj[o.key] === v ? ' on' : ''); b.textContent = t; b.addEventListener('click', () => choose(v)); ctl.appendChild(b); });
       if (o.type === 'toggle') [[true, 'On'], [false, 'Off']].forEach(([v, t]) => { const b = document.createElement('button'); b.className = 'ch' + (!!obj[o.key] === v ? ' on' : ''); b.textContent = t; b.addEventListener('click', () => choose(v)); ctl.appendChild(b); });
       panelBody.appendChild(row);
     });
@@ -5584,7 +5600,7 @@ window.__pgBoot = () => {
       if (typeof s === 'number') { d.style.cursor = 'pointer'; d.title = 'Click to follow this quest'; d.addEventListener('click', () => { STATE.track = id; save(); refreshQuestHud(); renderQuests(); }); }
       qlist.appendChild(d);
     });
-    try { renderBountyBoard(qlist); } catch (e) { console.error(e); }
+    try { renderBountyBoard(qlist); renderLegacy(qlist); } catch (e) { console.error(e); }
     const tip = document.createElement('p'); tip.className = 'note'; tip.textContent = 'Click a quest in progress to follow it. The gold marker on yer minimap and in the sky points the way.';
     qlist.appendChild(tip);
   }
@@ -5627,7 +5643,7 @@ window.__pgBoot = () => {
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = r.admiral ? '#141414' : r.bountied ? '#e8c44a' : '#c0392b'; ctx.strokeStyle = r.admiral ? '#e8c44a' : '#1c1c1c'; ctx.lineWidth = r.admiral ? 2.5 : 1.5;
       ctx.beginPath(); ctx.moveTo(0, -7 * sz); ctx.lineTo(4 * sz, 5 * sz); ctx.lineTo(-4 * sz, 5 * sz); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
-    try { drawForts(ctx, S, W, H); } catch (e) {}
+    try { drawForts(ctx, S, W, H); if (LEG.spot && !legendBeaten()) { const [x, y] = S(LEG.r ? LEG.r.x : LEG.spot.x, LEG.r ? LEG.r.z : LEG.spot.z); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5 - Math.PI / 2, rr = k % 2 ? 3.5 : 8; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); } } catch (e) {}
     if (ship && !(sailing || onShip || inInterior)) {
       const [x, y] = S(ship.x, ship.z); ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - ship.heading);
       ctx.fillStyle = '#6b4423'; ctx.strokeStyle = '#f4e4c1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(4, 5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -5802,7 +5818,8 @@ window.__pgBoot = () => {
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'saber', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
-  const curSword = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
+  const curSword = () => { const s0 = curSword0(), m = gearDmg(); return m === 1 ? s0 : Object.assign({}, s0, { dmg: Math.round(s0.dmg * m) }); };
+  const curSword0 = () => { const s = SWORDS[STATE.sword] || SWORDS.rusty; let night = false; try { night = isNight(); } catch (e) {}   // (the clock isn't set up yet while the game is loading)
     return (STATE.sword === 'tidecaller' || STATE.sword === 'ghost') && night ? Object.assign({}, s, { dmg: Math.round(s.dmg * (STATE.sword === 'ghost' ? 1.4 : 1.3)) }) : s; };   // moonlit edge   // Tidecaller: moonlit edge
   function addMat(k, n) { STATE.mats[k] = (STATE.mats[k] || 0) + n; save(); SFX.pickup(); toast(`+${n} ${MATS[k].name}`); }
   // the Sword of the Sea: a wave-shaped blade that runs from deep ocean blue at the hilt to sea-foam at the tip,
@@ -6263,6 +6280,7 @@ window.__pgBoot = () => {
       }
       card.appendChild(b); swordList.appendChild(card);
     });
+    renderArmor(swordList);
   }
   const tmpF = new THREE.Vector3();
   let flameT = 0;
@@ -6807,7 +6825,7 @@ window.__pgBoot = () => {
     if (GUEST.on || inInterior || RIDE.on || DUN.on || STOM.on || PLAYER.hp <= 0 || SIEGE.on) return null;
     const fromShip = (onShip || sailing) && ship && !ship.sinking && !ship.submerged, inSea = !fromShip && (krSwimming() || seaRunning()); if (!fromShip && !inSea) return null;
     let best = null, bd = 1e9;
-    for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || !r.group.parent || r.captured) continue;
+    for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || !r.group.parent || r.captured || r.legend) continue;
       let ok;
       if (fromShip) { const { lx, lz } = shipLocal(r, ship.x, ship.z); ok = Math.abs(lx) < (r.T.B + ship.T.B) / 2 + GRAPPLE && Math.abs(lz) < r.T.L / 2 + ship.T.L * 0.3 + 20; }
       else { const { lx, lz } = shipLocal(r, P.pos.x, P.pos.z); ok = Math.abs(lx) < r.T.B / 2 + 14 && Math.abs(lz) < r.T.L / 2 + 8; }
@@ -7053,7 +7071,7 @@ window.__pgBoot = () => {
     if (how === 'duel') {
       addGold(40000, 'Ye bested the Blackwater Admiral and took his flagship!'); addMat('steel', 10); addMat('pearl', 6); addMat('gem', 3);
       if (!STATE.swords.includes('admiral')) { STATE.swords.push('admiral'); toast('Ye take the Admiral\'s Cutlass from his hand! (I · Swords)'); }
-      STATE.admiralBeat = (STATE.admiralBeat || 0) + 1; save();
+      STATE.admiralBeat = (STATE.admiralBeat || 0) + 1; giveArmor('admiral'); save();
     } else { addGold(15000, 'Ye sent the Blackwater Admiral\'s flagship to the bottom!'); addMat('steel', 8); addMat('pearl', 3); }
     try { SFX.fanfare(); } catch (e) {}
     bountyClaimAdmiral();
@@ -7179,13 +7197,13 @@ window.__pgBoot = () => {
   const CAPTAINS = ['Mordecai Vex', 'Black Annis Crow', 'Silas Gallowglass', 'Red Tobias Marr', 'Iron Nell Sharrow', 'Ezekiel Thorne', 'One-Eyed Jago', 'Cutthroat Wren', 'Barnaby Gristle', 'Grim Hector Vane', 'Lady Sable Ash', 'Bloody Hal Corrigan'];
   const BNT = { players: [], nextT: 5 };
   function bountyFor(r) { return (STATE.bounties || []).find(b => raiders[b.i] === r); }
-  function refreshBountyTags() { raiders.forEach((r, i) => { if (r.admiral) return; const b = (STATE.bounties || []).find(x => x.i === i);
+  function refreshBountyTags() { raiders.forEach((r, i) => { if (r.admiral || r.legend) return; const b = (STATE.bounties || []).find(x => x.i === i);
     r.tag.innerHTML = (b ? `<span style="color:#ffd27a">☠ Capt. ${b.name} · ${b.gold.toLocaleString()} gold</span>` : (r.galleon ? 'Blackwater galleon' : 'Blackwater raider')) + '<div class="ehp"><div></div></div>'; r.bar = r.tag.querySelector('.ehp div'); r.bountied = !!b; }); }
   function updateBounties(dt) {
     STATE.bounties = STATE.bounties || [];
     BNT.nextT -= dt; if (BNT.nextT > 0) return; BNT.nextT = 20;
     if (STATE.bounties.length >= 3) return;
-    const free = raiders.map((r, i) => i).filter(i => !raiders[i].raid && !raiders[i].admiral && !STATE.bounties.some(b => b.i === i));
+    const free = raiders.map((r, i) => i).filter(i => !raiders[i].raid && !raiders[i].admiral && !raiders[i].legend && !STATE.bounties.some(b => b.i === i));
     if (!free.length) return;
     const i = free[Math.floor(Math.random() * free.length)], used = STATE.bounties.map(b => b.name), name = CAPTAINS.filter(n => !used.includes(n))[Math.floor(Math.random() * (CAPTAINS.length - used.length))];
     const gal = raiders[i].galleon, gold = Math.round((gal ? 3500 : 1800) * (0.8 + Math.random() * 0.5) / 50) * 50;
@@ -7500,6 +7518,7 @@ window.__pgBoot = () => {
     F.looted = true; F.lid.rotation.x = -1.2; STATE.forts = STATE.forts || {}; STATE.forts[F.isl] = Date.now(); STATE.fortsTaken = (STATE.fortsTaken || 0) + 1;
     addGold(6000, `Ye stormed the ${F.isl} fort and broke open its treasury!`); addMat('steel', 6); addMat('pearl', 3); addMat('gem', 2); try { SFX.fanfare(); } catch (e) {}
     F.flag.material.color.setHex(0xf2ead8); toast(`The Blackwater colours come down over ${F.isl}. They'll be back to retake it in 30 minutes.`);
+    if (STATE.fortsTaken >= 3) giveArmor('fortlord');
     if (typeof factionGain === 'function') factionGain(F.isl, 40);
     save();
   }
@@ -7533,6 +7552,85 @@ window.__pgBoot = () => {
   function drawForts(ctx, S, W, H) {
     for (const F of FORTS) { if (!F.g) continue; const [x, y] = S(F.x, F.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
       ctx.fillStyle = F.live ? '#2a2a2a' : '#f2ead8'; ctx.strokeStyle = F.live ? '#c0392b' : '#2e7d32'; ctx.lineWidth = 2; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeRect(x - 5, y - 5, 10, 10); }
+  }
+
+  // ===================== Weekly legendary hunt =====================
+  // Each week one legendary ship roams a stretch of sea (gold star on the map, named on the bounty board). Sink her for a
+  // big purse, a flag that only she carries, and (the first time) a suit of Kraken-hide armour. A new legend sails each week.
+  const LEGENDS = [
+    { key: 'pale', name: 'The Pale Ghost', kind: 'galleon', hp: 3200, speed: 1.0, gunDmg: 14, style: { sail: 0xdfe6e8, hull: 0x8a9294, trim: 0xf2f6f8, flag: 'pale', pattern: 'plain' }, flagName: 'Pale Ghost' },
+    { key: 'widow', name: 'The Crimson Widow', kind: 'brig', hp: 2400, speed: 1.45, gunDmg: 13, style: { sail: 0x7a0e12, hull: 0x1a0c0c, trim: 0xc81e24, flag: 'widow', pattern: 'halves' }, flagName: 'Crimson Widow' },
+    { key: 'duke', name: 'The Iron Duke', kind: 'titan', hp: 5600, speed: 0.85, gunDmg: 18, style: { sail: 0x5a5e62, hull: 0x2a2d30, trim: 0xb8bcc0, flag: 'duke', pattern: 'cross' }, flagName: 'Iron Duke' },
+    { key: 'bone', name: 'The Bone Galleon', kind: 'galleon', hp: 3600, speed: 1.1, gunDmg: 15, style: { sail: 0x1a1a1a, hull: 0xcfc4a8, trim: 0x2a2a2a, flag: 'bone', pattern: 'skull' }, flagName: 'Bone Galleon' },
+  ];
+  const WEEK_MS = 7 * 24 * 3600 * 1000, weekNo = () => Math.floor((Date.now() - Date.UTC(2026, 0, 5)) / WEEK_MS);   // weeks start Monday 00:00 UTC
+  const LEG = { r: null, spot: null };
+  const legendNow = () => LEGENDS[((weekNo() % LEGENDS.length) + LEGENDS.length) % LEGENDS.length];
+  function legendSpot() {   // where this week's legend hunts: a stretch of open sea picked from the week number
+    const w = weekNo(); let x = 0, z = 0;
+    for (let k = 0; k < 80; k++) { const h = Math.sin((w + 1) * 91.7 + k * 13.1) * 43758.5; const a = (h - Math.floor(h)) * 6.28, d = 2500 + ((h * 7) - Math.floor(h * 7)) * 3500; x = Math.sin(a) * d; z = Math.cos(a) * d; if (raidSea(x, z)) break; }
+    return { x, z };
+  }
+  const legendBeaten = () => STATE.legendWeek === weekNo();
+  function spawnLegend() {
+    const L = legendNow(), sp = LEG.spot;
+    const m = makeShip(L.kind, L.style); m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
+    const r = Object.assign(m, { home: { x: sp.x, z: sp.z }, maxHp: L.hp, hp: L.hp, galleon: L.kind !== 'brig', legend: L, local: true, wp: 0, reload: { 1: 0, '-1': 0 }, steer: 0, deckCrew: [] });
+    r.x = sp.x; r.z = sp.z; r.heading = Math.random() * 6.28; r.speed = 10; r.state = 'patrol'; r.sinkT = 0; r.pitch = 0; r.roll = 0; raiderWaypoint(r);
+    const tag = document.createElement('div'); tag.className = 'tag etag'; tag.style.cssText = 'font-size:14px;border:1px solid #d4af37;background:rgba(40,30,0,.85)'; tag.innerHTML = `★ ${L.name} ★<div class="ehp"><div></div></div>`; tagLayer.appendChild(tag); r.tag = tag; r.bar = tag.querySelector('.ehp div');
+    enableShadows(m.group); r.group.rotation.set(0, r.heading, 0); scene.add(r.group); raiders.push(r); LEG.r = r;
+    toast(`★ ${L.name} is in these waters! This week's legend. Sink her!`); try { SFX.horn(); } catch (e) {}
+  }
+  function removeLegend() { const r = LEG.r; if (!r) return; LEG.r = null; if (GUEST.raider === r) raiderLeave(); const i = raiders.indexOf(r); if (i >= 0) raiders.splice(i, 1); if (r.group.parent) r.group.parent.remove(r.group); r.tag.remove(); }
+  function legendDefeated(r) {
+    if (r.legDone) return; r.legDone = true; const L = r.legend;
+    STATE.legendWeek = weekNo(); STATE.unlocked = STATE.unlocked || {}; STATE.unlocked['flag_' + L.key] = true; STATE.legendsSunk = (STATE.legendsSunk || 0) + 1;
+    addGold(12000, `Ye sank ${L.name}, this week's legend!`); addMat('pearl', 5); addMat('gem', 3); addMat('steel', 6);
+    toast(`Ye take ${L.name}'s colours: the "${L.flagName}" flag is yers (C · Customize, Ship).`);
+    if (!(STATE.armors || []).includes('kraken')) giveArmor('kraken');
+    try { SFX.fanfare(); } catch (e) {} save();
+  }
+  function updateLegend(dt) {
+    if (!LEG.spot || LEG.week !== weekNo()) { LEG.week = weekNo(); LEG.spot = legendSpot(); if (LEG.r && !LEG.r.legDone) removeLegend(); }
+    const r = LEG.r;
+    if (r && (r.state === 'gone')) { removeLegend(); return; }
+    if (legendBeaten()) return;
+    const atSea = ship && !ship.sinking && (sailing || onShip);
+    if (!r && atSea && Math.hypot(ship.x - LEG.spot.x, ship.z - LEG.spot.z) < 2500) spawnLegend();
+    if (r && r.state !== 'sinking') { if (r.legend.speed !== 1 && r.state === 'attack') r.speed = Math.min(r.speed * (1 + (r.legend.speed - 1) * dt), 40 * r.legend.speed);   // the Widow outruns anything
+      if (!ship || Math.hypot(r.x - P.pos.x, r.z - P.pos.z) > 7000) removeLegend(); }
+  }
+
+  // ===================== Legendary armour =====================
+  // Suits won from the hardest fights in the seas. Wear one at a time (I · Swords and armour). Each has its own bonus, and
+  // changes how ye look (unless ye carry the Sword of the Sea, whose Tyrant's garb covers all).
+  function giveArmor(k) { STATE.armors = STATE.armors || []; if (STATE.armors.includes(k)) return; STATE.armors.push(k); save(); toast(`New armour: ${ARMORS[k].name}! Wear it from I · Swords and armour.`); }
+  function wearArmor(k) { STATE.armor = STATE.armor === k ? null : k; save(); try { rebuildPlayer(); } catch (e) {} toast(STATE.armor ? `Ye put on the ${ARMORS[k].name}.` : 'Ye take off yer armour.'); if (uiOpen === 'forge') renderForge(); }
+  function renderArmor(list) {
+    const h = document.createElement('h3'); h.style.cssText = 'margin:16px 0 6px'; h.textContent = 'Legendary armour'; list.appendChild(h);
+    for (const [k, A] of Object.entries(ARMORS)) { const own = (STATE.armors || []).includes(k), on = STATE.armor === k;
+      const card = document.createElement('div'); card.className = 'sword' + (on ? ' eq' : ''); card.style.cssText = 'display:flex;align-items:center;gap:10px';
+      const sw = document.createElement('div'); sw.style.cssText = `width:46px;height:46px;border-radius:8px;flex:none;background:#${A.look.coat.toString(16).padStart(6, '0')};border:3px solid #${(A.look.sash || 0x333333).toString(16).padStart(6, '0')}`; card.appendChild(sw);
+      const info = document.createElement('div'); info.style.flex = '1'; info.innerHTML = `<h3 style="margin:0">${A.name}</h3><p style="margin:2px 0">${A.bonus}</p><div class="req"><span>${own ? 'Owned' : A.how}</span></div>`; card.appendChild(info);
+      const b = document.createElement('button'); b.textContent = !own ? 'Locked' : on ? 'Take off' : 'Wear'; b.disabled = !own; b.onclick = () => wearArmor(k); card.appendChild(b); list.appendChild(card); }
+  }
+
+  // ===================== Captain's Legacy =====================
+  // For captains with more gold than they can spend: pay 1,000,000 gold into the Brethren's chest for a Legacy rank.
+  // Each rank: +5% on all gold ye earn, a star by yer name that other captains see, and at rank 1 the gold Legacy flag.
+  const LEGACY_COST = 1000000;
+  function legacyMul() { return 1 + 0.05 * (STATE.legacy || 0); }
+  function takeLegacy() {
+    if (STATE.gold < LEGACY_COST) { toast(`A Legacy rank costs ${LEGACY_COST.toLocaleString()} gold.`); return; }
+    STATE.gold -= LEGACY_COST; updateGold(); STATE.legacy = (STATE.legacy || 0) + 1; STATE.unlocked = STATE.unlocked || {}; STATE.unlocked.flag_legacy = true; save();
+    try { SFX.fanfare(); } catch (e) {} toast(`★ Legacy rank ${STATE.legacy}! Yer name goes in the Brethren's book. +${STATE.legacy * 5}% on all gold ye earn.`);
+    if (uiOpen === 'quests') renderQuests();
+  }
+  function renderLegacy(el) {
+    const box = document.createElement('div'); box.className = 'q'; box.style.borderColor = '#d4af37';
+    box.innerHTML = `<div class="qt">★ Captain's Legacy<span>rank ${STATE.legacy || 0}</span></div><div class="qd">Pay ${LEGACY_COST.toLocaleString()} gold into the Brethren's chest for a Legacy rank: +5% on all gold ye earn (now +${(STATE.legacy || 0) * 5}%), a star by yer name for other captains to see, and the gold Legacy flag. Ye keep everything else.<div style="margin-top:6px">This week's legend: <b>${legendNow().name}</b> ${legendBeaten() ? '<span style="color:#2e7d32">(sunk!)</span>' : '(gold star on yer map)'}. Forts stormed: ${STATE.fortsTaken || 0}.</div></div>`;
+    const b = document.createElement('button'); b.className = 'ch'; b.style.marginTop = '6px'; b.textContent = `Take a Legacy rank (${LEGACY_COST.toLocaleString()} gold)`; b.disabled = STATE.gold < LEGACY_COST; b.onclick = e => { e.stopPropagation(); takeLegacy(); }; box.appendChild(b);
+    el.prepend(box);
   }
 
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
@@ -7601,6 +7699,7 @@ window.__pgBoot = () => {
     if (RIDE.on && ELD.on && !ELD.leaving && ELD.hp > 0) { elderHurt(n * 3); return; }   // riding: yer serpent takes the blow for ye (until he falls and ye're thrown off)
     if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
     if (STATE.sword === 'seasword') n *= TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
+    n *= gearDR();   // legendary armour
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
     if (PLAYER.hp <= 0) playerDefeated();
   }
@@ -7709,6 +7808,7 @@ window.__pgBoot = () => {
     if (ent === ship) return (STATE.sword === 'seasword' ? 22 : 11) * gunMul();
     if (ent.remote) return (ent.sw === 'seasword' ? 12 : 6) * (ent.gm || 1);
     if (ent.admiral) return 16;   // the flagship's heavy guns
+    if (ent.legend) return ent.legend.gunDmg;
     return ent.galleon ? 12 : 9;   // Blackwater shot: a galleon's guns hit hardest
   }
   function updateBalls(dt, t) {
@@ -7758,6 +7858,7 @@ window.__pgBoot = () => {
     else if (tg.hp <= 0 && tg.state !== 'sinking') {
       tg.state = 'sinking'; tg.sinkT = 0; SFX.crash(tg);
       if (tg.admiral) { tg.captured = false; admiralDefeated(tg, 'sink'); return; }   // the flagship: her own prize
+      if (tg.legend) { legendDefeated(tg); return; }   // this week's legend
       if (!tg.captured && !(KR.lock === tg && KR.ally <= 0)) { bountyClaim(tg, 'sink'); noteWrath(); }
       if (tg.captured) { tg.captured = false; questEvent('raider', tg.galleon ? 'galleon' : 'brig'); return; }   // a prize ye took and scuttled: the plunder's already yers
       if (!(KR.lock === tg && KR.ally <= 0)) questEvent('raider', tg.galleon ? 'galleon' : 'brig');   // sunk by ye (or yer kraken)
@@ -7909,7 +8010,7 @@ window.__pgBoot = () => {
 
   function updateCombat(dt, t) {
     for (const k of ['slashT', 'aimT', 'cool', 'reload']) PLAYER[k] = Math.max(0, PLAYER[k] - dt);
-    { const want = STATE.sword === 'seasword' ? TYRANT.hp : 100; if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
+    { const want = (STATE.sword === 'seasword' ? TYRANT.hp : 100) + ((gear() && gear().hp) || 0); if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
     updateCombatFeel(dt, t);
     if (PLAYER.hitPending > 0) {
       PLAYER.hitPending -= dt;
@@ -7942,7 +8043,9 @@ window.__pgBoot = () => {
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
-    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); } catch (e) { console.error(e); }
+    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); updateLegend(dt); } catch (e) { console.error(e); }
+    { const G = gear(); if (G && G.regen && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + G.regen * dt); }
+    if ((MODFX.tagT = (MODFX.tagT || 0) - dt) <= 0) { MODFX.tagT = 3; if (window.__mpRetag) window.__mpRetag(); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
       autoFireT -= dt;
       const hostile = raiders.filter(r => (r.state === 'attack' || r.state === 'patrol') && Math.hypot(r.x - ship.x, r.z - ship.z) < 520)
@@ -13120,7 +13223,7 @@ window.__pgBoot = () => {
       MP.room.on('bounties', m => { if (m.peer !== 'server' || !m.data) return; try { setPlayerBounties(m.data.list); } catch (e) {} });
       MP.room.on('bclaim', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.gold > 0)) return; addGold(Math.min(50000, Math.floor(d.gold)), `Bounty claimed on ${String(d.name || 'a wanted captain').replace(/[<>&]/g, '')}!`); try { SFX.fanfare(); } catch (e) {} });
       MP.room.on('wanted', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.gold > 0)) return; toast(`☠ Ye sank ${String(d.name || 'a captain').replace(/[<>&]/g, '')}'s ship! There's now a bounty of ${Math.floor(d.gold).toLocaleString()} gold on yer head.`); });
-      window.__mpRetag = () => { for (const p of MP.peers.values()) { if (!p.tag || !p.name) continue; const b = BNT.players.find(e => e[0] === p.name); p.tag.textContent = p.name + (b ? `  ☠ WANTED ${b[1].toLocaleString()}g` : ''); p.tag.style.color = b ? '#ffb0a0' : ''; } };
+      window.__mpRetag = () => { for (const p of MP.peers.values()) { if (!p.tag || !p.name) continue; const b = BNT.players.find(e => e[0] === p.name), lg = p.tgt && p.tgt.lg > 0 ? `★${p.tgt.lg | 0} ` : ''; p.tag.textContent = lg + p.name + (b ? `  ☠ WANTED ${b[1].toLocaleString()}g` : ''); p.tag.style.color = b ? '#ffb0a0' : ''; } };
       MP.room.on('raidwave', m => { const d = m.data; if (m.peer !== 'server' || !d || !(d.w > 1)) return; toast(`More Blackwater sails on the horizon! Wave ${d.w}: ${d.n} more ships.`); });
       MP.room.on('bwhit', m => { const d = m.data; if (m.peer !== 'server' || !d || d.to !== MP.me) return; try { bwHitMe(Math.min(40, +d.dmg || 0), d.sw === 1); } catch (e) {} });
       MP.room.on('bwdead', m => { const d = m.data; if (m.peer !== 'server' || !d) return;
@@ -13155,7 +13258,7 @@ window.__pgBoot = () => {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         if (DUN.on) { const d = dunDoor(); _mpV.set(d.x, heightAt(d.x, d.z) - 30, d.z); }   // down in the vaults: out of sight under the skull
         const r = v => Math.round(v * 100) / 100;
-        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: STATE.look, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null, eat: ELD.on && !ELD.leaving && ELD.mode === 'attack' && ELD.pick && (ELD.pick.kind === 'player' || ELD.pick.kind === 'person') ? ELD.pick.peer : null, esr: ELD.on && !ELD.leaving ? (() => { const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg; return T && T.kind === 'rserp' ? T.peer : null; })() : null,   /* eat: whose ship or self his serpent's been sent after; esr: whose serpent he's going for */   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
+        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: gearLook(), lg: STATE.legacy || 0, sw: STATE.sword, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null, eat: ELD.on && !ELD.leaving && ELD.mode === 'attack' && ELD.pick && (ELD.pick.kind === 'player' || ELD.pick.kind === 'person') ? ELD.pick.peer : null, esr: ELD.on && !ELD.leaving ? (() => { const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg; return T && T.kind === 'rserp' ? T.peer : null; })() : null,   /* eat: whose ship or self his serpent's been sent after; esr: whose serpent he's going for */   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           sl: ELD.on && STATE.serpLook && Object.keys(STATE.serpLook).length ? STATE.serpLook : null,   // yer serpent's colours, so others see him as ye've painted him
           swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
