@@ -14063,6 +14063,124 @@ window.__pgBoot = () => {
   const tmp = new THREE.Vector3();
   let lastFrameAt = 0;
   let questHudTimer = 0;
+  // ===================== Wildlife =====================
+  // Animals that live around ye, spawned near the camera where they belong and left behind as ye go:
+  //   at sea: dolphins riding yer bow wave and leaping, whales surfacing to blow and dive, flying fish, sea turtles in the
+  //   shallows; on beaches: crabs; in the towns: chickens, goats, dogs and cats; in the jungle: monkeys; by day
+  //   butterflies, by night fireflies.
+  const WILD = { list: [], whaleT: 40, fishT: 5, checkT: 0 };
+  const wmat = c => new THREE.MeshLambertMaterial({ color: c });
+  const WM_ = { grey: wmat(0x5f6f7c), belly: wmat(0xc8d0d4), dark: wmat(0x262c33), white: wmat(0xf2efe6), red: wmat(0xc8332a), orange: wmat(0xe07a2a), brown: wmat(0x6b4a2e), tan: wmat(0xc8a070), black: wmat(0x1a1a1a),
+    shell: wmat(0x4a5a2e), shellD: wmat(0x33401f), skin: wmat(0x7a8a5a), silver: wmat(0xb8c8d4), goat: wmat(0xd8d0c0), horn: wmat(0x8a7a60), yellow: wmat(0xe8c030), ginger: wmat(0xd0802a), grey2: wmat(0x8a8a8a) };
+  const wbox = (w, h, d, m, x = 0, y = 0, z = 0, p) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); p.add(o); return o; };
+  const wball = (r, m, x, y, z, p, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 7), m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); p.add(o); return o; };
+  const wcone = (r, h, m, x, y, z, p, rx = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); p.add(o); return o; };
+  function makeAnimal(type) {
+    const g = new THREE.Group(), a = { type, g, legs: [], t: Math.random() * 10 };
+    if (type === 'dolphin') { wball(0.45, WM_.grey, 0, 0, 0, g, 1, 1, 3.4); wball(0.4, WM_.belly, 0, -0.12, 0.2, g, 0.9, 0.7, 2.8); wcone(0.12, 0.6, WM_.grey, 0, 0, 1.75, g, Math.PI / 2); wcone(0.25, 0.6, WM_.grey, 0, 0.5, -0.1, g, -0.5);
+      const fl = new THREE.Group(); fl.position.z = -1.55; g.add(fl); wbox(1.1, 0.06, 0.35, WM_.grey, 0, 0, -0.15, fl); a.fluke = fl; }
+    else if (type === 'whale') { wball(3, WM_.dark, 0, 0, 0, g, 1, 0.85, 3.8); wball(2.6, WM_.grey2, 0, -0.9, 1.5, g, 0.95, 0.5, 3.2);
+      for (let i = 0; i < 6; i++) wbox(0.15, 0.15, 6, WM_.grey2, -1.2 + i * 0.5, -2.1, 6, g);
+      const tl = new THREE.Group(); tl.position.z = -10; g.add(tl); wball(1.2, WM_.dark, 0, 0, -1.5, tl, 1, 0.8, 2.5); const fk = wbox(7, 0.35, 2.2, WM_.dark, 0, 0, -4, tl); a.tail = tl; a.fk = fk;
+      for (const sd of [-1, 1]) { const f = wbox(3.5, 0.25, 1.6, WM_.dark, sd * 3.6, -1.2, 4, g); f.rotation.z = sd * 0.3; } }
+    else if (type === 'fish') { wball(0.12, WM_.silver, 0, 0, 0, g, 1, 0.8, 3); for (const sd of [-1, 1]) wbox(0.5, 0.02, 0.2, WM_.belly, sd * 0.25, 0.05, 0.1, g); }
+    else if (type === 'turtle') { wball(0.7, WM_.shell, 0, 0, 0, g, 1, 0.38, 1.25); wball(0.55, WM_.shellD, 0, 0.12, 0, g, 1, 0.3, 1.15); wball(0.22, WM_.skin, 0, 0, 1.0, g, 1, 0.9, 1.3);
+      for (const [x, z] of [[-0.75, 0.5], [0.75, 0.5], [-0.55, -0.6], [0.55, -0.6]]) { const f = wbox(0.7, 0.06, 0.28, WM_.skin, x, -0.02, z, g); a.legs.push(f); } }
+    else if (type === 'crab') { wball(0.22, WM_.red, 0, 0.18, 0, g, 1.3, 0.55, 1); for (const sd of [-1, 1]) { wball(0.09, WM_.red, sd * 0.24, 0.2, 0.22, g, 1.3, 0.8, 1); for (let k = 0; k < 3; k++) { const l = wbox(0.28, 0.03, 0.03, WM_.red, sd * 0.33, 0.1, -0.1 + k * 0.1, g); l.rotation.z = sd * -0.6; a.legs.push(l); } wball(0.03, WM_.black, sd * 0.07, 0.3, 0.16, g); } }
+    else if (type === 'chicken') { wball(0.22, WM_.white, 0, 0.35, 0, g, 0.9, 0.9, 1.2); const hd = new THREE.Group(); hd.position.set(0, 0.55, 0.2); g.add(hd); wball(0.1, WM_.white, 0, 0, 0, hd); wbox(0.03, 0.08, 0.1, WM_.red, 0, 0.1, 0, hd); wcone(0.03, 0.08, WM_.yellow, 0, -0.01, 0.12, hd, Math.PI / 2); a.head = hd;
+      wbox(0.06, 0.18, 0.12, WM_.white, 0, 0.42, -0.25, g); for (const sd of [-1, 1]) a.legs.push(wbox(0.03, 0.2, 0.03, WM_.yellow, sd * 0.08, 0.1, 0, g)); }
+    else if (type === 'goat' || type === 'dog' || type === 'cat') {
+      const S = type === 'goat' ? 1 : type === 'dog' ? 0.75 : 0.45, m = type === 'goat' ? WM_.goat : type === 'dog' ? (Math.random() < 0.5 ? WM_.brown : WM_.tan) : (Math.random() < 0.5 ? WM_.ginger : WM_.grey2);
+      wbox(0.5 * S, 0.45 * S, 1.0 * S, m, 0, 0.75 * S, 0, g); const hd = new THREE.Group(); hd.position.set(0, 1.05 * S, 0.6 * S); g.add(hd); wbox(0.32 * S, 0.32 * S, 0.42 * S, m, 0, 0, 0.08 * S, hd); a.head = hd;
+      if (type === 'goat') { for (const sd of [-1, 1]) wcone(0.04, 0.3, WM_.horn, sd * 0.1, 0.25, -0.05, hd, -0.6); wbox(0.06, 0.15, 0.05, WM_.white, 0, -0.2, 0.25, hd); }
+      else for (const sd of [-1, 1]) wcone(0.07 * S * 1.6, 0.2 * S * 1.6, type === 'cat' ? m : WM_.brown, sd * 0.11 * S, 0.22 * S, -0.02, hd);
+      wball(0.025 * (S + 0.6), WM_.black, 0, 0.02, 0.3 * S, hd);
+      const tail = wbox(0.06 * S, 0.06 * S, 0.45 * S, m, 0, 0.9 * S, -0.6 * S, g); tail.rotation.x = type === 'cat' ? -0.9 : -0.5; a.tailM = tail;
+      for (const [x, z] of [[-0.17, 0.38], [0.17, 0.38], [-0.17, -0.38], [0.17, -0.38]]) { const lg = new THREE.Group(); lg.position.set(x * S, 0.55 * S, z * S); g.add(lg); wbox(0.11 * S, 0.55 * S, 0.11 * S, m, 0, -0.27 * S, 0, lg); a.legs.push(lg); } }
+    else if (type === 'monkey') { wball(0.28, WM_.brown, 0, 0.55, 0, g, 1, 1.25, 0.9); const hd = new THREE.Group(); hd.position.set(0, 0.98, 0.05); g.add(hd); wball(0.2, WM_.brown, 0, 0, 0, hd); wball(0.14, WM_.tan, 0, -0.03, 0.12, hd, 1, 0.9, 0.6); for (const sd of [-1, 1]) { wball(0.07, WM_.tan, sd * 0.2, 0.02, 0, hd, 0.5, 1, 1); wball(0.025, WM_.black, sd * 0.06, 0.04, 0.2, hd); } a.head = hd;
+      for (const [x, y] of [[-0.22, 0.75], [0.22, 0.75], [-0.14, 0.32], [0.14, 0.32]]) { const lg = new THREE.Group(); lg.position.set(x, y, 0.05); g.add(lg); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.42, 6), WM_.brown); c.position.y = -0.2; lg.add(c); a.legs.push(lg); }
+      const tl = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.04, 5, 12, Math.PI * 1.4), WM_.brown); tl.position.set(0, 0.55, -0.4); tl.rotation.y = Math.PI / 2; g.add(tl); }
+    else if (type === 'butterfly') { const col = [0xe8902a, 0x3a7ae8, 0xe8d23a, 0xd04ad0, 0xf2f2f2][Math.floor(Math.random() * 5)], m = new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide });
+      a.wings = [-1, 1].map(sd => { const w = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.12), m); w.geometry.translate(sd * 0.08, 0, 0); w.rotation.x = -Math.PI / 2; g.add(w); return w; }); wbox(0.02, 0.02, 0.12, WM_.black, 0, 0, 0, g); }
+    else if (type === 'firefly') { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xd8ff6a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sp.scale.setScalar(0.35); g.add(sp); a.sp = sp; }
+    scene.add(g); return a;
+  }
+  const WCAP = { dolphin: 5, turtle: 4, crab: 8, chicken: 5, goat: 2, dog: 2, cat: 2, monkey: 7, butterfly: 10, firefly: 28 };
+  const countOf = t => WILD.list.reduce((n, a) => n + (a.type === t ? 1 : 0), 0);
+  function islandAt(x, z) { let best = null, bd = 1e9; for (const I of ISLANDS) { const d = Math.hypot(x - I.c.x, z - I.c.y) - I.r * 1.3; if (d < bd) { bd = d; best = I; } } return bd < 0 ? best : null; }
+  function landSpot(cx, cz, rMin, rMax, ok) { for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, r = rMin + Math.random() * (rMax - rMin), x = cx + Math.sin(a) * r, z = cz + Math.cos(a) * r, h = heightAt(x, z); if (ok(h, x, z)) return { x, z, h }; } return null; }
+  function spawnWild(type, x, z, y, extra) { const a = makeAnimal(type); Object.assign(a, { x, z, y, h: Math.random() * 6.28, sp: 0, st: 'idle', stT: 1 + Math.random() * 3 }, extra || {}); a.g.position.set(x, y, z); WILD.list.push(a); return a; }
+  function killWild(a) { scene.remove(a.g); a.g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); a.dead = true; }
+  function updateFauna(dt, t) {
+    const cx = camera.position.x, cz = camera.position.z, px = P.pos.x, pz = P.pos.z, day = gameTime > 6 && gameTime < 19, onLand = !onShip && !sailing && !inInterior && !DUN.on && heightAt(px, pz) > 0.3;
+    // ---- spawning, a few times a second ----
+    if ((WILD.checkT -= dt) <= 0 && !inInterior && !DUN.on) { WILD.checkT = 0.4;
+      const I = islandAt(px, pz);
+      if (onLand && I) {
+        const sand = (h) => h > 0.3 && h < 3.2, grass = h => h > 3 && h < 40;
+        if (countOf('crab') < WCAP.crab) { const s = landSpot(px, pz, 12, 40, sand); if (s) spawnWild('crab', s.x, s.z, s.h); }
+        if (I.kind === 'home' || I.kind === 'port') for (const ty of ['chicken', 'goat', 'dog', 'cat']) if (countOf(ty) < WCAP[ty] && Math.random() < 0.35) { const s = landSpot(px, pz, 14, 55, grass); if (s) spawnWild(ty, s.x, s.z, s.h); }
+        if (I.kind === 'jungle' && countOf('monkey') < WCAP.monkey) { const s = landSpot(px, pz, 10, 45, grass); if (s) spawnWild('monkey', s.x, s.z, s.h); }
+        if (day && (I.kind === 'jungle' || I.kind === 'cove' || I.kind === 'home') && countOf('butterfly') < WCAP.butterfly) { const s = landSpot(px, pz, 3, 22, grass); if (s) spawnWild('butterfly', s.x, s.z, s.h + 1 + Math.random() * 2); }
+        if (!day && (I.kind === 'jungle' || I.kind === 'home' || I.kind === 'cove') && countOf('firefly') < WCAP.firefly) { for (let k = 0; k < 4; k++) { const s = landSpot(px, pz, 2, 26, grass); if (s) spawnWild('firefly', s.x, s.z, s.h + 0.5 + Math.random() * 2.5); } }
+      }
+      if (countOf('turtle') < WCAP.turtle) { const s = landSpot(cx, cz, 30, 160, h => h < -1.8 && h > -6.5); if (s) spawnWild('turtle', s.x, s.z, -1.1); }
+      const atSea = ship && !ship.sinking && !ship.submerged && (sailing || onShip) && heightAt(ship.x, ship.z) < -6;
+      if (atSea && Math.abs(ship.speed) > 4 && countOf('dolphin') < WCAP.dolphin && Math.random() < 0.3 && !WILD.list.some(a => a.type === 'dolphin')) {
+        const n = 3 + (Math.random() * 3 | 0), side = Math.random() < 0.5 ? -1 : 1; for (let i = 0; i < n; i++) spawnWild('dolphin', ship.x, ship.z, -3, { side, off: (ship.T.B / 2 + 6 + i * 3 + Math.random() * 4), ahead: ship.T.L * (0.1 + Math.random() * 0.4), ph: Math.random() * 6.28, life: 40 + Math.random() * 30 }); }
+      if (atSea) { WILD.whaleT -= 0.4; if (WILD.whaleT <= 0 && !WILD.list.some(a => a.type === 'whale')) { WILD.whaleT = 90 + Math.random() * 120; const a = Math.random() * 6.28, d = 220 + Math.random() * 260, x = cx + Math.sin(a) * d, z = cz + Math.cos(a) * d; if (heightAt(x, z) < -6) spawnWild('whale', x, z, -14, { h: Math.random() * 6.28, T: 0 }); } }
+      if (atSea) { WILD.fishT -= 0.4; if (WILD.fishT <= 0) { WILD.fishT = 3 + Math.random() * 6; const a = Math.random() * 6.28, d = 30 + Math.random() * 90, x = ship.x + Math.sin(a) * d, z = ship.z + Math.cos(a) * d, h = Math.random() * 6.28; for (let i = 0; i < 3 + (Math.random() * 4 | 0); i++) spawnWild('fish', x + (Math.random() - 0.5) * 6, z + (Math.random() - 0.5) * 6, 0, { h, T: -i * 0.12, dur: 1.2 + Math.random() * 0.5 }); } }
+    }
+    // ---- behaviour ----
+    for (const a of WILD.list) { if (a.dead) continue; a.t += dt; const g = a.g;
+      const far = Math.hypot(a.x - cx, a.z - cz), maxD = a.type === 'whale' ? 1200 : a.type === 'dolphin' ? 400 : a.type === 'turtle' ? 260 : 90;
+      if (far > maxD) { killWild(a); continue; }
+      if (a.type === 'dolphin') {
+        a.life -= dt; const S = ship; if (!S || a.life <= 0 || !(sailing || onShip) || Math.abs(S.speed) < 2) { a.h += 0; a.x += Math.sin(a.h) * 14 * dt; a.z += Math.cos(a.h) * 14 * dt; a.y = Math.max(a.y - dt * 2, -6); if (a.y <= -5.9) { killWild(a); continue; } }
+        else { const c = Math.cos(S.heading), s = Math.sin(S.heading), tx = S.x + a.side * a.off * c + a.ahead * s + Math.sin(a.t * 0.7 + a.ph) * 3, tz = S.z - a.side * a.off * s + a.ahead * c;
+          a.x += (tx - a.x) * Math.min(1, dt * 1.5); a.z += (tz - a.z) * Math.min(1, dt * 1.5); a.h = S.heading;
+          const lp = (a.t * 1.1 + a.ph) % 6.28, arc = Math.sin(lp); a.y = arc > 0 ? -0.6 + arc * 3.2 : -0.6 + arc * 1.2;
+          if (arc > 0 && !a.up) { a.up = true; puff(a.x, 0.5, a.z, { color: 0xffffff, size: 1.6, life: 0.5, grow: 1.3, vy: 3, op: 0.8 }); } if (arc < 0 && a.up) { a.up = false; puff(a.x, 0.4, a.z, { color: 0xffffff, size: 2, life: 0.6, grow: 1.5, vy: 4, op: 0.85 }); try { SFX.splash({ x: a.x, z: a.z }, false); } catch (e) {} }
+          g.rotation.set(-Math.cos(lp) * 0.7, a.h, 0); }
+        if (a.fluke) a.fluke.rotation.x = Math.sin(a.t * 8) * 0.35; g.position.set(a.x, a.y, a.z); if (a.dead) continue; continue; }
+      if (a.type === 'whale') { a.T += dt; const T = a.T; let pitch = 0;
+        if (T < 4) a.y += (-1.2 - a.y) * Math.min(1, dt * 0.8);   // rising
+        else if (T < 10) { a.y = -1.2 + Math.sin(T * 0.8) * 0.3; if (!a.blew && T > 4.5) { a.blew = true; for (let k = 0; k < 6; k++) puff(a.x + Math.sin(a.h) * 6, 3 + k * 1.4, a.z + Math.cos(a.h) * 6, { color: 0xf2f6f8, size: 2.5 + k * 0.4, life: 1.8, grow: 2, vy: 6, op: 0.7 }); try { SFX.splash({ x: a.x, z: a.z }, true); } catch (e) {} } }
+        else if (T < 18) { pitch = Math.min(1.1, (T - 10) * 0.35); a.y -= dt * 1.6; if (a.tail) a.tail.rotation.x = -pitch * 1.2; if (!a.flukeUp && T > 13) { a.flukeUp = true; for (let k = 0; k < 8; k++) puff(a.x - Math.sin(a.h) * 14, 2, a.z - Math.cos(a.h) * 14, { color: 0xffffff, size: 3, life: 1.2, grow: 2, vy: 7, op: 0.8 }); } }
+        else { killWild(a); continue; }
+        a.x += Math.sin(a.h) * 3 * dt; a.z += Math.cos(a.h) * 3 * dt; g.position.set(a.x, a.y, a.z); g.rotation.set(pitch, a.h, 0); continue; }
+      if (a.type === 'fish') { a.T += dt; if (a.T < 0) { g.visible = false; continue; } g.visible = true; const u = a.T / a.dur; if (u >= 1) { killWild(a); continue; }
+        const x = a.x + Math.sin(a.h) * u * 9, z = a.z + Math.cos(a.h) * u * 9, y = Math.sin(u * Math.PI) * 1.8 - 0.1; g.position.set(x, y, z); g.rotation.set(-Math.cos(u * Math.PI) * 0.8, a.h, 0);
+        if (u < 0.05 || u > 0.95) puff(x, 0.2, z, { color: 0xffffff, size: 0.5, life: 0.35, grow: 1.4, vy: 1.5, op: 0.8 }); continue; }
+      if (a.type === 'turtle') { a.stT -= dt; if (a.stT <= 0) { a.stT = 3 + Math.random() * 5; a.h += (Math.random() - 0.5) * 1.5; }
+        const nx = a.x + Math.sin(a.h) * 1.2 * dt, nz = a.z + Math.cos(a.h) * 1.2 * dt; if (heightAt(nx, nz) < -1.6) { a.x = nx; a.z = nz; } else a.h += 2;
+        const f = Math.sin(a.t * 2); a.legs.forEach((l, i) => l.rotation.y = (i % 2 ? -1 : 1) * f * 0.5); g.position.set(a.x, waveHeight(a.x, a.z, t) * 0.5 - 1.0, a.z); g.rotation.set(0, a.h, Math.sin(a.t) * 0.05); continue; }
+      if (a.type === 'butterfly') { a.h += (Math.random() - 0.5) * 3 * dt; a.x += Math.sin(a.h) * 1.4 * dt; a.z += Math.cos(a.h) * 1.4 * dt; const gy = groundAt(a.x, a.z); a.y += ((gy + 1.2 + Math.sin(a.t * 1.7) * 0.8) - a.y) * dt;
+        const f = Math.sin(a.t * 22) * 1.1; a.wings[0].rotation.z = f; a.wings[1].rotation.z = -f; g.position.set(a.x, a.y, a.z); g.rotation.y = a.h; continue; }
+      if (a.type === 'firefly') { if (day) { killWild(a); continue; } a.x += Math.sin(a.t * 0.7 + a.h) * 0.6 * dt; a.z += Math.cos(a.t * 0.5 + a.h * 1.3) * 0.6 * dt; a.y += Math.sin(a.t * 0.9 + a.h) * 0.3 * dt;
+        a.sp.material.opacity = Math.max(0, Math.sin(a.t * 1.6 + a.h * 3)) * 0.95; g.position.set(a.x, a.y, a.z); continue; }
+      // land walkers: crabs, chickens, goats, dogs, cats, monkeys
+      const pd = Math.hypot(px - a.x, pz - a.z), shy = a.type === 'crab' || a.type === 'chicken' || a.type === 'cat';
+      a.stT -= dt;
+      if (shy && pd < 4 && a.st !== 'flee') { a.st = 'flee'; a.stT = 1.5 + Math.random(); a.h = Math.atan2(a.x - px, a.z - pz) + (Math.random() - 0.5) * 0.6; }
+      else if (a.stT <= 0) { const r = Math.random(); a.st = r < 0.45 ? 'idle' : r < 0.85 ? 'walk' : 'act'; a.stT = 1.5 + Math.random() * 4; if (a.st === 'walk') a.h += (Math.random() - 0.5) * 2.4;
+        if (a.type === 'monkey' && a.st === 'act') { a.hop = 0.6; } if (a.type === 'dog' && a.st === 'act' && pd < 30) { a.st = 'follow'; a.stT = 6; } }
+      const spd = { crab: 1.6, chicken: 1.1, goat: 0.9, dog: 2.4, cat: 1.4, monkey: 1.8 }[a.type] * (a.st === 'flee' ? 2.6 : a.st === 'follow' ? 1.5 : 1);
+      let moving = a.st === 'walk' || a.st === 'flee' || (a.st === 'follow' && pd > 3);
+      if (a.st === 'follow') a.h = Math.atan2(px - a.x, pz - a.z);
+      if (moving) { const dir = a.type === 'crab' ? a.h + Math.PI / 2 : a.h, nx = a.x + Math.sin(dir) * spd * dt, nz = a.z + Math.cos(dir) * spd * dt, nh = heightAt(nx, nz);
+        const okH = a.type === 'crab' ? nh > 0.2 && nh < 3.5 : nh > 2.5 && nh < 45; if (okH) { a.x = nx; a.z = nz; } else { a.h += Math.PI * (0.5 + Math.random()); a.st = 'idle'; } }
+      let lift = 0; if (a.hop > 0) { a.hop -= dt; lift = Math.sin((0.6 - a.hop) / 0.6 * Math.PI) * 1.1; }
+      a.y = groundAt(a.x, a.z) + lift; g.position.set(a.x, a.y, a.z); g.rotation.y = a.h;
+      const w = moving ? Math.sin(a.t * (a.type === 'crab' ? 26 : 12)) : 0;
+      a.legs.forEach((l, i) => { if (a.type === 'crab') l.rotation.y = w * 0.4 * (i % 2 ? 1 : -1); else l.rotation.x = w * 0.6 * (i % 2 ? 1 : -1) * (i < 2 ? 1 : -1); });
+      if (a.head) { if (a.type === 'chicken') a.head.rotation.x = a.st === 'act' || a.st === 'idle' ? Math.max(0, Math.sin(a.t * 6)) * 0.9 : Math.sin(a.t * 12) * 0.15;   // pecking
+        else if (a.type === 'goat') a.head.rotation.x = a.st === 'act' ? 0.8 : 0; else a.head.rotation.y = Math.sin(a.t * 0.7) * 0.5; }
+      if (a.tailM) a.tailM.rotation.y = a.type === 'dog' ? Math.sin(a.t * (a.st === 'follow' ? 18 : 6)) * 0.6 : Math.sin(a.t * 1.3) * 0.3;
+    }
+    if (WILD.list.some(a => a.dead)) WILD.list = WILD.list.filter(a => !a.dead);
+  }
+
   // ===================== Polish: settings, HUD details, ambience and a frame loop that can't freeze =====================
   const SET_KEY = 'pg_settings';
   const SETTINGS = Object.assign({ quality: 'medium', fps: 'auto', shake: 100, vol: 80, music: 32, grade: true, vignette: true, showFps: false, particles: 100 }, (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch (e) { return {}; } })());
@@ -14458,6 +14576,7 @@ window.__pgBoot = () => {
     try { cineCam(dt); } catch (e) {}   // the Leviathan's cinematics take the camera
     try { updatePolish(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateJungle(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateFauna(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
