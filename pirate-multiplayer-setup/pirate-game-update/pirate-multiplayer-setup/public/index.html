@@ -3538,7 +3538,7 @@ window.__pgBoot = () => {
   const hullMul = key => 1 + 0.2 * upgL(key, 'hull'), speedMul = key => 1 + 0.08 * upgL(key, 'sails'), turnMul = key => 1 + 0.05 * upgL(key, 'sails');
   const isTitan = () => ownKey() === 'titan';   // her guns hit two and a half times as hard, and her timbers shrug off most of what hits her
   const gunMul = () => (1 + 0.15 * upgL(ownKey(), 'cannons')) * (isTitan() ? 2.5 : 1), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => (1 - 0.1 * upgL(ownKey(), 'plating')) * (isTitan() ? 0.4 : 1);
-  const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key));
+  const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key) * (STATE.mods && STATE.mods[key] && STATE.mods[key].keel ? 1.3 : 1));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
   function buildPlayerShip(key) {
     const fig = (STATE.shipStyle || {}).fig, wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? Object.assign({}, WRECK_STYLE, { fig: fig && fig !== 'none' ? fig : 'skull' }) : gh ? Object.assign({}, GHOST_STYLE, { fig }) : undefined);   // (the sea and the dead keep yer figurehead)   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
@@ -3848,7 +3848,7 @@ window.__pgBoot = () => {
       const reef = SEA_ROCKS.find(r => Math.hypot(nx - r.x, nz - r.z) < r.hitRadius + T.B * 0.35);
       if (reef && now - reef.lastHit > 1.8 && Math.abs(ship.speed) > 1.2) {
         reef.lastHit = now;
-        const impact = Math.min(34, 12 + Math.abs(ship.speed) * 0.9);
+        const impact = Math.min(34, 12 + Math.abs(ship.speed) * 0.9) * (hasMod('keel') ? 0.5 : 1);
         ship.hp = Math.max(0, ship.hp - impact);
         ship.lastHit = 0;
         ship.speed *= -0.42;
@@ -4800,6 +4800,7 @@ window.__pgBoot = () => {
       b.disabled = !can; b.onclick = () => buyUpgrade(k);
       row.append(info, b); body.appendChild(row);
     }
+    renderModules(body); renderEscorts(body);
     if (uiOpen) closeUI();
     uiOpen = 'upgr'; el.style.display = 'flex';
   }
@@ -5769,6 +5770,8 @@ window.__pgBoot = () => {
   addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     if ((k === 'e' || k === 'enter') && !e.repeat) interact();
+    if (k === 'k' && !e.repeat && !talk && !uiOpen) cycleAmmo();
+    if (k === 'l' && !e.repeat && !talk && !uiOpen) fireMortar();
     if (k === 'u' && !e.repeat && !talk && !uiOpen) { const tp = nearTradePost(); if (tp) openTrade(tp); }
     if (talk && talk.options && k >= '1' && k <= '9') chooseShip(+k - 1);
     if (!talk && !(sailing && ship && ship.submerged) && !e.repeat && (k === 'c' || k === 'q' || k === 'm' || k === 'i')) toggleUI({ c: 'custom', q: 'quests', m: 'map', i: 'forge' }[k]);
@@ -7208,6 +7211,177 @@ window.__pgBoot = () => {
     box.innerHTML = h + '</div>'; el.prepend(box);
   }
 
+  // hooks for things yer guns can aim at and hit besides ships (fort batteries, the Leviathan...)
+  const TARGET_HOOKS = [], BALL_HOOKS = [];
+  const extraTargets = () => TARGET_HOOKS.flatMap(f => f());
+
+  // ===================== Ship modules =====================
+  // Fitted by Hal's shipwrights on top of the upgrades, kept for whichever ship ye sail. Some need a trophy from a hard fight.
+  const MODULES = {
+    ram:   { name: 'Iron ram', desc: 'An iron beak at the bow. Drive into a ship at speed to stove in her hull (yer own bow takes no harm).', gold: 12000, mats: { iron: 12, steel: 4 } },
+    chain: { name: 'Chain shot', desc: 'Two balls chained together that shred rigging: a ship hit by them is slowed to a crawl for 8 seconds. K switches shot.', gold: 9000, mats: { iron: 10, steel: 3 } },
+    fire:  { name: 'Fire shot', desc: 'Heated shot that sets a hull burning for 6 seconds. K switches shot.', gold: 14000, mats: { steel: 4, gem: 2 } },
+    mortar: { name: 'Mortar deck', desc: 'A heavy mortar amidships: L lobs three shells high over the waves onto the nearest enemy ship within 700 m (12 s to reload). Needs the Admiral beaten.', gold: 30000, mats: { steel: 10, gem: 3 }, need: () => (STATE.admiralBeat || 0) > 0, needTxt: 'Beat the Blackwater Admiral first' },
+    keel:  { name: 'Reinforced keel', desc: '+30% hull, and reefs and rocks do half the damage.', gold: 20000, mats: { wood: 14, iron: 8, steel: 4 } },
+  };
+  const hasMod = k => !!(STATE.mods && STATE.mods[ownKey()] && STATE.mods[ownKey()][k]);
+  const AMMO = { ball: 'Round shot', chain: 'Chain shot', fire: 'Fire shot' };
+  function cycleAmmo() {
+    const list = ['ball', ...['chain', 'fire'].filter(hasMod)]; if (list.length < 2) { toast('Ye only have round shot. Hal can fit chain shot or fire shot.'); return; }
+    STATE.ammo = list[(list.indexOf(STATE.ammo || 'ball') + 1) % list.length]; save(); toast(`Loading ${AMMO[STATE.ammo]}.`);
+  }
+  const ammoNow = () => hasMod(STATE.ammo) ? STATE.ammo : 'ball';
+  function buyModule(k) {
+    const M = MODULES[k], key = ownKey(); if (hasMod(k)) return;
+    if (M.need && !M.need()) { toast(M.needTxt); return; }
+    if (STATE.gold < M.gold || !Object.entries(M.mats).every(([m, n]) => (STATE.mats[m] || 0) >= n)) return;
+    addGold(-M.gold, M.name); for (const [m, n] of Object.entries(M.mats)) STATE.mats[m] -= n;
+    STATE.mods = STATE.mods || {}; (STATE.mods[key] = STATE.mods[key] || {})[k] = 1; save();
+    if (k === 'keel' && ship) { const nh = Math.round(ship.maxHp * 1.3); ship.hp += nh - ship.maxHp; ship.maxHp = nh; }
+    SFX.anvil(); toast(`Hal's shipwrights fit the ${M.name.toLowerCase()}.`); openUpgrades();
+  }
+  function renderModules(body) {
+    const h = document.createElement('div'); h.style.cssText = 'font-weight:bold;margin:14px 0 4px'; h.textContent = 'Modules'; body.appendChild(h);
+    for (const [k, M] of Object.entries(MODULES)) {
+      const have = hasMod(k), lock = M.need && !M.need(), can = !have && !lock && STATE.gold >= M.gold && Object.entries(M.mats).every(([m, n]) => (STATE.mats[m] || 0) >= n);
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;border-radius:6px;background:rgba(80,50,20,.08);border:1px solid rgba(80,50,20,.18)';
+      const need = [`<span style="color:${STATE.gold >= M.gold ? 'inherit' : '#b03020'}">${M.gold.toLocaleString()} gold</span>`, ...Object.entries(M.mats).map(([m, n]) => `<span style="color:${(STATE.mats[m] || 0) >= n ? 'inherit' : '#b03020'}">${n} ${MATS[m].name.toLowerCase()}</span>`)].join(' · ');
+      const info = document.createElement('div'); info.style.flex = '1';
+      info.innerHTML = `<div style="font-weight:bold">${M.name}</div><div style="font-size:12px;opacity:.85">${M.desc}</div>${have ? '<div style="font-size:12px;color:#2e7d32">Fitted</div>' : lock ? `<div style="font-size:12px;color:#b03020">${M.needTxt}</div>` : `<div style="font-size:12px">${need}</div>`}`;
+      const b = document.createElement('button'); b.className = 'ch'; b.textContent = have ? 'Fitted' : 'Fit'; b.disabled = !can; b.onclick = () => buyModule(k);
+      row.append(info, b); body.appendChild(row);
+    }
+  }
+  // per frame: ramming, chain-shot slows, burning hulls, the mortar's reload
+  const MODFX = { mortarT: 0, ramT: 0, burnT: 0 };
+  function updateModules(dt) {
+    MODFX.mortarT = Math.max(0, MODFX.mortarT - dt); MODFX.ramT = Math.max(0, MODFX.ramT - dt);
+    const online = !!(window.__mpOnline && window.__mpOnline());
+    MODFX.burnT -= dt; const tick = MODFX.burnT <= 0; if (tick) MODFX.burnT = 1;
+    for (const r of raiders) {
+      if (r.state !== 'patrol' && r.state !== 'attack') { r.slowT = r.burnT = 0; continue; }
+      if (r.slowT > 0) { r.slowT -= dt; if (!online || r.local) r.speed = Math.min(r.speed, 5); }
+      if (r.burnT > 0) { r.burnT -= dt; if (Math.random() < dt * 8) puff(r.x + (Math.random() - 0.5) * r.T.B, r.group.position.y + r.T.H * 0.5, r.z + (Math.random() - 0.5) * r.T.L * 0.6, { color: Math.random() < 0.5 ? 0xff7a2a : 0x555555, size: 2.5, life: 1.2, grow: 2, vy: 4, op: 0.8 }); if (tick) damageShip(r, 6 * gunMul()); }
+    }
+    if (ship && hasMod('ram') && !ship.sinking && Math.abs(ship.speed) > 8 && MODFX.ramT <= 0) {
+      for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || r.captured) continue;
+        const { lx, lz } = shipLocal(ship, r.x, r.z);
+        if (lz > 0 && Math.abs(lx) < (ship.T.B + r.T.B) * 0.45 && lz < (ship.T.L + r.T.L) * 0.5) {
+          const dmg = Math.round(Math.abs(ship.speed) * 9 * (isTitan() ? 2.5 : 1)); damageShip(r, dmg); MODFX.ramT = 2; ship.speed *= 0.45;
+          SFX.crash({ x: r.x, z: r.z }); CMB.shake = Math.max(CMB.shake, 0.6); toast(`Ye ram her amidships! (${dmg} damage)`);
+          for (let i = 0; i < 10; i++) puff(r.x + (Math.random() - 0.5) * r.T.B, 3, r.z + (Math.random() - 0.5) * 8, { color: 0x6b4423, size: 2, life: 1, grow: 1.4, vy: 5, op: 0.9 });
+          break; } }
+    }
+  }
+  function fireMortar() {
+    if (!ship || ship.sinking || !(sailing || onShip)) return;
+    if (!hasMod('mortar')) { toast('Hal can fit a mortar deck once ye\'ve beaten the Blackwater Admiral.'); return; }
+    if (MODFX.mortarT > 0) { toast(`The mortar is reloadin' (${Math.ceil(MODFX.mortarT)}s).`); return; }
+    const list = raiders.filter(r => r.state === 'patrol' || r.state === 'attack').concat(window.__mpShips ? window.__mpShips() : []).concat(extraTargets());
+    let tg = null, bd = 700; for (const r of list) { const d = Math.hypot(r.x - ship.x, r.z - ship.z); if (d < bd) { bd = d; tg = r; } }
+    if (!tg) { toast('No enemy ship within mortar range (700 m).'); return; }
+    MODFX.mortarT = 12;
+    for (let k = 0; k < 3; k++) setTimeout(() => { if (!ship) return;
+      const x = ship.x, z = ship.z, y = ship.group.position.y + ship.T.H * 0.6, T = Math.max(2.5, bd / 90), sp = tg.speed || 0;
+      const tx = tg.x + Math.sin(tg.heading || 0) * sp * T + (Math.random() - 0.5) * 18, tz = tg.z + Math.cos(tg.heading || 0) * sp * T + (Math.random() - 0.5) * 18, ty = (tg.group ? tg.group.position.y : 0) + 4;
+      const m = new THREE.Mesh(ballGeo, ballMat); m.scale.setScalar(1.6); m.position.set(x, y, z); scene.add(m);
+      balls.push({ m, vx: (tx - x) / T, vy: (ty - y + 10 * T * T) / T, vz: (tz - z) / T, enemy: false, from: ship, life: T + 3, dmg: 45 * gunMul(), mortar: true, tg, tLeft: T });
+      SFX.cannon({ x, z }); puff(x, y + 2, z, { color: 0xdedad2, size: 7, life: 3, grow: 2.4, vy: 3, op: 0.8 }); CMB.shake = Math.max(CMB.shake, 0.25);
+    }, k * 350);
+  }
+  // a mortar shell bursts where it lands: ships within 35 m take the blast even on a near miss
+  function mortarBurst(x, z, b) {
+    for (let i = 0; i < 3; i++) puff(x + (Math.random() - 0.5) * 10, 2, z + (Math.random() - 0.5) * 10, { color: i ? 0xffffff : 0xff9a3a, size: 8, life: 1.2, grow: 2.5, vy: 10, op: 0.9 });
+    for (const r of raiders.filter(q => q.state === 'patrol' || q.state === 'attack').concat(extraTargets())) { const d = Math.hypot(r.x - x, r.z - z) - (r.T ? r.T.B / 2 : 0); if (d < 35) { if (r.mortarHit) r.mortarHit(b.dmg * 0.7); else damageShip(r, b.dmg * 0.7); } }
+  }
+  // when a shot from yer guns strikes a ship
+  function shotEffects(b, tg) {
+    if (!b || b.from !== ship || !tg || tg === ship || tg.remote) return;
+    if (b.ammo === 'chain') { tg.slowT = 8; }
+    if (b.ammo === 'fire') { tg.burnT = 6; }
+  }
+
+  // ===================== Fleet escorts =====================
+  // Hired from Hal: a navy-blue brig or galleon that sails in formation off yer quarter, engages any Blackwater ship that
+  // comes near, and takes her own hits. Sunk escorts limp back to port and rejoin ye three minutes later.
+  const ESCORT_KINDS = { brig: { name: 'Escort brig', gold: 8000, hp: 360 }, galleon: { name: 'Escort galleon', gold: 20000, hp: 720 } };
+  const escortCap = () => ({ sloop: 1, brig: 1, galleon: 2, titan: 3 }[ownKey()] || 1);
+  const ESC = { list: [] };
+  function makeEscort(kind, slot) {
+    const m = makeShip(kind, { sail: 0xf2ead8, hull: 0x1f3a5f, trim: 0xd9b13a, flag: 'blue' });
+    m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
+    const e = Object.assign(m, { escort: true, kind, slot, maxHp: ESCORT_KINDS[kind].hp, hp: ESCORT_KINDS[kind].hp, galleon: kind === 'galleon', reload: { 1: 0, '-1': 0 }, steer: 0, speed: 0, heading: ship ? ship.heading : 0, pitch: 0, roll: 0, state: 'follow', downT: 0 });
+    const tag = document.createElement('div'); tag.className = 'tag'; tag.style.cssText = 'background:rgba(20,40,80,.8);border:1px solid #6aa0ff'; tag.innerHTML = `${ESCORT_KINDS[kind].name}<div class="ehp"><div style="background:#6aa0ff"></div></div>`; tagLayer.appendChild(tag);
+    e.tag = tag; e.bar = tag.querySelector('.ehp div'); enableShadows(m.group); return e;
+  }
+  const escortSlot = (i, S) => { const off = [[-1, -0.7], [1, -0.7], [0, -1.6]][i] || [0, -2]; return { x: off[0] * (S.T.B * 2.2 + 40), z: off[1] * (S.T.L + 30) }; };
+  function placeEscort(e) {
+    const o = escortSlot(e.slot, ship), c = Math.cos(ship.heading), s = Math.sin(ship.heading);
+    for (let k = 0; k < 12; k++) { const sc = 1 + k * 0.4, x = ship.x + (o.x * c + o.z * s) * sc, z = ship.z + (-o.x * s + o.z * c) * sc; if (!blockedAt(e, x, z, ship.heading)) { e.x = x; e.z = z; break; } e.x = x; e.z = z; }
+    e.heading = ship.heading; e.speed = 0; if (!e.group.parent) scene.add(e.group);
+  }
+  function syncEscorts() {
+    STATE.escorts = (STATE.escorts || []).slice(0, escortCap());
+    while (ESC.list.length > STATE.escorts.length) { const e = ESC.list.pop(); scene.remove(e.group); e.tag.remove(); }
+    STATE.escorts.forEach((k, i) => { if (!ESC.list[i] || ESC.list[i].kind !== k) { if (ESC.list[i]) { scene.remove(ESC.list[i].group); ESC.list[i].tag.remove(); } ESC.list[i] = makeEscort(k, i); if (ship) placeEscort(ESC.list[i]); } });
+  }
+  function hireEscort(kind) {
+    const K = ESCORT_KINDS[kind]; STATE.escorts = STATE.escorts || [];
+    if (STATE.escorts.length >= escortCap()) { toast(`Yer ${(SHIP_TYPES[ownKey()] || {}).name || 'ship'} can lead ${escortCap()} escort${escortCap() > 1 ? 's' : ''}. A bigger flagship can lead more.`); return; }
+    if (STATE.gold < K.gold) return;
+    addGold(-K.gold, `Hired an ${K.name.toLowerCase()}`); STATE.escorts.push(kind); save(); syncEscorts(); SFX.horn && SFX.horn();
+    toast(`The ${K.name.toLowerCase()} runs up yer colours and falls in astern of ye.`); openUpgrades();
+  }
+  function dismissEscort(i) { STATE.escorts.splice(i, 1); save(); syncEscorts(); toast('The escort salutes and sails for home.'); openUpgrades(); }
+  function renderEscorts(body) {
+    const h = document.createElement('div'); h.style.cssText = 'font-weight:bold;margin:14px 0 4px'; h.textContent = `Fleet escorts (${(STATE.escorts || []).length}/${escortCap()})`; body.appendChild(h);
+    const row = document.createElement('div'); row.style.cssText = 'font-size:12px;opacity:.85;margin-bottom:6px'; row.textContent = 'Escorts sail in formation, fight any Blackwater ship that comes near, and come back to ye three minutes after they sink. Sloops and brigs lead one, galleons two, a Titan three.'; body.appendChild(row);
+    (STATE.escorts || []).forEach((k, i) => { const e = ESC.list[i], r = document.createElement('div'); r.style.cssText = 'display:flex;align-items:center;gap:10px;margin:4px 0';
+      r.innerHTML = `<div style="flex:1">${ESCORT_KINDS[k].name} ${e ? (e.state === 'down' ? `<span style="color:#b03020">(sunk, back in ${Math.ceil(e.downT)}s)</span>` : `<span style="opacity:.7">${Math.round(e.hp)}/${e.maxHp} hull</span>`) : ''}</div>`;
+      const b = document.createElement('button'); b.className = 'ch'; b.textContent = 'Dismiss'; b.onclick = () => dismissEscort(i); r.appendChild(b); body.appendChild(r); });
+    const r2 = document.createElement('div'); r2.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    for (const [k, K] of Object.entries(ESCORT_KINDS)) { const b = document.createElement('button'); b.className = 'ch'; b.textContent = `Hire ${K.name.toLowerCase()} (${K.gold.toLocaleString()} gold)`; b.disabled = STATE.gold < K.gold || (STATE.escorts || []).length >= escortCap(); b.onclick = () => hireEscort(k); r2.appendChild(b); }
+    body.appendChild(r2);
+  }
+  function escortHurt(e, n) {
+    if (e.state === 'down') return; e.hp -= n;
+    if (e.hp <= 0) { e.state = 'sinking'; e.sinkT = 0; SFX.crash(e); toast(`Yer ${ESCORT_KINDS[e.kind].name.toLowerCase()} is going down! She'll limp back to ye in three minutes.`); }
+  }
+  function updateEscorts(dt, t) {
+    if ((STATE.escorts || []).length !== ESC.list.length) syncEscorts();
+    for (const e of ESC.list) {
+      if (!ship) { e.group.visible = false; e.tag.style.display = 'none'; continue; }
+      if (e.state === 'sinking') { e.sinkT += dt; e.group.position.y -= dt * 1.5; e.roll += dt * 0.06; e.group.rotation.set(e.pitch, e.heading, e.roll); e.tag.style.display = 'none'; if (e.sinkT > 8) { scene.remove(e.group); e.state = 'down'; e.downT = 180; } continue; }
+      if (e.state === 'down') { e.downT -= dt; if (e.downT <= 0) { e.state = 'follow'; e.hp = e.maxHp; placeEscort(e); toast(`Yer ${ESCORT_KINDS[e.kind].name.toLowerCase()} rejoins the fleet, patched and ready.`); } continue; }
+      if (!e.group.parent || Math.hypot(e.x - ship.x, e.z - ship.z) > 1800) placeEscort(e);
+      e.hp = Math.min(e.maxHp, e.hp + dt * 1.5);
+      // an enemy close by? turn to bring the guns to bear
+      let foe = null, fd = 450;
+      for (const r of raiders) { if ((r.state !== 'patrol' && r.state !== 'attack') || r.captured) continue; const d = Math.hypot(r.x - e.x, r.z - e.z); if (d < fd) { fd = d; foe = r; } }
+      let desired, want;
+      if (foe) {
+        const dx = foe.x - e.x, dz = foe.z - e.z, b = Math.atan2(dx, dz);
+        if (fd > 230) { desired = b; want = 30; } else { const a1 = b + Math.PI / 2, a2 = b - Math.PI / 2; desired = Math.abs(angDiff(e.heading, a1)) < Math.abs(angDiff(e.heading, a2)) ? a1 : a2; want = 22; }
+        if (fd < 260) { const fwd = (dx * Math.sin(e.heading) + dz * Math.cos(e.heading)) / fd, side = dx * Math.cos(e.heading) - dz * Math.sin(e.heading) > 0 ? 1 : -1;
+          if (Math.abs(fwd) < 0.45 && e.reload[side] <= 0) { fireBroadside(e, side, false); e.reload[side] = 3.2 + Math.random(); } }
+      } else {
+        const o = escortSlot(e.slot, ship), c = Math.cos(ship.heading), s = Math.sin(ship.heading), tx = ship.x + o.x * c + o.z * s, tz = ship.z - o.x * s + o.z * c, d = Math.hypot(tx - e.x, tz - e.z);
+        desired = d > 25 ? Math.atan2(tx - e.x, tz - e.z) : ship.heading; want = Math.min(42, Math.max(0, Math.abs(ship.speed) + (d - 20) * 0.25));
+      }
+      for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
+      const diff = angDiff(e.heading, desired), nh = e.heading + Math.max(-0.55 * dt, Math.min(0.55 * dt, diff));
+      e.steer += (Math.sign(diff) * Math.min(1, Math.abs(diff)) - e.steer) * Math.min(1, dt * 2);
+      e.speed += (want - e.speed) * Math.min(1, dt * 0.6);
+      const nx = e.x + Math.sin(nh) * e.speed * dt, nz = e.z + Math.cos(nh) * e.speed * dt;
+      if (blockedAt(e, nx, nz, nh)) { e.heading += 0.9 * dt; e.speed *= 0.6; } else { e.heading = nh; e.x = nx; e.z = nz; }
+      bob(e, dt, t); e.group.visible = Math.hypot(e.x - camera.position.x, e.z - camera.position.z) < 6000;
+      if (!inInterior && Math.hypot(e.x - P.pos.x, e.z - P.pos.z) < 700) { tmp2.set(e.x, e.group.position.y + e.T.H + 14, e.z).project(camera);
+        if (tmp2.z < 1) { e.tag.style.display = 'block'; e.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px,${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; e.bar.style.width = Math.max(0, e.hp / e.maxHp * 100) + '%'; } else e.tag.style.display = 'none'; }
+      else e.tag.style.display = 'none';
+    }
+  }
+  const liveEscorts = () => ESC.list.filter(e => e.state === 'follow');
+
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -7315,7 +7489,7 @@ window.__pgBoot = () => {
 
   // ---------- Cannons ----------
   const balls = [], pendingShots = [];
-  const ballGeo = new THREE.SphereGeometry(0.45, 8, 6), ballMat = lam(0x1a1a1a);
+  const ballGeo = new THREE.SphereGeometry(0.45, 8, 6), ballMat = lam(0x1a1a1a), FIRE_BALL = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
   const gunCount = ent => ent.T.gunRows && ent.T.gunRows.length ? Math.min(ent.T.guns, ent.T.maxGuns || 8) : 2;
   function fireBroadside(ent, side, enemy) {
     if (ent === ship && !enemy && window.__mpFire) window.__mpFire(side);
@@ -7330,7 +7504,8 @@ window.__pgBoot = () => {
     const x = ent.x + lx * c + lz * s, z = ent.z - lx * s + lz * c, y = ent.group.position.y + T.H * 0.38;
     const rx = p.side * c, rz = -p.side * s, spd = 115 + Math.random() * 15;
     const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
-    const b = { m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, from: ent, life: 6, dmg: shotDamage(ent, p.enemy) };
+    const b = { m, vx: rx * spd + s * ent.speed + (Math.random() - 0.5) * 6, vy: 7 + Math.random() * 4, vz: rz * spd + c * ent.speed + (Math.random() - 0.5) * 6, enemy: p.enemy, from: ent, life: 6, dmg: shotDamage(ent, p.enemy), ammo: ent === ship ? ammoNow() : null };
+    if (b.ammo === 'fire') { m.material = FIRE_BALL; } else if (b.ammo === 'chain') m.scale.set(1.5, 0.7, 0.7);
     const tg = aimTarget(ent, p.side, x, z, rx, rz);
     if (tg) aimShot(b, x, y, z, tg, p.lz / T.L);
     balls.push(b);
@@ -7344,7 +7519,9 @@ window.__pgBoot = () => {
     if (ent === ship) {                // yer own guns: raiders and other players' ships
       list = raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       if (window.__mpShips) list = list.concat(window.__mpShips());
-      list = list.concat(serpTargets());
+      list = list.concat(serpTargets()).concat(extraTargets());
+    } else if (ent.escort) {           // yer escorts lead their shots at the raider they're fighting
+      list = raiders.filter(r => r.state === 'patrol' || r.state === 'attack').concat(extraTargets());
     } else if (ent.remote) {           // another player's broadside, replayed here: it was aimed at us
       list = ship && !ship.sinking && !ship.submerged ? [ship] : [];
     } else if (raiders.includes(ent) && ship && !ship.sinking && !ship.submerged) {   // Blackwater gunners lead their shots at the ship they're hunting
@@ -7385,6 +7562,7 @@ window.__pgBoot = () => {
     for (let i = pendingShots.length - 1; i >= 0; i--) { const p = pendingShots[i]; p.delay -= dt; if (p.delay <= 0) { pendingShots.splice(i, 1); launchShot(p); } }
     for (let i = balls.length - 1; i >= 0; i--) {
       const b = balls[i], m = b.m; b.life -= dt;
+      if (b.mortar && b.tg) { b.tLeft -= dt; if (b.tLeft > 0.15) { b.vx = (b.tg.x - m.position.x) / b.tLeft; b.vz = (b.tg.z - m.position.z) / b.tLeft; } }   // the mortar's spotter walks the shells onto her
       b.vy -= 20 * dt; m.position.x += b.vx * dt; m.position.y += b.vy * dt; m.position.z += b.vz * dt;
       const x = m.position.x, y = m.position.y, z = m.position.z;
       let hit = false;
@@ -7392,12 +7570,12 @@ window.__pgBoot = () => {
       if (!hit && b.enemy && !RIDE.on && elderBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }   // shot that strikes the Elder Serpent's body
       if (!hit && b.enemy && RIDE.on && ELD.on && Math.hypot(x - ELD.x, z - ELD.z) < 45 && y < 50) { elderHurt(b.dmg || 11); hit = true; wSplash(x, 2, z, true); SFX.crash({ x, z }); toast(`A cannonball slams into ${mountName()} beneath ye!`); }   // shot at while riding
       if (!hit && b.enemy && (krSwimming() || seaRunning()) && !(sailing || onShip || inInterior) && Math.hypot(x - P.pos.x, z - P.pos.z) < 4 && y < 4) { hit = true; hurtPlayer(28); wSplash(x, 2, z, true); SFX.crash({ x, z }); toast('A cannonball crashes into the water right on top of ye!'); }   // shot at while swimming
-      const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
+      const targets = hit ? [] : b.enemy ? (ship && !ship.sinking ? [ship] : []).concat(liveEscorts()) : raiders.filter(r => r.state === 'patrol' || r.state === 'attack');
       for (const tg of targets) {
         const dx = x - tg.x, dz = z - tg.z, hh = tg.heading;
         const lx = dx * Math.cos(hh) - dz * Math.sin(hh), lz = dx * Math.sin(hh) + dz * Math.cos(hh), gy = tg.group.position.y;
         if (Math.abs(lx) < tg.T.B / 2 + 0.6 && Math.abs(lz) < tg.T.L / 2 && y < gy + tg.T.H && y > gy - 3) {
-          hit = true; damageShip(tg, b.dmg || (b.enemy ? 6 : 11)); SFX.crash({ x, z });
+          hit = true; damageShip(tg, b.dmg || (b.enemy ? 6 : 11)); shotEffects(b, tg); SFX.crash({ x, z });
           if (tg === ship && b.from && b.from.remote && b.from.peer) { ELD.threats.set(b.from.peer, clock.elapsedTime); ship.lastBy = { peer: b.from.peer, t: clock.elapsedTime }; }   // the Elder Serpent remembers who fired on ye
           puff(x, y, z, { color: 0x6b4423, size: 3, life: 0.8, grow: 1.5, vy: 3, op: 0.9 });
           puff(x, y + 1, z, { color: 0x888888, size: 4, life: 2, grow: 2, vy: 2, op: 0.6 });
@@ -7406,8 +7584,9 @@ window.__pgBoot = () => {
       }
       if (!hit && !b.enemy && serpentBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
       if (!hit && !b.enemy && bwBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
+      if (!hit && !b.enemy && BALL_HOOKS.some(f => f(x, y, z, b))) { hit = true; SFX.crash({ x, z }); }
       if (!hit && y < waveHeight(x, z, t)) {
-        hit = true;
+        hit = true; if (b.mortar) mortarBurst(x, z, b);
         if (heightAt(x, z) < -1) { SFX.splash({ x, z }, true); puff(x, y + 1.5, z, { color: 0xffffff, size: 4, life: 0.9, grow: 1.2, vy: 9, op: 0.9 }); puff(x, y + 0.5, z, { color: 0xeaf6ff, size: 6, life: 1.4, grow: 1.5, op: 0.6 }); }
         else puff(x, y + 1, z, { color: 0xb59a6a, size: 4, life: 1, grow: 1.5, vy: 2, op: 0.8 });
       }
@@ -7416,6 +7595,7 @@ window.__pgBoot = () => {
     }
   }
   function damageShip(tg, n, pierce) {
+    if (tg.escort) { escortHurt(tg, n); return; }
     if (tg === ship && window.__god) return;
     if (tg === ship && !pierce) n *= armorMul();   // iron plating
     if (tg.remote) return;   // another player's ship: their own game applies the damage
@@ -7608,6 +7788,7 @@ window.__pgBoot = () => {
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
+    try { updateModules(dt); updateEscorts(dt, t); } catch (e) { console.error(e); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
       autoFireT -= dt;
       const hostile = raiders.filter(r => (r.state === 'attack' || r.state === 'patrol') && Math.hypot(r.x - ship.x, r.z - ship.z) < 520)
@@ -7625,7 +7806,7 @@ window.__pgBoot = () => {
     if (ship) {
       hullBar.style.display = 'flex'; hullFill.style.width = Math.max(0, ship.hp / ship.maxHp * 100) + '%';
       const r = ship.reload || {};
-      const txt = sailing ? (ship.submerged ? `SUBMERGED · depth ${Math.round(Math.abs(ship.diveDepth ?? 22))} · hidden from raiders` : `Port guns ${r[-1] > 0 ? 'reloading' : 'ready'} · starboard ${r[1] > 0 ? 'reloading' : 'ready'}`) : '';
+      const txt = sailing ? (ship.submerged ? `SUBMERGED · depth ${Math.round(Math.abs(ship.diveDepth ?? 22))} · hidden from raiders` : `Port guns ${r[-1] > 0 ? 'reloading' : 'ready'} · starboard ${r[1] > 0 ? 'reloading' : 'ready'}${ammoNow() !== 'ball' ? ` · ${AMMO[ammoNow()]} (K)` : hasMod('chain') || hasMod('fire') ? ' · round shot (K)' : ''}${hasMod('mortar') ? ` · mortar ${MODFX.mortarT > 0 ? Math.ceil(MODFX.mortarT) + 's' : 'ready (L)'}` : ''}`) : '';
       if (gunTxt.textContent !== txt) gunTxt.textContent = txt;
     } else { hullBar.style.display = 'none'; if (gunTxt.textContent) gunTxt.textContent = ''; }
     const op = parseFloat(hurtEl.style.opacity || 0); if (op > 0) hurtEl.style.opacity = Math.max(0, op - dt * 1.5);
