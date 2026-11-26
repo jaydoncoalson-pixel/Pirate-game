@@ -1559,6 +1559,19 @@ window.__pgBoot = () => {
   const waveUniform = WAVES.map(w => new THREE.Vector4(Math.cos(WIND_ANGLE + w[0]), Math.sin(WIND_ANGLE + w[0]), w[1], w[2]));
   const wavePhase = WAVES.map(w => w[3]);
 
+  // A tileable map of small wind-driven waves (a spectrum of periodic waves, longer ones stronger), stored as normals in
+  // RGB and height in A. The sea samples it at three sizes scrolling different ways, so the surface never shows a grid.
+  const WATER_NRM = (() => {
+    const N = 256, h = new Float32Array(N * N), rnd = (() => { let s = 1234567; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+    const comps = []; for (let i = 0; i < 90; i++) { let kx = 0, ky = 0; while (!kx && !ky) { kx = Math.round((rnd() * 2 - 1) * 22); ky = Math.round((rnd() * 2 - 1) * 22); } const k = Math.hypot(kx, ky), wa = Math.atan2(ky, kx); comps.push([kx, ky, Math.pow(k, -1.6) * (0.55 + 0.45 * Math.cos(wa) * Math.cos(wa)), rnd() * 6.283]); }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let v = 0; for (const [kx, ky, a, ph] of comps) v += a * Math.sin(6.2832 * (kx * x + ky * y) / N + ph); h[y * N + x] = v; }
+    let lo = 1e9, hi = -1e9; for (const v of h) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const data = new Uint8Array(N * N * 4), S = 9;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const at = (xx, yy) => h[((yy + N) % N) * N + ((xx + N) % N)];
+      const dx = (at(x + 1, y) - at(x - 1, y)) * S, dy = (at(x, y + 1) - at(x, y - 1)) * S, l = Math.hypot(dx, dy, 1), i = (y * N + x) * 4;
+      data[i] = Math.round((-dx / l * 0.5 + 0.5) * 255); data[i + 1] = Math.round((-dy / l * 0.5 + 0.5) * 255); data[i + 2] = Math.round((1 / l * 0.5 + 0.5) * 255); data[i + 3] = Math.round((h[y * N + x] - lo) / (hi - lo) * 255); }
+    const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true; return t;
+  })();
   const SIZE = 1600, SEG = 320, CELL = SIZE / SEG;
   const oceanGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   oceanGeo.rotateX(-Math.PI / 2);
@@ -1573,7 +1586,7 @@ window.__pgBoot = () => {
       shallow: { value: new THREE.Color(0x1d7f9a) },
       skyTop: { value: SKY_TOP },
       horizon: { value: SKY_HORIZON },
-      shallowTex: { value: shallowTex }, wmin: { value: new THREE.Vector2(WMAP.min, WMAP.min) }, wsize: { value: WMAP.size },
+      nrmTex: { value: WATER_NRM }, shallowTex: { value: shallowTex }, wmin: { value: new THREE.Vector2(WMAP.min, WMAP.min) }, wsize: { value: WMAP.size },
     },
     vertexShader: `
       #define WAVE_N ${WAVE_N}
@@ -1615,7 +1628,7 @@ window.__pgBoot = () => {
       }`,
     fragmentShader: `
       uniform vec3 sunDir; uniform vec3 camPos; uniform float specK; uniform float fogDist; uniform vec3 deep; uniform vec3 shallow;
-      uniform vec3 skyTop; uniform vec3 horizon; uniform float time; uniform sampler2D shallowTex; uniform vec2 wmin; uniform float wsize; uniform vec4 krDark; uniform vec2 windDir; uniform float seaState;
+      uniform vec3 skyTop; uniform vec3 horizon; uniform float time; uniform sampler2D shallowTex; uniform vec2 wmin; uniform float wsize; uniform vec4 krDark; uniform vec2 windDir; uniform float seaState; uniform sampler2D nrmTex;
       varying vec3 vWorld; varying vec3 vNormal; varying float vCrest; varying float vJac;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
@@ -1634,20 +1647,26 @@ window.__pgBoot = () => {
         vec2 p = vWorld.xz, slope = vec2(0.0);
         slope += rip(p, rot(windDir,  0.25), 8.5, 0.10, 1.7) * mid;
         slope += rip(p, rot(windDir, -0.55), 6.1, 0.09, 4.2) * mid;
-        slope += rip(p, rot(windDir,  0.85), 4.3, 0.08, 0.4) * near;
-        slope += rip(p, rot(windDir, -0.15), 3.1, 0.07, 2.9) * near;
-        slope += rip(p, rot(windDir,  1.30), 2.2, 0.06, 5.3) * near;
-        slope += rip(p, rot(windDir, -1.10), 1.5, 0.05, 3.6) * near;
-        // a little noise breaks up what's left of the pattern
-        vec2 q = p * 0.45;
-        slope += (vec2(noise(q + time * 0.5), noise(q * 1.7 - time * 0.7)) - 0.5) * 0.09 * near;
+        // three layers of the wind-wave map at different sizes, each drifting its own way: fine chop up close, broader
+        // patterns far out (mipmapping keeps the distance from shimmering)
+        float far2 = exp(-dist / 1400.0);
+        vec4 m1 = texture2D(nrmTex, rot(p, 0.35) / 23.0 + windDir * time * 0.032);
+        vec4 m2 = texture2D(nrmTex, rot(p, -0.9) / 8.5 - rot(windDir, 0.6) * time * 0.055);
+        vec4 m3 = texture2D(nrmTex, p / 71.0 + rot(windDir, -0.3) * time * 0.012);
+        slope += (m1.xy * 2.0 - 1.0) * 0.34 * (0.3 + 0.7 * mid) + (m2.xy * 2.0 - 1.0) * 0.24 * near + (m3.xy * 2.0 - 1.0) * 0.26 * (0.3 + 0.7 * far2);
+        slope *= 0.8 + 0.5 * seaState;
         n = normalize(n - vec3(slope.x, 0.0, slope.y));
+        float microH = m1.w * 0.5 + m2.w * 0.3 + m3.w * 0.2;
 
-        float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
-        fres = clamp(0.02 + 0.98 * fres, 0.0, 1.0) * 0.92;
+        // Schlick's Fresnel for water (F0 = 0.02): looking down ye see into the water, at a glancing angle ye see the sky
+        float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+        fres = clamp(fres, 0.0, 1.0) * 0.94;
 
-        vec3 R = reflect(-V, n);
+        vec3 R = reflect(-V, n); R.y = abs(R.y);
         vec3 skyCol = mix(horizon, skyTop, pow(max(R.y, 0.0), 0.55));
+        // soft cloud shapes in the reflection, so it isn't a flat gradient
+        float cl = noise(R.xz / (R.y + 0.08) * 1.6 + time * 0.01) * 0.6 + noise(R.xz / (R.y + 0.08) * 4.0) * 0.4;
+        skyCol = mix(skyCol, mix(horizon, vec3(1.0), 0.25) * (0.75 + 0.35 * clamp(specK / 2.5, 0.0, 1.0)), smoothstep(0.5, 0.9, cl) * 0.18 * (1.0 - R.y));
 
         float facing = max(dot(n, sunDir), 0.0);
         float day = clamp(specK / 2.5, 0.0, 1.0);
@@ -1658,6 +1677,11 @@ window.__pgBoot = () => {
         float back = pow(max(dot(-V, sunFlat), 0.0) * 0.8 + 0.2, 3.0);
         float thin = clamp((vWorld.y + 0.6) * 0.45, 0.0, 1.0);
         water += vec3(0.04, 0.30, 0.26) * thin * (0.35 + 0.65 * back) * day;
+        // subsurface glow: light scattering up through the body of a wave, teal-green on the slopes facing away from the sun
+        float sss = pow(clamp(dot(V, -sunFlat) * 0.5 + 0.5, 0.0, 1.0), 4.0) * clamp(vWorld.y * 0.25 + 0.35 + microH * 0.3, 0.0, 1.0);
+        water += vec3(0.02, 0.22, 0.2) * sss * day * (1.0 - fres);
+        // looking straight down into deep water it goes darker and bluer
+        water *= mix(0.78, 1.0, smoothstep(0.0, 0.6, 1.0 - max(dot(n, V), 0.0)));
         float shallowAmt = texture2D(shallowTex, (vWorld.xz - wmin) / wsize).r;
         float bright = clamp(length(shallow) / 0.79, 0.0, 1.5);
         water = mix(water, vec3(0.16, 0.62, 0.62) * (0.6 + 0.4 * facing) * bright, shallowAmt * 0.85);
@@ -1676,6 +1700,11 @@ window.__pgBoot = () => {
         float cap = smoothstep(0.62 + 0.5 * seaState, 0.12, vJac);   // rough weather: whitecaps everywhere
         float foam = clamp(cap * (0.55 + streak * 0.9) - 0.25 + seaState * streak * 0.15 * mid, 0.0, 1.0);
         foam = max(foam, smoothstep(0.62, 0.9, vCrest + streak * 0.25) * 0.5);
+        foam *= smoothstep(0.25, 0.65, microH + streak * 0.3);   // foam lies in lacy patches, not flat sheets
+        // surf: bands of foam rolling in toward the beaches, breaking up as they go
+        float shore = smoothstep(0.5, 0.97, shallowAmt);
+        float surf = smoothstep(0.55, 0.95, sin(shallowAmt * 34.0 - time * 1.6 + streak * 5.0) * 0.5 + 0.5) * shore + smoothstep(0.9, 1.0, shallowAmt) * 0.6;
+        foam = max(foam, surf * smoothstep(0.2, 0.7, microH + streak * 0.4) * 0.9 * near);
         col = mix(col, vec3(0.93, 0.97, 1.0) * (0.15 + 0.85 * max(bright, 0.6 * day + 0.1)), foam * 0.85);   // foam stays white under storm clouds
         // where the kraken attacks, the sea turns black as ink, swirling slowly around the fight
         if (krDark.w > 0.001) {
