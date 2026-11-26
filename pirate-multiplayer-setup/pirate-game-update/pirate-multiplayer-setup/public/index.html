@@ -5627,6 +5627,7 @@ window.__pgBoot = () => {
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - r.heading); ctx.fillStyle = r.admiral ? '#141414' : r.bountied ? '#e8c44a' : '#c0392b'; ctx.strokeStyle = r.admiral ? '#e8c44a' : '#1c1c1c'; ctx.lineWidth = r.admiral ? 2.5 : 1.5;
       ctx.beginPath(); ctx.moveTo(0, -7 * sz); ctx.lineTo(4 * sz, 5 * sz); ctx.lineTo(-4 * sz, 5 * sz); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
+    try { drawForts(ctx, S, W, H); } catch (e) {}
     if (ship && !(sailing || onShip || inInterior)) {
       const [x, y] = S(ship.x, ship.z); ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI - ship.heading);
       ctx.fillStyle = '#6b4423'; ctx.strokeStyle = '#f4e4c1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(4, 5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -5745,6 +5746,7 @@ window.__pgBoot = () => {
       if (nearLadder()) goUp(); else if (nearBed()) sleep(); else if (nearWardrobe()) openUI('custom', 'pirate'); else if (nearTrophies()) showTrophies(); else { const n = nearestNpc(); if (n) { talk = { npc: n, line: 0 }; showLine(); } } return; }
     if (nearHatch()) { goBelow(); return; }
     if (nearDoor()) { goInside('quarters'); return; }
+    { const fc = nearFortChest(); if (fc) { openFortChest(fc); return; } }
     if (GUEST.on && GUEST.raider) { raiderLeave(); return; }
     if (GUEST.on) { guestLeave(); return; }
     { const rb = nearRaiderToBoard(); if (rb && !nearWheel()) { raiderBoard(rb); return; } }
@@ -6843,6 +6845,7 @@ window.__pgBoot = () => {
     const out = [];
     if (GUEST.on && GUEST.raider) for (const c of crewOf(GUEST.raider)) if (c.st === 'fight') out.push(c);
     if (SIEGE.on && onShip) for (const c of SIEGE.list) if (c.st === 'fight') out.push(c);
+    if (!onShip && !GUEST.on) for (const c of fortFighters()) out.push(c);
     return out;
   }
   function hitFighter(c, dm, heavy) {
@@ -7382,6 +7385,156 @@ window.__pgBoot = () => {
   }
   const liveEscorts = () => ESC.list.filter(e => e.state === 'follow');
 
+  // ===================== Blackwater forts =====================
+  // Three forts on the outer islands. Four gun towers on the walls open fire on any ship that comes within 500 m.
+  // Shell the towers to rubble from the sea (broadsides or the mortar), then land, cut down the garrison inside the walls
+  // and break open the treasury. The Blackwater fleet retakes a fort 30 minutes after ye storm it.
+  const FORTS = [{ isl: 'Skull Isle' }, { isl: 'Turtle Cay' }, { isl: 'Driftwood Isle' }];
+  const FORT_R = 30, FORT_COOL = 30 * 60 * 1000, TOWER_HP = 420;
+  function fortSite(I) {
+    let best = null;
+    for (let k = 0; k < 32; k++) { const a = k / 32 * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a);
+      for (let rr = I.r * 1.1; rr > I.r * 0.2; rr -= 6) { const x = I.c.x + dx * rr, z = I.c.y + dz * rr;
+        if (heightAt(x, z) < 3) continue;
+        const cx = x - dx * (FORT_R + 14), cz = z - dz * (FORT_R + 14); let lo = 1e9, hi = -1e9;
+        for (let j = 0; j < 12; j++) { const b = j / 12 * Math.PI * 2, h = heightAt(cx + Math.sin(b) * (FORT_R + 4), cz + Math.cos(b) * (FORT_R + 4)); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+        const hc = heightAt(cx, cz), score = (hi - lo) + (lo < 1.5 ? 60 : 0) + Math.abs(hc - 8) * 0.3;
+        if (!best || score < best.score) best = { x: cx, z: cz, y: hc, face: a, score };
+        break; } }
+    return best;
+  }
+  function buildFort(F) {
+    const I = ISLANDS.find(i => i.name === F.isl); if (!I) return;
+    const site = fortSite(I); if (!site) return; Object.assign(F, site);
+    const g = new THREE.Group(); g.position.set(F.x, 0, F.z); scene.add(g); F.g = g;
+    // clear the palms and rocks off the ground the fort stands on
+    { const mtx = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0); I.group.updateMatrixWorld(true);
+      I.group.traverse(o => { if (!o.isInstancedMesh) return; let ch = false; for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, mtx); v.setFromMatrixPosition(mtx).applyMatrix4(o.matrixWorld); if (Math.hypot(v.x - F.x, v.z - F.z) < FORT_R + 8) { o.setMatrixAt(i, zero); ch = true; } } if (ch) o.instanceMatrix.needsUpdate = true; });
+      for (let i = colliders.length - 1; i >= 0; i--) { const c = colliders[i]; if (Math.hypot(c.x - F.x, c.z - F.z) < FORT_R + 8) colliders.splice(i, 1); } }
+    const stone = lam(0x6e6a62), stoneD = lam(0x4e4a44), wood = lam(0x4a3220), iron = lam(0x1c1c1c);
+    const gy = (lx, lz) => heightAt(F.x + lx, F.z + lz);
+    // curtain walls: short segments round a ring, with a gate
+    const N = 20, gate = Math.floor((((F.face % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * N) % N;   // the gate faces the sea, where ye land
+    for (let k = 0; k < N; k++) { if (k === gate) continue; const a0 = k / N * Math.PI * 2, a1 = (k + 1) / N * Math.PI * 2, am = (a0 + a1) / 2;
+      const lx = Math.sin(am) * FORT_R, lz = Math.cos(am) * FORT_R, len = 2 * FORT_R * Math.sin(Math.PI / N) + 0.6, y = gy(lx, lz);
+      const w = new THREE.Mesh(new THREE.BoxGeometry(len, 9, 2.4), k % 2 ? stone : stoneD); w.position.set(lx, y + 3.2, lz); w.rotation.y = am; g.add(w);
+      for (let m = -1; m <= 1; m += 2) { const mer = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 2.4), stone); mer.position.set(lx + Math.cos(am) * m * len * 0.28, y + 8.3, lz - Math.sin(am) * m * len * 0.28); mer.rotation.y = am; g.add(mer); }
+      colliders.push({ box: true, x: F.x + lx, z: F.z + lz, hw: len / 2, hd: 1.4, rot: am }); }
+    // the four gun towers
+    F.towers = [];
+    for (let k = 0; k < 4; k++) { const a = F.face + (k - 1.5) * (Math.PI / 2) * 0.62, lx = Math.sin(a) * (FORT_R + 1), lz = Math.cos(a) * (FORT_R + 1), y = gy(lx, lz);
+      const tg = new THREE.Group(); tg.position.set(F.x + lx, y, F.z + lz); scene.add(tg);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 5.4, 14, 10), stoneD); body.position.y = 6; tg.add(body);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(5.6, 5.0, 1.6, 10), stone); top.position.y = 13.4; tg.add(top);
+      for (let m = 0; m < 8; m++) { const b = m / 8 * Math.PI * 2, mer = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 1.0), stone); mer.position.set(Math.sin(b) * 5.2, 15, Math.cos(b) * 5.2); mer.rotation.y = b; tg.add(mer); }
+      const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.65, 4.2, 10), iron); gun.rotation.x = Math.PI / 2; gun.position.set(0, 15, 2.2); const piv = new THREE.Group(); piv.position.y = 0; piv.add(gun); piv.rotation.y = a; tg.add(piv);
+      colliders.push({ x: tg.position.x, z: tg.position.z, r: 5.6 });
+      const T = { L: 6, B: 10, H: 16 }, tw = { fort: F, g: tg, group: tg, piv, x: tg.position.x, z: tg.position.z, heading: 0, speed: 0, T, hp: TOWER_HP, maxHp: TOWER_HP, reload: 1 + k * 1.3, dead: false };
+      tw.mortarHit = n => towerHurt(tw, n); F.towers.push(tw); }
+    // the keep yard: flagpole, powder kegs, the treasury chest
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 18, 6), wood); pole.position.set(0, gy(0, 0) + 9, 0); g.add(pole);
+    F.flag = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), new THREE.MeshLambertMaterial({ color: 0x111111, side: THREE.DoubleSide })); F.flag.position.set(2.6, gy(0, 0) + 16.5, 0); g.add(F.flag);
+    const sk = new THREE.Mesh(new THREE.CircleGeometry(0.8, 12), new THREE.MeshBasicMaterial({ color: 0xeeeeee, side: THREE.DoubleSide })); sk.position.set(0, 0, 0.01); F.flag.add(sk);
+    for (let k = 0; k < 6; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.4, 10), wood); const a = k * 1.1; b.position.set(Math.sin(a) * 12, gy(Math.sin(a) * 12, Math.cos(a) * 12) + 0.7, Math.cos(a) * 12); g.add(b); }
+    const cx = -Math.sin(F.face) * 8, cz = -Math.cos(F.face) * 8; F.chest = { x: F.x + cx, z: F.z + cz, y: gy(cx, cz) };
+    const chest = new THREE.Group(); chest.position.set(cx, F.chest.y, cz); g.add(chest);
+    const cb = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.4), lam(0x6b4423)); cb.position.y = 0.6; chest.add(cb);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.2, 10, 1, false, 0, Math.PI), lam(0x7a5030)); lid.rotation.z = Math.PI / 2; lid.position.y = 1.2; chest.add(lid);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.15, 1.5), lam(0xd9b13a)); band.position.y = 1.0; chest.add(band); F.chestG = chest; F.lid = lid;
+    const tag = document.createElement('div'); tag.className = 'tag etag'; tag.style.display = 'none'; tagLayer.appendChild(tag); F.tag = tag;
+    resetFort(F, !fortCaptured(F));
+  }
+  const fortCaptured = F => STATE.forts && STATE.forts[F.isl] && Date.now() - STATE.forts[F.isl] < FORT_COOL;
+  function resetFort(F, live) {
+    F.live = live; F.alerted = false;
+    for (const t of F.towers) { t.dead = !live; t.hp = live ? TOWER_HP : 0; t.g.scale.y = live ? 1 : 0.45; t.piv.visible = live; }
+    F.flag.material.color.setHex(live ? 0x111111 : 0xf2ead8); F.lid.rotation.x = 0;
+    if (F.guards) for (const c of F.guards) if (c.ch.root.parent) c.ch.root.parent.remove(c.ch.root);
+    F.guards = []; F.looted = !live;
+    if (!live) return;
+    for (let k = 0; k < 8; k++) { const ch = makeCharacter(Object.assign(banditLook(), { coat: 0x2a2424, hat: k % 3 ? 'tricorn' : 'bandana', hatColor: 0x111111 })); addProp(ch, 'blade'); scene.add(ch.root);
+      const a = k / 8 * Math.PI * 2, x = F.x + Math.sin(a) * 14, z = F.z + Math.cos(a) * 14; ch.root.position.set(x, groundAt(x, z), z);
+      const c = { ch, home: new THREE.Vector3(x, 0, z), pos: ch.root.position.clone(), lp: ch.root.position, facing: a, fort: F }; initFighter(c, 70); c.st = 'idle'; F.guards.push(c); }
+  }
+  function towerHurt(t, n) {
+    if (t.dead) return; t.hp -= n; t.fort.alerted = true; dmgNum({ x: t.x, y: t.g.position.y + 16, z: t.z }, `${Math.round(n)}`, '');
+    if (t.hp <= 0) { t.dead = true; t.g.scale.y = 0.45; t.piv.visible = false; SFX.crash({ x: t.x, z: t.z });
+      for (let i = 0; i < 14; i++) puff(t.x + (Math.random() - 0.5) * 10, t.g.position.y + 4 + Math.random() * 8, t.z + (Math.random() - 0.5) * 10, { color: i % 3 ? 0x8a8478 : 0xff8a3a, size: 4, life: 2, grow: 2, vy: 6, op: 0.9 });
+      const F = t.fort, left = F.towers.filter(x => !x.dead).length;
+      toast(left ? `A gun tower of the ${F.isl} fort collapses! ${left} left.` : `The ${F.isl} fort's guns are silenced! Land, storm the walls and cut down the garrison to reach the treasury.`); }
+  }
+  const fortGuns = () => FORTS.filter(F => F.g && F.live).flatMap(F => F.towers.filter(t => !t.dead));
+  TARGET_HOOKS.push(fortGuns);
+  BALL_HOOKS.push((x, y, z, b) => { for (const t of fortGuns()) { const gy0 = t.g.position.y; if (Math.hypot(x - t.x, z - t.z) < 6.5 && y > gy0 - 2 && y < gy0 + 17) { towerHurt(t, b.dmg || 11); puff(x, y, z, { color: 0x8a8478, size: 3, life: 1, grow: 1.6, vy: 2, op: 0.9 }); return true; } } return false; });
+  function fortGuardStep(c, dt) {
+    const root = c.ch.root;
+    if (c.st === 'dead') { c.deadT += dt; root.rotation.x = -Math.min(Math.PI / 2, c.deadT * 3); c.ch.update(dt, 0, false, false, null); if (c.deadT > 3.5) { root.visible = false; c.st = 'gone'; } c.pos.copy(root.position); return; }
+    if (c.st === 'gone') return;
+    const dx = P.pos.x - c.lp.x, dz = P.pos.z - c.lp.z, d = Math.hypot(dx, dz), onLand = !onShip && !sailing && !inInterior && !RIDE.on && !GUEST.on && PLAYER.hp > 0;
+    if (c.st === 'idle') { if (onLand && d < 45) { c.st = 'fight'; c.fort.alerted = true; } else { c.ch.update(dt, 0, false, false, null); c.pos.copy(root.position); return; } }
+    if (!onLand || d > 90) { c.st = 'idle'; c.windT = c.slashT = 0; }
+    let spd = 0, action = null;
+    if (c.stagT > 0) c.stagT -= dt; if (c.flinchT > 0) c.flinchT -= dt;
+    c.facing = angLerp(c.facing, Math.atan2(dx, dz), Math.min(1, dt * 8));
+    const busy = c.stagT > 0 || c.windT > 0 || c.slashT > 0;
+    if (d > 1.9) { if (!busy) { spd = d > 6 ? 4.6 : 3; const st = spd * dt; const p = { x: c.lp.x, z: c.lp.z }; moveWithCollision(p, Math.sin(c.facing) * st, Math.cos(c.facing) * st, 0.4, []); c.lp.x = p.x; c.lp.z = p.z; } }
+    else { c.atkT -= dt;
+      if (c.stagT > 0) {}
+      else if (c.windT > 0) { c.windT -= dt; if (c.windT <= 0) { SFX.swing(c.pos); c.slashT = 0.4; c.hitAt = 0.15; } }
+      else if (c.atkT <= 0 && c.slashT <= 0) { c.windT = 0.45; c.atkT = 1.2 + Math.random() * 0.8; banditGlint({ pos: c.pos, facing: c.facing }); } }
+    if (c.windT > 0) { action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w * (1 - c.windT / 0.45); }
+    if (c.slashT > 0) { c.slashT -= dt; action = 'slash'; c.ch.slashKind = 0; c.ch.slashP = SWING_KF[0].w + (1 - SWING_KF[0].w) * (1 - Math.max(0, c.slashT) / 0.4);
+      if (c.hitAt > 0) { c.hitAt -= dt; if (c.hitAt <= 0 && d < 2.8 && Math.abs(P.pos.y - c.lp.y) < 2) meleeHurt(12 + Math.floor(Math.random() * 6), c); } }
+    c.lp.y = groundAt(c.lp.x, c.lp.z); root.rotation.set(-((c.flinchT > 0 ? Math.sin(c.flinchT / 0.3 * Math.PI) * 0.35 : 0) + (c.stagT > 0 ? 0.25 : 0)), c.facing, 0);
+    c.ch.update(dt, spd, false, false, action); if (c.ch.props.blade) c.ch.props.blade.visible = true; c.pos.copy(root.position);
+  }
+  const fortFighters = () => FORTS.flatMap(F => F.guards || []).filter(c => c.st === 'fight');
+  function nearFortChest() {
+    if (onShip || sailing || inInterior || GUEST.on) return null;
+    return FORTS.find(F => F.g && F.live && !F.looted && Math.hypot(F.chest.x - P.pos.x, F.chest.z - P.pos.z) < 4.5) || null;
+  }
+  function openFortChest(F) {
+    if (F.towers.some(t => !t.dead)) { toast('The treasury is barred while the fort\'s guns still fire. Silence all four towers first.'); return; }
+    const left = F.guards.filter(c => c.st === 'fight' || c.st === 'idle').length;
+    if (left) { toast(`${left} of the garrison still stand. Cut them down first!`); return; }
+    F.looted = true; F.lid.rotation.x = -1.2; STATE.forts = STATE.forts || {}; STATE.forts[F.isl] = Date.now(); STATE.fortsTaken = (STATE.fortsTaken || 0) + 1;
+    addGold(6000, `Ye stormed the ${F.isl} fort and broke open its treasury!`); addMat('steel', 6); addMat('pearl', 3); addMat('gem', 2); try { SFX.fanfare(); } catch (e) {}
+    F.flag.material.color.setHex(0xf2ead8); toast(`The Blackwater colours come down over ${F.isl}. They'll be back to retake it in 30 minutes.`);
+    if (typeof factionGain === 'function') factionGain(F.isl, 40);
+    save();
+  }
+  function updateForts(dt, t) {
+    for (const F of FORTS) { if (!F.g) continue;
+      if (!F.live && !fortCaptured(F)) { resetFort(F, true); if (Math.hypot(F.x - P.pos.x, F.z - P.pos.z) < 3000) toast(`The Blackwater fleet has retaken the ${F.isl} fort.`); }
+      const near = Math.hypot(F.x - P.pos.x, F.z - P.pos.z) < 2500;
+      for (const c of F.guards) if (near || c.st === 'fight') fortGuardStep(c, dt);
+      F.flag.rotation.y = Math.sin(t * 1.3) * 0.25;
+      if (!F.live) { F.tag.style.display = 'none'; continue; }
+      // the towers fire on any ship of yers in range
+      const targets = [ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : null, ...liveEscorts()].filter(Boolean);
+      for (const tw of F.towers) { if (tw.dead) continue; tw.reload -= dt;
+        let tg = null, td = 500; for (const s of targets) { const d = Math.hypot(s.x - tw.x, s.z - tw.z); if (d < td) { td = d; tg = s; } }
+        if (!tg) continue; tw.piv.rotation.y = angLerp(tw.piv.rotation.y, Math.atan2(tg.x - tw.x, tg.z - tw.z), Math.min(1, dt * 3));
+        if (tw.reload <= 0) { tw.reload = 4.5 + Math.random() * 1.5; F.alerted = true;
+          if (!F.warned) { F.warned = true; toast(`The guns of the ${F.isl} fort open fire! Shell the four towers to silence them.`); }
+          const a = tw.piv.rotation.y, x = tw.x + Math.sin(a) * 4.5, z = tw.z + Math.cos(a) * 4.5, y = tw.g.position.y + 15;
+          const m = new THREE.Mesh(ballGeo, ballMat); m.position.set(x, y, z); scene.add(m); SFX.cannon({ x, z });
+          const b = { m, vx: 0, vy: 0, vz: 0, enemy: true, from: tw, life: 7, dmg: 14 }; aimShot(b, x, y, z, tg, (Math.random() - 0.5) * 0.6); balls.push(b);
+          puff(x, y, z, { color: 0xdedad2, size: 5, life: 2.5, grow: 2, vy: 1.5, op: 0.75 }); } }
+      // a label over the fort while ye're in sight of it
+      const d = Math.hypot(F.x - P.pos.x, F.z - P.pos.z);
+      if (d < 1400 && !inInterior) { tmp2.set(F.x, F.g.position.y + heightAt(F.x, F.z) + 26, F.z).project(camera);
+        if (tmp2.z < 1) { const tl = F.towers.filter(x => !x.dead).length, gl = F.guards.filter(c => c.st === 'fight' || c.st === 'idle').length;
+          F.tag.style.display = 'block'; F.tag.innerHTML = `⛫ Blackwater fort · ${F.isl}<div style="font-size:11px;opacity:.85">${tl ? `${tl} gun tower${tl > 1 ? 's' : ''}` : `guns silenced · ${gl} garrison left`}</div>`;
+          F.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px,${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; } else F.tag.style.display = 'none'; }
+      else F.tag.style.display = 'none';
+    }
+  }
+  function drawForts(ctx, S, W, H) {
+    for (const F of FORTS) { if (!F.g) continue; const [x, y] = S(F.x, F.z); if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
+      ctx.fillStyle = F.live ? '#2a2a2a' : '#f2ead8'; ctx.strokeStyle = F.live ? '#c0392b' : '#2e7d32'; ctx.lineWidth = 2; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeRect(x - 5, y - 5, 10, 10); }
+  }
+
   function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
@@ -7686,6 +7839,7 @@ window.__pgBoot = () => {
     enableShadows(m.group); raiders.push(r);
   });
   try { buildPosts(); refreshBountyTags(); } catch (e) { console.error(e); }
+  try { FORTS.forEach(buildFort); } catch (e) { console.error(e); }
   function bob(r, dt, t) {
     const T = r.T, L = T.L, B = T.B, sx = Math.sin(r.heading), sz = Math.cos(r.heading);
     const hC = waveHeight(r.x, r.z, t), hF = waveHeight(r.x + sx * L * 0.4, r.z + sz * L * 0.4, t), hB = waveHeight(r.x - sx * L * 0.4, r.z - sz * L * 0.4, t);
@@ -7788,7 +7942,7 @@ window.__pgBoot = () => {
     for (const e of [ship, ...raiders]) if (e && e.reload) for (const k in e.reload) e.reload[k] = Math.max(0, e.reload[k] - dt);
     updateBandits(dt); updateRaiders(dt, t); try { updateBoarding(dt, t); } catch (e) { console.error(e); }
     try { updateAdmiral(dt); updateBounties(dt); updatePosts(); } catch (e) { console.error(e); }
-    try { updateModules(dt); updateEscorts(dt, t); } catch (e) { console.error(e); }
+    try { updateModules(dt); updateEscorts(dt, t); updateForts(dt, t); } catch (e) { console.error(e); }
     if (autoRoute && autoRoute.active && ship && !ship.submerged) {
       autoFireT -= dt;
       const hostile = raiders.filter(r => (r.state === 'attack' || r.state === 'patrol') && Math.hypot(r.x - ship.x, r.z - ship.z) < 520)
@@ -13267,6 +13421,7 @@ window.__pgBoot = () => {
     if (GUEST.on && !talk && !uiOpen) promptHtml = `Aboard ${GUEST.p ? GUEST.p.name : 'a'}'s ship &middot; <b>E</b> Go ashore`;
     if (!talk && !uiOpen) { if (GUEST.raider) promptHtml = boardPrompt(); else if ((sailing || !nearWheel()) && !RIDE.on && !inInterior) { const rb = nearRaiderToBoard(); if (rb) promptHtml = `<b>E</b> ${onShip || sailing ? 'Throw grapples and board' : 'Climb aboard'} the ${rb.admiral ? 'Admiral\'s flagship' : rb.galleon ? 'Blackwater galleon' : 'Blackwater raider'}`; }
       if (SIEGE.on && sailing) promptHtml = '<b>Boarders on yer deck!</b> &middot; <b>E</b> Leave the wheel and fight';
+      { const fc = nearFortChest(); if (fc) promptHtml = '<b>E</b> Break open the fort\'s treasury'; }
       if (!GUEST.raider && !SIEGE.on) { const tp = nearTradePost(); if (tp) promptHtml = (promptHtml ? promptHtml + ' &middot; ' : '') + `<b>U</b> Trade at the ${tp.isl} post`; } }
     if (promptHtml) { if (promptEl.innerHTML !== promptHtml) promptEl.innerHTML = promptHtml; promptEl.style.display = 'block'; }
     else promptEl.style.display = 'none';
