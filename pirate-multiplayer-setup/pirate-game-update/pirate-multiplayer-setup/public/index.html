@@ -5780,6 +5780,7 @@ window.__pgBoot = () => {
     const krFight = KR.lock === ship && (KR.st === 'attack' || KR.st === 'grip'), fighters = krFight ? krCrewOf(ship) : [];
     for (const c of ship.crew) {
       if (krFight && fighters.includes(c)) krCrewStep(c, dt, ship);
+      else if (c.duel) tutDuelStep(c, dt);   // the opening: locked in a duel of their own
       else if (SIEGE.on && isDefender(c)) defenderStep(c, dt);   // boarders on deck: the crew draw steel
       else animateCrewMember(c, dt, ship.K, (onShip || sailing) ? PL.x : null, PL.z, shipFloor);
       placeTag(c, 2.9 * (c.def.look.scale || 1), !inInterior);
@@ -7075,7 +7076,7 @@ window.__pgBoot = () => {
     if (STATE.sword === 'admiral') { SWP.cmdN = Math.min(5, SWP.cmdN + 1); SWP.cmdT = 10; PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 15); dmgNum(P.pos, `Command +${SWP.cmdN * 8}%`, 'heavy'); }
     if (STATE.sword === 'golden') addGold(20 + Math.floor(Math.random() * 25), 'Plunder');
   }
-  const parryWin = () => STATE.sword === 'steel' ? 0.45 : 0.3;
+  const parryWin = () => (STATE.sword === 'steel' ? 0.45 : 0.3) * (TUT.on && TUT.cp === 'block' ? 1.8 : 1);
   // a shockwave where a slam or plunge lands: a ring of dust and spray racing out across the ground
   function slamWave(x, y, z, r) {
     const gy = onShip || GUEST.on ? y : groundAt(x, z);
@@ -8384,7 +8385,7 @@ window.__pgBoot = () => {
         const dmg = () => (q.galleon ? 11 : 9) + Math.floor(Math.random() * 5), mine = onShip && !inInterior;
         for (const c of SIEGE.list) fighterStep(c, ship, dt, mine, dmg, b => boarderTarget(b, mine));
         ship.speed = Math.min(ship.speed, 2); if (!online || q.local) q.speed = Math.min(q.speed, 2);
-        if (!SIEGE.list.some(c => c.st === 'fight' || c.st === 'dead')) endSiege(true);
+        if (!SIEGE.list.some(c => c.st === 'fight' || c.st === 'dead') && !TUT.holdSiege) endSiege(true);
       }
     }
     const pair = SIEGE.on ? [ship, SIEGE.r] : r && ship && Math.hypot(ship.x - r.x, ship.z - r.z) < 140 ? [ship, r] : null;
@@ -15984,7 +15985,7 @@ window.__pgBoot = () => {
 
   // ---- start: the lent galleon, out on the open sea ----
   function tutStart() {
-    TUT.on = true; TUT.t = 0; TUT.done = {}; TUT.raiders = []; TUT.prevKey = STATE.shipKey || null;
+    TUT.on = true; TUT.t = 0; TUT.done = {}; TUT.raiders = []; TUT.prevKey = STATE.shipKey || null; TUT.cp = ''; TUT.nextT = 0; TUT.slashes = 0; TUT.nBlock = 0;
     document.body.classList.add('tutOn');
     spawnShip('galleon'); STATE.shipKey = TUT.prevKey; save();   // she's lent for the opening, never saved as the captain's own
     Object.assign(ship, { x: TUT_SEA.x, z: TUT_SEA.z, heading: TUT_SEA.h, speed: ship.T.speed * 0.5, sailSet: 1, sailTarget: 1 });
@@ -16029,6 +16030,7 @@ window.__pgBoot = () => {
   // ---- out on deck: the raider grapples alongside, and her boarders come over ----
   function tutGrapple() {
     TUT.stage = 'grapple'; tutTick('door'); tutObj(null);
+    { const lz = 3, W = ship.walk, lx = (W.F.pt(lz / (W.L / 2), 1)[0] * 0.97 - 0.45) * 0.45, f = shipFloor(lx, lz); attachToShip(lx, f ?? W.F.deckY(lz), lz, 0.5); yaw = ship.heading + 0.5 + Math.PI; pitch = 0.3; dist = 10; snapCam = true; }   // out on the open main deck, on the starboard side where they'll come over
     const r = tutMakeRaider(170, 20); TUT.r1 = r;
     const L = ship.T.L, lat0 = 170, latEnd = tutLat(r);
     TUT.pinLat = lat0; TUT.pinAlong = 20;
@@ -16040,18 +16042,20 @@ window.__pgBoot = () => {
     }, [
       [0.3, () => tutSay('<b>Hargreave:</b> There she is, a Blackwater raider, coming in fast!', 3)],
       [3.5, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 0.9); ship.krJolt = 0.8; }],
-      [3.7, () => { startSiege(r); BOARD.cool = 1e9; }, true],
+      [3.7, () => { tutSiege(r); }, true],
+      [4.6, () => { if (!TUT.cp) tutPhase('slash'); }, true],
       [4.0, () => tutSay('<b>Hargreave:</b> Grapples! They\'re boarding us! Draw yer blade, Captain, they\'re coming for YOU!', 3.2)],
     ], () => {
       TUT.pinLat = latEnd; TUT.pinAlong = 0; TUT.stage = 'combat';
-      if (!SIEGE.on) { startSiege(r); BOARD.cool = 1e9; }
-      tutObj('COMBAT ESSENTIALS', [['slash', '<b>F</b>: slash (tap again for a combo)'], ['block', 'Hold <b>X</b> or right-click: block'], ['parry', 'Block just as a blow lands: <b>parry</b>'], ['boarders', 'Cut down the boarders']]);
+      if (!SIEGE.on) tutSiege(r);
+      if (!TUT.cp) tutPhase('slash');
+      tutSay('<b>Hargreave:</b> The lads have their own to deal with! That one\'s yours, Captain! <b>F</b> to slash!', 3.6);
     });
   }
   // ---- the wheel and the guns ----
   function tutToWheel() {
     TUT.stage = 'wheel'; BOARD.cool = 1e9; TUT.cruise = false;
-    tutSay('<b>Hargreave:</b> They\'re beaten! We\'ve cut the lines. Now take the wheel, Captain, and give her a broadside!', 4);
+    tutSay('<b>Hargreave:</b> The last of \'em\'s over the side! We\'ve cut the lines. Now take the wheel, Captain, and give her a broadside!', 4);
     tutObj('TO THE WHEEL', [['wheel', 'Climb to the quarterdeck and press <b>E</b> at the wheel']]);
   }
   function tutCannons() {
@@ -16143,6 +16147,8 @@ window.__pgBoot = () => {
   // ---- tidying up: the wreck, the Beast and the raiders go; the galleon was never the captain's ----
   function tutCleanup() {
     if (TUT.cine) { const C = TUT.cine; TUT.cine = null; tutBars(false); }
+    TUT.holdSiege = false; TUT.cp = ''; tutCue.style.display = 'none';
+    for (const c of (ship && ship.crew) || []) if (c.duel) { const r = c.duel.b.ch.root; r.parent && r.parent.remove(r); c.lp.copy(c.duel.home); c.duel = null; }
     if (SIEGE.on) endSiege(false);
     if (inInterior) goUp();
     if (sailing || onShip) detach();
@@ -16166,6 +16172,120 @@ window.__pgBoot = () => {
 
   // ---- every frame ----
   let tutPrevSlash = 0;
+  // ---- the boarding fight: one lesson at a time, with the crew locked in their own duels behind ye ----
+  const tutCue = (() => { const e = document.createElement('div'); e.style.cssText = 'position:fixed;left:50%;top:30%;transform:translateX(-50%);z-index:42;pointer-events:none;font:700 clamp(26px,4.5vw,46px) Georgia,serif;letter-spacing:.12em;text-shadow:0 3px 10px #000,0 0 3px #000;display:none'; document.body.appendChild(e); return e; })();
+  function tutSiege(r) {
+    SIEGE.on = true; SIEGE.r = r; SIEGE.t = 0; SIEGE.list = []; TUT.holdSiege = true; BOARD.cool = 1e9;
+    (r.deckCrew || []).forEach(c => { c.ch.root.visible = false; c.st = 'gone'; });   // every hand aboard her has come across
+    SFX.creak(); tutDuels();
+  }
+  function tutBoarder(hp, angs, d = 4.5) {   // one boarder, over the rail a few paces from the captain
+    const K = ship.K, ch = makeCharacter(banditLook()); addProp(ch, 'blade'); ch.root.scale.setScalar(1 / K); ship.group.add(ch.root);
+    let at = null;
+    for (const dd of [d, d * 0.75, d * 1.4]) { for (const a of angs) { const lx = PL.x + Math.sin(a) * dd / K, lz = PL.z + Math.cos(a) * dd / K, f = shipFloor(lx, lz);
+        if (f !== null && Math.abs(f - PL.y) < 1.2 && !shipBlockedAt(lx, lz, f)) { at = { lx, lz, f }; break; } } if (at) break; }
+    if (!at) at = { lx: PL.x + 2 / K, lz: PL.z, f: PL.y };
+    ch.root.position.set(at.lx, at.f, at.lz);
+    const c = { ch, lp: ch.root.position, facing: Math.atan2(PL.x - at.lx, PL.z - at.lz) }; initFighter(c, hp); c.atkT = 2; SIEGE.list.push(c);
+    ch.root.getWorldPosition(c.pos); SFX.swing(c.pos); for (let k = 0; k < 8; k++) puff(c.pos.x, c.pos.y + 0.8, c.pos.z, { color: 0xeae2d0, size: 0.5, life: 0.5, grow: 1.5, vx: (Math.random() - 0.5) * 4, vy: 2, vz: (Math.random() - 0.5) * 4, op: 0.6 });
+    return c;
+  }
+  const STB = [Math.PI / 2, Math.PI / 3, Math.PI * 2 / 3, 0, Math.PI, -Math.PI / 2, -Math.PI / 4, Math.PI / 4];   // starboard first: that's where they come over
+  function tutPhase(p) {
+    TUT.cp = p; TUT.cpT = 0; const dmg = curSword().dmg;
+    if (p === 'slash') {
+      TUT.foe = tutBoarder(Math.round(dmg * 3.6), STB); TUT.foe.passive = true;
+      tutObj('COMBAT 1/3: ATTACK', [['slash', '<b>F</b>: slash the boarder'], ['combo', 'Tap <b>F</b> three times in a row: full combo'], ['k1', 'Cut him down']]);
+    } else if (p === 'block') {
+      TUT.foe = tutBoarder(9999, STB, 3.5); TUT.nBlock = 0;
+      tutSay('<b>Hargreave:</b> Watch this one, Captain, he\'s a real swordsman! Ye\'ll not get through his guard. Block him!', 4);
+      tutObj('COMBAT 2/3: DEFEND', [['block', 'Hold <b>X</b> or right-click to block his blows (0/2)'], ['parry', 'Block just as his blade swings: <b>PARRY</b>'], ['riposte', 'Strike while he reels']]);
+    } else if (p === 'slam') {
+      TUT.pairF = [tutBoarder(Math.round(dmg * 2.4), [Math.PI / 2, Math.PI / 3, 0]), tutBoarder(Math.round(dmg * 2.4), [-Math.PI / 2, -Math.PI / 3, Math.PI])];
+      TUT.pairF.forEach(c => { c.atkT = 2.5 + Math.random(); });
+      tutSay('<b>Hargreave:</b> Two of \'em, either side of ye! Hold yer blade back and bring it down on both!', 4);
+      tutObj('COMBAT 3/3: HEAVY ATTACK', [['slam', 'Hold <b>F</b>, then release: charged slam (hits all round ye)'], ['clear', 'Defeat both boarders']]);
+    }
+  }
+  let tutPrevBH = 0;
+  function tutCombat(dt) {
+    TUT.cpT += dt;
+    const sl = PLAYER.slashT > 0; if (sl && !tutPrevSlash) TUT.slashes = (TUT.slashes || 0) + 1; tutPrevSlash = sl ? 1 : 0;
+    if (sl && PLAYER.swingKind === 2) tutTick('combo');
+    if (sl && PLAYER.swingKind === 3) tutTick('slam');
+    const bh = CMB.blockHit > 0; if (bh && !tutPrevBH) TUT.nBlock = (TUT.nBlock || 0) + 1; tutPrevBH = bh ? 1 : 0;
+    const F = TUT.foe, near = c => c && c.st === 'fight' && Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z) < 4;
+    let cue = '';
+    if (TUT.cp === 'slash') {
+      if (F.st === 'fight') { F.atkT = 9; F.windT = 0; }   // dazed from the jump: he only stands his ground
+      if (F.hp < F.max) tutTick('slash');
+      if (F.st !== 'fight') { tutTick('slash'); tutTick('k1'); if (!TUT.nextT) { TUT.nextT = 1.4; tutSay('<b>Hargreave:</b> That\'s the way! Here comes another!', 2); } }
+    } else if (TUT.cp === 'block') {
+      if (!TUT.done.parry && F.st === 'fight') {
+        if (F.hp < F.max) { F.hp = F.max; if (!(TUT.guardT > 0)) { TUT.guardT = 4; dmgNum(F.pos, 'GUARDED', 'block'); tutSay('<b>Hargreave:</b> His guard\'s too tight! Block him, then <b>PARRY</b>!', 2.6); } }
+        if (F.slashT <= 0 && F.windT <= 0) F.atkT = Math.min(F.atkT, 1.5);   // he keeps coming
+      }
+      TUT.guardT = (TUT.guardT || 0) - dt;
+      const bi = tutUI.obj.querySelector('[data-k="block"]'); if (bi && !TUT.done.block) bi.innerHTML = `Hold <b>X</b> or right-click to block his blows (${Math.min(2, TUT.nBlock)}/2)`;
+      if (TUT.nBlock >= 2 && !TUT.done.block) { tutTick('block'); tutSay('<b>Hargreave:</b> Good! Now <b>time it</b>: start yer block just as his blade comes down!', 3.4); }
+      if (CMB.parryT > 0 && !TUT.done.parry) { tutTick('parry'); if (!TUT.done.block) tutTick('block'); F.hp = F.max = Math.round(curSword().dmg * 1.6); tutSay('<b>Hargreave:</b> PARRIED! He\'s reeling! Strike NOW!', 2.4); }
+      if (near(F) && F.windT > 0) cue = TUT.done.block ? '<span style="color:#ffd76a">PARRY: BLOCK NOW!</span>' : '<span style="color:#9fe6ff">BLOCK! (hold X)</span>';
+      if (near(F) && F.stagT > 0 && TUT.done.parry) cue = '<span style="color:#ff8a6a">STRIKE! (F)</span>';
+      if (F.st !== 'fight') { tutTick('riposte'); if (!TUT.nextT) { TUT.nextT = 1.6; tutSay('<b>Hargreave:</b> Ha! Ye\'re a natural, Captain!', 2); } }
+    } else if (TUT.cp === 'slam') {
+      if (TUT.pairF.every(c => c.st !== 'fight')) { tutTick('clear'); if (!TUT.nextT) TUT.nextT = 1.2; }
+    }
+    tutCue.innerHTML = cue; tutCue.style.display = cue && !TUT.cine ? 'block' : 'none';
+    if (TUT.nextT > 0) { TUT.nextT -= dt; if (TUT.nextT <= 0) { TUT.nextT = 0; if (TUT.cp === 'slash') tutPhase('block'); else if (TUT.cp === 'block') tutPhase('slam'); else tutCombatWon(); } }
+  }
+  function tutCombatWon() {
+    TUT.cp = ''; tutCue.style.display = 'none'; tutEndDuels();
+    TUT.holdSiege = false; if (SIEGE.on) endSiege(true);
+    tutToWheel();
+  }
+  // ---- the crew's own fights: each hand squares off against a boarder, trading blows and parries ----
+  function tutDuels() {
+    const K = ship.K, cands = (ship.crew || []).filter(c => c.ch && !c.climb && !c.silent && !c.fixedY && !c.duel)
+      .map(c => ({ c, d: Math.hypot(c.lp.x - PL.x, c.lp.z - PL.z) * K })).filter(o => o.d > 7).sort((a, b) => a.d - b.d).slice(0, 4);
+    for (const { c } of cands) {
+      let spot = null;
+      for (let k = 0; k < 12 && !spot; k++) { const a = k * 0.52 + Math.random() * 0.2, lx = c.lp.x + Math.sin(a) * 1.8 / K, lz = c.lp.z + Math.cos(a) * 1.8 / K, f = shipFloor(lx, lz);
+        if (f !== null && Math.abs(f - c.lp.y) < 0.4 && !shipBlockedAt(lx, lz, f)) spot = { lx, lz, f, a }; }
+      if (!spot) continue;
+      const ch = makeCharacter(banditLook()); addProp(ch, 'blade'); ch.root.scale.setScalar(1 / K); ship.group.add(ch.root); ch.root.position.set(spot.lx, spot.f, spot.lz);
+      if (!c.ch.props.blade) { addProp(c.ch, 'blade'); c.addedBlade = true; }
+      const b = { ch, lp: ch.root.position, facing: 0, pos: new THREE.Vector3() };
+      c.duel = { b, home: c.lp.clone(), hf: c.facing, mx: (c.lp.x + spot.lx) / 2, mz: (c.lp.z + spot.lz) / 2, a0: Math.atan2(c.lp.x - spot.lx, c.lp.z - spot.lz), t: 0, ph: Math.random() * 6, cd: 0.4 + Math.random(), turn: Math.random() < 0.5 ? 0 : 1, atk: null, blockT: [0, 0], end: 0 };
+    }
+  }
+  function tutEndDuels() { for (const c of (ship && ship.crew) || []) if (c.duel && !c.duel.end) { c.duel.end = 0.001; c.duel.atk = null; const p = c.duel.b.ch.root.getWorldPosition(new THREE.Vector3()); SFX.hit(p); } }
+  function tutDuelStep(c, dt) {
+    const D = c.duel, b = D.b, K = ship.K; D.t += dt;
+    const pose = (ch, lp, f, spd, action, extra) => { ch.root.position.copy(lp); ch.root.rotation.set(extra || 0, f, 0); ch.update(dt, spd, false, false, action); if (ch.props.blade) ch.props.blade.visible = true; };
+    if (D.end) {   // the crewman wins: his boarder goes down
+      D.end += dt; b.ch.root.position.copy(b.lp); b.ch.root.rotation.set(-Math.min(Math.PI / 2, D.end * 3), b.facing, 0); b.ch.update(dt, 0, false, false, null); if (b.ch.props.blade) b.ch.props.blade.visible = D.end < 0.5;
+      pose(c.ch, c.lp, c.facing, 0, null);
+      if (D.end > 3.2) { b.ch.root.parent && b.ch.root.parent.remove(b.ch.root); c.lp.copy(D.home); c.facing = D.hf; if (c.addedBlade && c.ch.props.blade) c.ch.props.blade.visible = false; c.duel = null; }
+      return;
+    }
+    // circling: they edge round each other, a few degrees either way
+    const a = D.a0 + Math.sin(D.t * 0.35 + D.ph) * 0.55, r = 0.85 / K, cx = D.mx + Math.sin(a) * r, cz = D.mz + Math.cos(a) * r, bx = D.mx - Math.sin(a) * r, bz = D.mz - Math.cos(a) * r;
+    const fc = shipFloor(cx, cz), fb = shipFloor(bx, bz); let spd = 0;
+    if (fc !== null && fb !== null && Math.abs(fc - c.lp.y) < 0.4 && Math.abs(fb - b.lp.y) < 0.4) { spd = Math.hypot(cx - c.lp.x, cz - c.lp.z) * K / Math.max(dt, 1e-3); c.lp.set(cx, fc, cz); b.lp.set(bx, fb, bz); }
+    c.facing = Math.atan2(b.lp.x - c.lp.x, b.lp.z - c.lp.z); b.facing = c.facing + Math.PI;
+    // the exchange: one swings, the other catches it on his blade
+    D.cd -= dt;
+    if (!D.atk && D.cd <= 0) { const who = Math.random() < 0.7 ? D.turn : 1 - D.turn; D.turn = 1 - who; D.atk = { who, t: 0, kind: Math.floor(Math.random() * 2) }; }
+    let ac = null, ab = null;
+    if (D.atk) { const A = D.atk; A.t += dt; const w = 0.32, s = 0.34, act = A.t < w ? SWING_KF[0].w * (A.t / w) : SWING_KF[0].w + (1 - SWING_KF[0].w) * Math.min(1, (A.t - w) / s);
+      const att = A.who ? b.ch : c.ch; att.slashKind = A.kind; att.slashP = act;
+      if (A.who) { ab = 'slash'; if (A.t > w * 0.4) ac = 'block'; } else { ac = 'slash'; if (A.t > w * 0.4) ab = 'block'; }
+      if (!A.hit && A.t > w + 0.12) { A.hit = true; const p = ship.group.localToWorld(new THREE.Vector3(D.mx, c.lp.y + 1.45 / K, D.mz)); SFX.clang(p);
+        for (let k = 0; k < 6; k++) puff(p.x, p.y, p.z, { color: 0xfff1b0, size: 0.14, life: 0.25, grow: 0.2, vx: (Math.random() - 0.5) * 6, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 6, op: 1 }); }
+      if (A.t > w + s + 0.1) { D.atk = null; D.cd = 0.25 + Math.random() * 0.75; } }
+    pose(c.ch, c.lp, c.facing, spd, ac); pose(b.ch, b.lp, b.facing, spd, ab);
+    b.ch.root.getWorldPosition(b.pos);
+  }
   function updateTut(dt, t) {
     if (!TUT.on) return;
     TUT.dt = dt; TUT.t += dt;
@@ -16197,13 +16317,7 @@ window.__pgBoot = () => {
     }
     // overboard? the crew haul ye back
     if (['combat', 'wheel', 'cannon', 'sail'].includes(TUT.stage) && !onShip && !sailing && !inInterior && !cine) { TUT.wet = (TUT.wet || 0) + dt; if (TUT.wet > 2.5) { TUT.wet = 0; tutBackAboard(); toast('Hargreave throws ye a line and the crew haul ye back aboard!'); } } else TUT.wet = 0;
-    if (TUT.stage === 'combat') {
-      const sl = PLAYER.slashT > 0 ? 1 : 0; if (sl && !tutPrevSlash) TUT.slashes = (TUT.slashes || 0) + 1; tutPrevSlash = sl; if (TUT.slashes >= 2) tutTick('slash');
-      if (CMB.blocking) { TUT.blockT = (TUT.blockT || 0) + dt; if (TUT.blockT > 0.4) tutTick('block'); }
-      if (CMB.parryT > 0) tutTick('parry');
-      if (CMB.blockHit > 0) tutTick('block');
-      if (!SIEGE.on) { tutTick('boarders'); tutToWheel(); }
-    }
+    if (TUT.stage === 'combat' && TUT.cp) tutCombat(dt);
     if (TUT.stage === 'wheel' && sailing) tutCannons();
     if (TUT.stage === 'cannon') {
       if (r1) { const fx = -Math.sin(yaw), fz = -Math.cos(yaw), dx = r1.x - ship.x, dz = r1.z - ship.z, d = Math.hypot(dx, dz); if ((fx * dx + fz * dz) / d > 0.75) tutTick('look'); }
@@ -16228,7 +16342,7 @@ window.__pgBoot = () => {
   }
   window.__tut = { TUT, tutStart, tutFinish, tutBeast, tutCineEnd, tutGrapple,
     goUp: () => { if (inInterior) goUp(); }, wheel: () => { if (inInterior) goUp(); if (!sailing) takeWheel(); }, sink: r => damageShip(r, 99999),
-    kill: () => SIEGE.list.forEach(c => { c.hp = 0; c.st = 'dead'; }), state: () => ({ stage: TUT.stage, cine: TUT.cine ? +TUT.cine.t.toFixed(1) : 0, inInterior, onShip, sailing, siege: SIEGE.on, boarders: SIEGE.list.length, hp: PLAYER.hp, ship: ship ? Math.round(ship.hp) + '/' + ship.maxHp : null, done: TUT.done, pos: [Math.round(P.pos.x), Math.round(P.pos.z)] }) };
+    kill: () => SIEGE.list.forEach(c => { c.hp = 0; c.st = 'dead'; }), state: () => ({ stage: TUT.stage, cine: TUT.cine ? +TUT.cine.t.toFixed(1) : 0, inInterior, onShip, sailing, siege: SIEGE.on, boarders: SIEGE.list.length, hp: PLAYER.hp, cp: TUT.cp, foe: TUT.foe ? [TUT.foe.st, Math.round(TUT.foe.hp), +TUT.foe.windT.toFixed(2)] : null, nBlock: TUT.nBlock, duels: ship && ship.crew ? ship.crew.filter(c => c.duel).length : 0, ship: ship ? Math.round(ship.hp) + '/' + ship.maxHp : null, done: TUT.done, pos: [Math.round(P.pos.x), Math.round(P.pos.z)] }) };
   function tick() {
     if (!settledWorld) { settledWorld = true; try { window.__settled = settleWorld(); } catch (e) { console.error(e); } }
     const t0 = performance.now(), ran0 = lastFrameAt;
