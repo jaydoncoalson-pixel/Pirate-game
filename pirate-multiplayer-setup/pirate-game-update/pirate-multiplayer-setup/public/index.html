@@ -2714,6 +2714,10 @@ window.__pgBoot = () => {
 
   // ---------- Characters ----------
   // sword swing keyframes (see the 'slash' pose): ready guard, the wind-up extreme, and the end of the strike
+  // the guard: blade held across in front of ye, point to the left and a little up, the off hand braced behind the flat.
+  // A parry snaps it out and up, knocking the blow wide, then settles back into guard; a blocked blow jolts it back.
+  const BLOCK_POSE = { shR: -1.15, elR: -1.4, shRz: -0.25, shL: -0.95, elL: -1.4, shLz: 0.35, twist: 0.35, yaw: 0.1, lean: 0.16, bob: -0.06, headY: -0.1, headX: 0.06, wrX: 0.3, wrY: 1.25 };
+  const PARRY_POSE = { shR: -1.75, elR: -0.9, shRz: 0.55, shL: -0.7, elL: -1.0, shLz: 0.1, twist: -0.4, yaw: -0.2, lean: 0.06, bob: -0.03, headY: 0.15, headX: 0, wrX: 0.5, wrY: 0.5 };
   const SWING_KF = {
     // the Sword of the Sea: a great blade swung two-handed in one unbroken flow. Each cut ends where the next begins,
     // so its quick chain reads as a single dance: a wide sweep, the sweep back rising, then a diagonal slam from high.
@@ -3196,7 +3200,13 @@ window.__pgBoot = () => {
             else { t.hipL -= 0.15 * step; t.kneeL += 0.15 * step; }
             t.bob -= 0.05 * step * dep;
             rate = 45; break; }
-          case 'block': t.shR = -1.45; t.elR = -1.35; t.shRz = 0.95; t.shL = -1.1; t.elL = -1.25; t.shLz = 0.35; t.twist = -0.15; t.lean = 0.12; t.headY = 0; t.headX = 0.05; stance(); rate = 26; break;   // blade held crossways in front
+          case 'block': case 'parry': {
+            const B = BLOCK_POSE; for (const key in B) t[key] = B[key];
+            if (action === 'parry') { const q = Math.min(1, Math.max(0, ch.parryP || 0)), k2 = q < 0.25 ? 1 - Math.pow(1 - q / 0.25, 3) : 1 - (q - 0.25) / 0.75 * ((q - 0.25) / 0.75) * (3 - 2 * (q - 0.25) / 0.75);   // snap out fast, ease home
+              for (const key in PARRY_POSE) t[key] = B[key] + (PARRY_POSE[key] - B[key]) * k2; }
+            const j = ch.blockHit || 0; t.elR += 0.35 * j; t.elL += 0.3 * j; t.lean -= 0.18 * j; t.bob -= 0.05 * j;   // a blocked blow jolts the guard back
+            if (still) { t.hipL = -0.42; t.kneeL = 0.45; t.hipR = 0.32; t.kneeR = 0.32; t.bob -= 0.06; }   // feet set wide, knees bent
+            rate = action === 'parry' ? 60 : 22; snapArms = false; break; }
           case 'aim': t.shR = -1.55; t.elR = 0; t.shRz = -0.1; t.shL = -0.2; t.elL = -0.7; t.twist = -0.25; t.headY = 0.2; t.headX = 0; stance(); rate = 24; break;
         }
       }
@@ -4696,7 +4706,7 @@ window.__pgBoot = () => {
         const desired = Math.atan2(dx, dz), err = angDiff(ship.heading, desired);
         const steer = Math.abs(err) < 0.025 ? 0 : Math.sign(err);
         ship.sailTarget = 1;
-        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : 1;
+        const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : STATE.sword === 'tidecaller' ? 1.2 : 1;
         // full sail on a straight run; ease off for sharp turns and when closing on the last mark
         const cruiseSpeed = T.speed * seaBuff * 0.9 * Math.max(0.35, Math.cos(Math.min(Math.PI / 2, Math.abs(err)))) * (last ? Math.min(1, 0.25 + d / 160) : 1);
         ship.speed += (cruiseSpeed * Math.max(0.2, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.4);
@@ -4710,7 +4720,7 @@ window.__pgBoot = () => {
       const thr = (keys['w'] || keys['arrowup'] ? 1 : 0) - (keys['s'] || keys['arrowdown'] ? 1 : 0);
       const steer = (keys['a'] || keys['arrowleft'] ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
       if (thr > 0) ship.sailTarget = 1; else if (thr < 0 && Math.abs(ship.speed) < 2) ship.sailTarget = 0.12;
-      const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : 1;   // the Sword of the Sea fills yer sails
+      const seaBuff = STATE.sword === 'seasword' && !ship.wraith ? 1.6 : STATE.sword === 'tidecaller' ? 1.2 : 1;   // the Sword of the Sea fills yer sails (and the Tidecaller carries the ship on the current)
       if (thr > 0) ship.speed += (T.speed * seaBuff * Math.max(0.15, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.5);
       else if (thr < 0) ship.speed += (-T.speed * 0.3 - ship.speed) * Math.min(1, dt * 0.8);
       else ship.speed *= 1 - dt * 0.3;
@@ -6913,7 +6923,7 @@ window.__pgBoot = () => {
     saber:    { name: 'Navy Saber', desc: 'Forged from captured raider steel. Fine, balanced and deadly.', dmg: 42, cool: 0.45, reach: 3.1, arc: 0.15, cost: { steel: 4, iron: 2 }, gold: 250, look: { style: 'saber', blade: 0xc8d4e0, guard: 0x2f5d8a, len: 1.1, curve: 0.25, width: 0.1, basket: true } },
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
-    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep. Passives: swim 60% faster and heal while swimming, yer hull mends 3x faster, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them.", dmg: 70, cool: 0.4, reach: 3.5, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
+    tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep: the strongest blade a captain can earn. Passives: every hit throws an undertow that strikes foes around yer target and mends ye, yer ship sails 20% faster and mends 3x faster, swim 60% faster and heal while swimming, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them. T: Riptide carries ye forward on a rush of water, cutting down everything in the way.", dmg: 100, cool: 0.36, reach: 3.9, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (for as long as ye like, ye become a colossal scarred grey kraken, as vast as the Elder Serpent, scarred by a thousand fights, that walks the land, swims and dives: its own attacks Z Crushing Grab, R Tentacle Storm, G Ink Cloud, T Maelstrom Spin, B Dive and Breach; 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
@@ -6943,6 +6953,11 @@ window.__pgBoot = () => {
   }
   function swordOnHit(tg, dm, crit, pos) {
     const id = STATE.sword;
+    if (id === 'tidecaller' && !SWP.undertow) {   // Undertow: a surge of water bursts from the blow and strikes those close by, and the sea mends ye
+      SWP.undertow = true; PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 6);
+      for (const b of bandits) { if (b === tg || b.state === 'dead' || b.state === 'gone' || Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z) > 5) continue; const n = Math.round(dm * 0.45); hitBandit(b, n); dmgNum(b.pos, `${n}`, 'heavy'); }
+      for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28; puff(pos.x, pos.y + 0.6, pos.z, { color: k % 3 ? 0x9ff0ff : 0xffffff, size: 0.35 + Math.random() * 0.3, life: 0.5, grow: 0.8, vx: Math.cos(a) * 7, vz: Math.sin(a) * 7, vy: 2 + Math.random() * 2, op: 0.85 }); }
+      SWP.undertow = false; }
     if (id === 'scimitar') tg.bleed = { t: 4, dps: 8 };
     if (id === 'flame') tg.burn = { t: 3, dps: 12 };
     if (id === 'saber') SWP.chain++;
@@ -7470,7 +7485,7 @@ window.__pgBoot = () => {
       const cv = document.createElement('canvas'); cv.width = 200; cv.height = 68; drawSwordIcon(cv, S.look); card.appendChild(cv);
       const info = document.createElement('div');
       const speed = S.cool < 0.35 ? 'Very fast' : S.cool < 0.55 ? 'Normal' : 'Slow', arc = S.arc < 0 ? 'Very wide' : S.arc < 0.12 ? 'Wide' : S.arc > 0.4 ? 'Narrow' : 'Normal';
-      const reqs = owned ? '<span>Owned</span>' : S.legendary ? `<span>${S.claim || 'Only the worthy may claim it. Seek the sword in the stone at Mermaid Cove.'}</span>` : [...Object.entries(S.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= S.gold ? '' : 'no'}">${S.gold} gold</span>`].join(' · ');
+      const reqs = owned ? '<span>Owned</span>' : S.legendary ? `<span>${S.claim || 'Finish 15 quests, then draw it from the stone at Mermaid Cove.'}</span>` : [...Object.entries(S.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= S.gold ? '' : 'no'}">${S.gold} gold</span>`].join(' · ');
       const pv = SWORD_PASSIVE[id];
       info.innerHTML = `<h3>${S.name}</h3><p>${S.desc}</p>${pv ? `<p style="opacity:1;margin:2px 0 4px"><b style="color:#7a3a1a">Passive · ${pv[0]}:</b> ${pv[1]}</p>` : ''}<div class="stats"><span>Damage <b>${S.dmg}</b></span><span>Speed <b>${speed}</b></span><span>Reach <b>${S.reach.toFixed(1)}</b></span><span>Arc <b>${arc}</b></span></div><div class="req">${reqs}</div>`;
       card.appendChild(info);
@@ -9263,7 +9278,7 @@ window.__pgBoot = () => {
     el.prepend(box);
   }
 
-  function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; return PLAYER.slashT > 0 ? 'slash' : CMB.blocking ? 'block' : null; }
+  function plAction() { player.slashKind = PLAYER.swingKind || 0; player.seaSwing = STATE.sword === 'seasword'; player.parryP = 1 - CMB.parryT / 0.42; player.blockHit = CMB.blockHit / 0.2; return PLAYER.slashT > 0 ? 'slash' : CMB.parryT > 0 ? 'parry' : CMB.blocking ? 'block' : null; }
   function dmgNum(pos, txt, cls) {   // a number that pops off whatever ye hit
     const el = document.createElement('div'); el.className = 'dmgnum' + (cls ? ' ' + cls : ''); el.textContent = txt; tagLayer.appendChild(el);
     CMB.nums.push({ el, x: pos.x + (Math.random() - 0.5) * 0.6, y: pos.y + 2.4, z: pos.z + (Math.random() - 0.5) * 0.6, t: 0, vx: (Math.random() - 0.5) * 0.8 });
@@ -9285,12 +9300,12 @@ window.__pgBoot = () => {
       if (facing) {
         const wp = new THREE.Vector3(); player.root.getWorldPosition(wp); const sx = wp.x + Math.sin(P.facing) * 0.7, sz = wp.z + Math.cos(P.facing) * 0.7;
         if (CMB.blockT < parryWin()) {   // parried!
-          SFX.parry(); CMB.riposteT = 1.6; if (STATE.sword === 'rapier') SWP.ripN = 3; CMB.shake = Math.max(CMB.shake, 0.3); CMB.stop = 0.1; dmgNum(wp, 'PARRY!', 'parry');
+          SFX.parry(); CMB.parryT = 0.42; CMB.riposteT = 1.6; if (STATE.sword === 'rapier') SWP.ripN = 3; CMB.shake = Math.max(CMB.shake, 0.3); CMB.stop = 0.1; dmgNum(wp, 'PARRY!', 'parry');
           for (let k = 0; k < 10; k++) puff(sx, wp.y + 1.5, sz, { color: k % 2 ? 0xfff6c0 : 0x9ff6ff, size: 0.18 + Math.random() * 0.2, life: 0.35, grow: 0.2, vx: (Math.random() - 0.5) * 9, vy: Math.random() * 5, vz: (Math.random() - 0.5) * 9, op: 1 });
           if (src) { src.stagT = 1.4; src.windT = 0; src.slashT = 0; src.hitAt = 0; src.atkT = 2; }
           return;
         }
-        SFX.clang(); dmgNum(wp, 'blocked', 'block'); CMB.shake = Math.max(CMB.shake, 0.12);
+        SFX.clang(); dmgNum(wp, 'blocked', 'block'); CMB.shake = Math.max(CMB.shake, 0.12); CMB.blockHit = 0.2;
         for (let k = 0; k < 5; k++) puff(sx, wp.y + 1.5, sz, { color: 0xfff1b0, size: 0.15, life: 0.25, grow: 0.2, vx: (Math.random() - 0.5) * 6, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 6, op: 1 });
         hurtPlayer(Math.max(1, Math.round(dm * 0.2))); return;
       }
@@ -9299,7 +9314,7 @@ window.__pgBoot = () => {
   }
   function updateCombatFeel(dt, t) {
     CMB.comboT = Math.max(0, CMB.comboT - dt); if (CMB.comboT <= 0) { CMB.combo = 2; SWP.chain = 0; }   // (so the next swing starts the chain again)
-    CMB.riposteT = Math.max(0, CMB.riposteT - dt);
+    CMB.riposteT = Math.max(0, CMB.riposteT - dt); CMB.parryT = Math.max(0, (CMB.parryT || 0) - dt); CMB.blockHit = Math.max(0, (CMB.blockHit || 0) - dt);
     const want = (keys['x'] || CMB.rmb) && PLAYER.weapon === 'cutlass' && PLAYER.hp > 0 && PLAYER.slashT <= 0 && !RIDE.on && !sailing && !uiOpen && !talk;
     if (want && !CMB.blocking) { CMB.blocking = true; CMB.blockT = 0; }
     if (!want) CMB.blocking = false;
@@ -10599,7 +10614,9 @@ window.__pgBoot = () => {
     if (onShip || sailing || inInterior || STATE.tidecaller || MERM.state !== 'hidden') return false;
     return Math.hypot(P.pos.x - STONE_POS.x, P.pos.z - STONE_POS.z) < 6;
   }
-  const isWorthy = () => Object.keys(QUESTS).filter(k => k !== 'ghostblade').every(k => STATE.quests[k] === 'done');
+  const TIDE_NEED = 15;   // quests ye must finish (any of them) before the mermaid deems ye worthy
+  const questsDone = () => Object.keys(QUESTS).filter(k => STATE.quests[k] === 'done').length;
+  const isWorthy = () => questsDone() >= TIDE_NEED;
   MERM.pulls = 0;
   function summonMermaid() {
     if (!isWorthy()) {
@@ -10613,8 +10630,9 @@ window.__pgBoot = () => {
     yaw = Math.atan2(-dx, -dz); pitch = 0.1; dist = Math.max(dist, 18);
   }
   function mermaidSpeak() {
-    const total = Object.keys(QUESTS).length, done = Object.keys(QUESTS).filter(k => STATE.quests[k] === 'done').length, worthy = done >= total;
+    const done = questsDone(), worthy = isWorthy();
     const lines = ['Only the worthy can obtain this sword.'];
+    if (!worthy) lines.push(`Help those who call on ye across these islands. Ye have answered ${done} of the ${TIDE_NEED} I need to see, captain.`);
     if (worthy) lines.push('Ye have answered every soul who called on ye for help, from Gull Island to Port Coral. Ye are worthy, captain.', 'Take the Tidecaller, forged in the deep. May the tides guide yer blade.');
     else lines.push(`Ye have answered ${done} of the ${total} souls who called on ye for help. Return when every one of them has been answered.`, 'Until then, the blade stays in the stone.');
     if (!worthy && MERM.pulls === 2) lines.push('And heed me well, little pirate: lay a hand on my blade once more before ye are worthy, and ye will not live to regret it.');
@@ -14304,7 +14322,7 @@ window.__pgBoot = () => {
   // Actives:
   //   R  Tidal Wave: a wall of water surges out the way ye face, smashing ships, serpents and the Kraken (25 s)
   //   G  Whirlpool: opens a maelstrom ahead that drags ships in and grinds them for 8 s (45 s)
-  const TIDE = { waveCd: 0, poolCd: 0, waves: [], pools: [], WAVE_CD: 25, POOL_CD: 45 };
+  const TIDE = { waveCd: 0, poolCd: 0, ripCd: 0, rip: 0, waves: [], pools: [], WAVE_CD: 14, POOL_CD: 28, RIP_CD: 7 };
   const tideOn = () => STATE.sword === 'tidecaller';
   const tideHud = document.createElement('div');
   tideHud.style.cssText = 'position:absolute;right:16px;bottom:96px;color:#dffcff;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:none;text-align:right;line-height:1.5';
@@ -14354,10 +14372,26 @@ window.__pgBoot = () => {
     TIDE.pools.push({ disc, x, z, t: 0, tick: 0, big: false }); TIDE.poolCd = TIDE.POOL_CD;
     SFX.splash({ x, z }, true); toast('The sea begins to turn... a whirlpool opens before ye!');
   }
+  // T Riptide: a rush of water carries ye forward, cutting down everything in yer path
+  function tideRiptide() {
+    if (!tideOn() || talk || uiOpen || STOM.on || MERM.held || inInterior || sailing || RIDE.on || onShip) return;
+    if (TIDE.ripCd > 0) { toast(`The current needs a moment... (${Math.ceil(TIDE.ripCd)}s)`); return; }
+    TIDE.ripCd = TIDE.RIP_CD; TIDE.rip = 0.45; TIDE.ripHit = new Set(); SFX.splash({ x: P.pos.x, z: P.pos.z }, true); SFX.swing();
+    PLAYER.swingKind = 4; PLAYER.slashDur = 0.45; PLAYER.slashT = 0.45; PLAYER.cool = 0.5;
+  }
+  function updateRiptide(dt) {
+    TIDE.ripCd = Math.max(0, TIDE.ripCd - dt); if (!(TIDE.rip > 0)) return;
+    TIDE.rip -= dt; const v = 42, fx = Math.sin(P.facing), fz = Math.cos(P.facing);
+    moveWithCollision(P.pos, fx * v * dt, fz * v * dt, 0.4, []);
+    for (let k = 0; k < 4; k++) puff(P.pos.x + (Math.random() - 0.5) * 1.5, P.pos.y + 0.3, P.pos.z + (Math.random() - 0.5) * 1.5, { color: k % 2 ? 0x9ff0ff : 0xffffff, size: 0.6 + Math.random() * 0.6, life: 0.7, grow: 1.2, vx: -fx * 4, vz: -fz * 4, vy: 2.5, op: 0.85 });
+    const dm = Math.round(curSword().dmg * 1.8);
+    for (const b of bandits) { if (b.state === 'dead' || b.state === 'gone' || TIDE.ripHit.has(b) || Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) > 3.2) continue; TIDE.ripHit.add(b); hitBandit(b, dm); dmgNum(b.pos, `${dm}!`, 'crit'); banditFlinch(b, true, fx, fz); }
+    for (const c of activeFighters()) { if (TIDE.ripHit.has(c) || Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z) > 3.2) continue; TIDE.ripHit.add(c); hitFighter(c, dm, true); dmgNum(c.pos, `${dm}!`, 'crit'); if (c.st === 'dead') swordOnKill(); }
+  }
   function updateTide(dt, t) {
-    TIDE.waveCd = Math.max(0, TIDE.waveCd - dt); TIDE.poolCd = Math.max(0, TIDE.poolCd - dt);
+    TIDE.waveCd = Math.max(0, TIDE.waveCd - dt); TIDE.poolCd = Math.max(0, TIDE.poolCd - dt); updateRiptide(dt);
     // the HUD
-    const hud = tideOn() && !inInterior ? `<b>R</b> Tidal Wave ${TIDE.waveCd > 0 ? '(' + Math.ceil(TIDE.waveCd) + 's)' : '· ready'} &nbsp; <b>G</b> Whirlpool ${TIDE.poolCd > 0 ? '(' + Math.ceil(TIDE.poolCd) + 's)' : '· ready'}${isNight() ? '<br><span style="color:#bff8ff">Moonlit edge: +30% damage</span>' : ''}` : '';
+    const hud = tideOn() && !inInterior ? `<b>R</b> Tidal Wave ${TIDE.waveCd > 0 ? '(' + Math.ceil(TIDE.waveCd) + 's)' : '· ready'} &nbsp; <b>G</b> Whirlpool ${TIDE.poolCd > 0 ? '(' + Math.ceil(TIDE.poolCd) + 's)' : '· ready'} &nbsp; <b>T</b> Riptide ${TIDE.ripCd > 0 ? '(' + Math.ceil(TIDE.ripCd) + 's)' : '· ready'}${isNight() ? '<br><span style="color:#bff8ff">Moonlit edge: +30% damage</span>' : ''}` : '';
     if (tideHud.innerHTML !== hud) tideHud.innerHTML = hud;
     // passives: the sea heals a swimmer; the hull mends itself (the faster mending is in updateShip)
     if (tideOn() && krSwimming() && PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 4 * dt);
@@ -14373,7 +14407,7 @@ window.__pgBoot = () => {
         if (W.hit.has(T.e)) continue;
         const dx = T.e.x - W.x, dz = T.e.z - W.z, dist = Math.hypot(dx, dz); if (Math.abs(dist - d) > 30) continue;
         if (Math.abs(angDiff(W.h, Math.atan2(dx, dz))) > (B2 ? 1.0 : 0.7)) continue;
-        W.hit.add(T.e); T.hit(T.ship ? (B2 ? 95 : 40) : (B2 ? 140 : 70)); wSplash(T.e.x, 2, T.e.z, true);
+        W.hit.add(T.e); T.hit(T.ship ? (B2 ? 150 : 70) : (B2 ? 220 : 120)); wSplash(T.e.x, 2, T.e.z, true);
         if (T.ship && !T.e.net) { T.e.speed = B2 ? -14 : -6; T.e.x += dx / dist * (B2 ? 40 : 12); T.e.z += dz / dist * (B2 ? 40 : 12); T.e.roll = (T.e.roll || 0) + 0.25; }   // shoved back and heeled over
       }
       if (Math.random() < dt * 30) { const a = W.h + (Math.random() - 0.5) * 1.3; wSplash(W.x + Math.sin(a) * d, hgt, W.z + Math.cos(a) * d, false); }
@@ -14398,13 +14432,13 @@ window.__pgBoot = () => {
       for (const T of tideTargets()) {
         const dx = Pl.x - T.e.x, dz = Pl.z - T.e.z, dist = Math.hypot(dx, dz); if (dist > 110 * PR) continue;
         if (T.ship && !T.e.net && dist > 4) { const pull = Math.min(dist, (Pl.big ? 32 : 18) * dt) * life; T.e.x += dx / dist * pull + dz / dist * pull * 0.8; T.e.z += dz / dist * pull - dx / dist * pull * 0.8; T.e.heading += dt * 0.9 * life; }   // dragged round and in
-        if (grind && dist < 80 * PR) T.hit(T.ship ? (Pl.big ? 26 : 14) : (Pl.big ? 32 : 18));
+        if (grind && dist < 80 * PR) T.hit(T.ship ? (Pl.big ? 40 : 24) : (Pl.big ? 50 : 30));
       }
       if (Math.random() < dt * 10 * life) { const a = Math.random() * 6.28, r = 20 + Math.random() * 55; wSplash(Pl.x + Math.cos(a) * r, 1, Pl.z + Math.sin(a) * r, false); }
       if (Pl.t > PL) { if (Pl.fx2) { scene.remove(Pl.fx2); Pl.fx2.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); } scene.remove(Pl.disc); Pl.disc.geometry.dispose(); TIDE.pools.splice(i, 1); }
     }
   }
-  addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; const k = e.key.toLowerCase(); if (!tideOn()) return; if (k === 'r') tideWave(); if (k === 'g') tideWhirlpool(); });
+  addEventListener('keydown', e => { if (e.repeat || uiOpen || talk) return; const k = e.key.toLowerCase(); if (!tideOn()) return; if (k === 'r') tideWave(); if (k === 'g') tideWhirlpool(); if (k === 't') tideRiptide(); });
   // ---- the Sword of the Sea: SEA CONTROL ----
   // Z Tsunami: a towering wave that races out twice as far and hits more than twice as hard as Tidecaller's.
   // G Maelstrom: a vast whirlpool that drags ships in from far off and grinds them for 12 seconds.
