@@ -2196,7 +2196,6 @@ window.__pgBoot = () => {
     for (let i = 0; i < 46; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
       const side = Math.random() < 0.5 ? -1 : 1; s.userData = { x: side * T.B * (0.35 + Math.random() * 0.45), y: -0.5 + Math.random() * (T.D + 10), z: (Math.random() - 0.5) * T.L * 1.05, ph: Math.random() * 6, sp: 0.3 + Math.random() * 0.5, op: 0.4 + Math.random() * 0.3 };
       s.scale.setScalar(7 + Math.random() * 9); m.group.add(s); sprites.push(s); }
-    const glow = new THREE.PointLight(0x6a1ad8, 1.2, T.L * 1.2, 2); glow.position.set(0, T.D + 4, 0); m.group.add(glow);
     REV_AURAS.push({ m, sprites });
   }
   function updateHome(dt, t) {
@@ -3604,8 +3603,8 @@ window.__pgBoot = () => {
     stairs: { castle: 1, xs: [4.1, -4.1], w: 0.8, zLow: -5.6, zHigh: -9.5, n: 24 }, quarters: { castle: 1 }, deckItems: false,   // (her deck is dressed by titanDecor, at her own scale)
     speed: 11, turn: 0.34, titan: true };
   // the Revenant: the Cursed Blade's ship. A galleon's lines blackened and built bigger (104 m, between a galleon and the
-  // Titan), black sails and a bruise-purple trim, and faster than anything else on the water
-  SHIP_TYPES.revenant = Object.assign({}, SHIP_TYPES.galleon, { name: 'The Revenant', hull: 0x111114, bottom: 0x050506, wale: 0x3a1048, portLid: 0x08080a, sail: 0x0d0c10,
+  // Titan), near-black timbers and torn black sails, and faster than anything else on the water
+  SHIP_TYPES.revenant = Object.assign({}, SHIP_TYPES.galleon, { name: 'The Revenant', hull: 0x090908, bottom: 0x030303, wale: 0x1a1713, portLid: 0x050505, sail: 0x121110, tattered: true, deckCol: 0x1e1b17,
     flags: SHIP_TYPES.galleon.flags.map(f => Object.assign({}, f, { kind: 'jolly' })), speed: 36, turn: 0.62, revenant: true });   // (115 before upgrades: the fastest anything else gets is a fully upgraded sloop on the Tidecaller's current, about 105)
   const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 2.86, revenant: 2.6 };   // (the Titan: 160 m long, 44 m in the beam)
   function hullFns(S) {
@@ -3644,6 +3643,15 @@ window.__pgBoot = () => {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, len, 7), mat);
     m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); return m;
   }
+  // torn sailcloth, for the Revenant: white is cloth, black is gone. The foot hangs in ragged tongues, the edges are
+  // bitten away, long rips run up from the hem and holes are shot right through
+  const TATTER_TEX = (() => canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#000';
+    g.beginPath(); g.moveTo(0, h); for (let x = 0; x <= w; x += 8) g.lineTo(x, h - 10 - Math.random() * (x % 48 < 24 ? 70 : 28)); g.lineTo(w, h); g.closePath(); g.fill();   // the foot: hanging tongues
+    for (const sd of [0, 1]) { g.beginPath(); const x0 = sd ? w : 0; g.moveTo(x0, 0); for (let y = 0; y <= h; y += 10) g.lineTo(sd ? w - 4 - Math.random() * 18 : 4 + Math.random() * 18, y); g.lineTo(x0, h); g.closePath(); g.fill(); }   // bitten edges
+    for (let k = 0; k < 6; k++) { let x = 30 + Math.random() * (w - 60), y = h - 20; g.beginPath(); g.moveTo(x - 4, y); for (let n = 0; n < 6; n++) { x += (Math.random() - 0.5) * 18; y -= 12 + Math.random() * 18; g.lineTo(x, y); } g.lineTo(x + 3, y); for (let n = 0; n < 6; n++) { g.lineTo(x + 5 + Math.random() * 4, y += 15); } g.closePath(); g.fill(); }   // rips up from the hem
+    for (let k = 0; k < 9; k++) { const x = 30 + Math.random() * (w - 60), y = 25 + Math.random() * (h - 90), r = 5 + Math.random() * 16; g.beginPath(); for (let a = 0; a < 6.3; a += 0.5) { const rr = r * (0.6 + Math.random() * 0.6); a ? g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : g.moveTo(x + rr, y); } g.closePath(); g.fill(); }   // holes
+  }))();
   function quadSail(g, p00, p10, p01, p11, bulge, mat, square) {
     const A = 10, Bn = 8, pos = [], uv = [], idx = [], v = new THREE.Vector3();
     for (let j = 0; j <= Bn; j++) for (let i = 0; i <= A; i++) {
@@ -3883,7 +3891,7 @@ window.__pgBoot = () => {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), iron); arm.position.set(-sd * 0.15, 0.06, 0); lg.add(arm); } });
   }
   function makeShip(key, styleOverride) {
-    const S = Object.assign({}, SHIP_TYPES[key]), st = styleOverride || STATE.shipStyle;
+    const S = Object.assign({}, SHIP_TYPES[key]), st = S.revenant ? {} : styleOverride || STATE.shipStyle;   // (the Revenant keeps her own colours, whatever paint ye've chosen)
     if (st.sail != null) S.sail = st.sail;
     if (st.hull != null) { S.hull = st.hull; if (S.gunBand) S.portLid = st.hull; }
     if (st.trim != null) { S.wale = st.trim; if (S.gunBand) S.gunBand = st.trim; }
@@ -4109,6 +4117,7 @@ window.__pgBoot = () => {
 
     // masts, sails, rigging
     const sailMat = new THREE.MeshLambertMaterial({ map: sailTex(S.sail, S.pattern, S.emblem), side: THREE.DoubleSide });
+    if (S.tattered) { sailMat.alphaMap = TATTER_TEX; sailMat.alphaTest = 0.5; }   // rotten canvas: ragged hems, rips and holes
     const mastMat = lam(0x5e4028), rig = [], flags = [], furl = [], rigMat = new THREE.LineBasicMaterial({ color: 0x2a2018 });
     const addLine = (a, b) => rig.push(a.x, a.y, a.z, b.x, b.y, b.z);
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -6993,7 +7002,7 @@ window.__pgBoot = () => {
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep: the strongest blade a captain can earn. Passives: every hit throws an undertow that strikes foes around yer target and mends ye, yer ship sails 20% faster and mends 3x faster, swim 60% faster and heal while swimming, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them. T: Riptide carries ye forward on a rush of water, cutting down everything in the way.", dmg: 100, cool: 0.36, reach: 3.9, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
-    cursed: { name: 'The Cursed Blade', desc: "A blade of black steel that drinks the light, whispering in a voice only its bearer hears. Passives: every hit drains life to heal ye (12% of the damage), +25% damage against ships' crews and Blackwater soldiers. Claiming it raises the Revenant, a dark ship faster than any afloat.", dmg: 105, cool: 0.37, reach: 3.8, arc: 0, cost: {}, gold: 0, legendary: true, claim: 'Only a chosen few can claim it, from a black altar in the uncharted waters, due north past the edge of the chart.', look: { blade: 0x141418, guard: 0x2a0e36, len: 1.32, curve: 0.16, width: 0.14, glow: true, glowColor: 0x7a1aff } },
+    cursed: { name: 'The Cursed Blade', desc: "A blade of black steel that drinks the light, whispering in a voice only its bearer hears. Passives: every hit drains life to heal ye (12% of the damage), +25% damage against ships' crews and Blackwater soldiers. Claiming it raises the Revenant, a black ship with torn sails, faster than any afloat.", dmg: 105, cool: 0.37, reach: 3.8, arc: 0, cost: {}, gold: 0, legendary: true, claim: 'Only a chosen few can claim it, from a black altar in the uncharted waters, due north past the edge of the chart.', look: { blade: 0x141418, guard: 0x2a0e36, len: 1.32, curve: 0.16, width: 0.14, glow: true, glowColor: 0x7a1aff } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (for as long as ye like, ye become a colossal scarred grey kraken, as vast as the Elder Serpent, scarred by a thousand fights, that walks the land, swims and dives: its own attacks Z Crushing Grab, R Tentacle Storm, G Ink Cloud, T Maelstrom Spin, B Dive and Breach; 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
