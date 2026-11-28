@@ -3310,8 +3310,9 @@ window.__pgBoot = () => {
       g.position.set(0, -0.4, 0.02); ch.forearms[1].add(g);
     } else if (kind === 'pistol') {
       const P0 = typeof PISTOLS !== 'undefined' && PISTOLS ? PISTOLS[ch.pistolId] || PISTOLS.flint : null;
-      const gun = buildPistol(P0 && P0.look); gun.rotation.y = Math.PI; g.add(gun);   // (turned so the grip sits in the palm and the hammer's on top) g.userData.drum = gun.userData.drum; g.userData.muzzleY = gun.userData.muzzleY;
-      g.position.set(0, -0.38, 0.03); ch.forearms[1].add(g);
+      // turned so the grip sits in the palm and the hammer's on top, and set down into the fist
+      const gun = buildPistol(P0 && P0.look); gun.rotation.y = Math.PI; g.add(gun); g.userData.drum = gun.userData.drum; g.userData.muzzleY = gun.userData.muzzleY;
+      g.position.set(0, -0.42, -0.07); ch.forearms[1].add(g);
     } else if (kind === 'crate') {
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.45), M(0xa57b4a)));
       g.position.set(0, 1.2 - 0.95, 0.45); ch.upper.add(g);
