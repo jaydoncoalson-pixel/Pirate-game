@@ -3312,7 +3312,7 @@ window.__pgBoot = () => {
       const P0 = typeof PISTOLS !== 'undefined' && PISTOLS ? PISTOLS[ch.pistolId] || PISTOLS.flint : null;
       // turned so the grip sits in the palm and the hammer's on top
       const gun = buildPistol(P0 && P0.look); gun.rotation.y = Math.PI; g.add(gun); g.userData.drum = gun.userData.drum; g.userData.muzzleY = gun.userData.muzzleY;
-      g.position.set(0, -0.38, 0.03); ch.forearms[1].add(g);
+      g.position.set(0, -0.43, 0.12); ch.forearms[1].add(g);   // the fist round the grip, the lock and barrel above it
     } else if (kind === 'crate') {
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.45), M(0xa57b4a)));
       g.position.set(0, 1.2 - 0.95, 0.45); ch.upper.add(g);
