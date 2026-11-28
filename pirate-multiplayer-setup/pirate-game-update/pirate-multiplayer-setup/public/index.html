@@ -7149,9 +7149,9 @@ window.__pgBoot = () => {
     P(new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.052, 18), gold), 0, 0, 0.03).rotation.z = Math.PI / 2;
     for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; for (const sd of [-1, 1]) P(new THREE.Mesh(new THREE.SphereGeometry(0.0055, 6, 4), goldD), sd * 0.026, Math.cos(a) * 0.046, 0.03 + Math.sin(a) * 0.046); }
     // the collar: a fluted gold cup, flaring like a scallop shell, that the water of the blade wells up out of
-    { const cupG = new THREE.CylinderGeometry(0.078, 0.05, 0.075, 16, 1, true); cupG.rotateX(Math.PI / 2); cupG.scale(0.5, 1, 1);
+    { const cupG = new THREE.CylinderGeometry(0.088, 0.058, 0.08, 16, 1, true); cupG.rotateX(Math.PI / 2); cupG.scale(0.5, 1, 1);
       P(new THREE.Mesh(cupG, Object.assign(gold.clone(), { side: THREE.DoubleSide })), 0, 0, 0.088);
-      const lip = P(new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.0075, 6, 28), gold), 0, 0, 0.126); lip.scale.set(0.5, 1, 1); lip.rotation.y = 0; }
+      const lip = P(new THREE.Mesh(new THREE.TorusGeometry(0.088, 0.0075, 6, 28), gold), 0, 0, 0.128); lip.scale.set(0.5, 1, 1); lip.rotation.y = 0; }
     // langets: gold plates running up both flats of the blade from the collar, ending in a curl of wave and a pearl
     [-1, 1].forEach(sd => {
       const sh = new THREE.Shape(); sh.moveTo(-0.034, 0); sh.quadraticCurveTo(-0.03, 0.09, 0, 0.16); sh.quadraticCurveTo(0.03, 0.09, 0.034, 0); sh.lineTo(-0.034, 0);
@@ -7182,7 +7182,7 @@ window.__pgBoot = () => {
     for (let i = 0; i < n; i++) {
       const t0 = i / n, t1 = (i + 1) / n, a = at(t0), b = at(t1), tm = (t0 + t1) / 2, L = Math.hypot(b.z - a.z, b.y - a.y) * 1.03, rx = -Math.atan2(b.y - a.y, b.z - a.z);
       const col = tm < 0.55 ? deepC.clone().lerp(tealC, tm / 0.55) : tealC.clone().lerp(foamC, (tm - 0.55) / 0.45);
-      const w = 0.12 * (1 - 0.78 * Math.pow(tm, 1.5)) * (1 + 0.16 * Math.sin(tm * Math.PI * 7)) + 0.012;   // the back edge swells and dips like a wave train
+      const w = (0.12 * (1 - 0.78 * Math.pow(tm, 1.5)) * (1 + 0.16 * Math.sin(tm * Math.PI * 7)) + 0.012) * Math.min(1, 0.6 + tm * 5.5);   // the back edge swells and dips like a wave train (and starts narrow, welling up out of the collar)
       const water = new THREE.MeshPhongMaterial({ color: col, specular: 0xffffff, shininess: 200, emissive: col.clone().multiplyScalar(0.35), transparent: true, opacity: 0.82 });
       const seg = P(new THREE.Mesh(new THREE.BoxGeometry(0.026, w, L), water), 0, (a.y + b.y) / 2, (a.z + b.z) / 2); seg.rotation.x = rx;
       const core = P(new THREE.Mesh(new THREE.BoxGeometry(0.03, w * 0.4, L), coreM), 0, (a.y + b.y) / 2 - w * 0.12, (a.z + b.z) / 2); core.rotation.x = rx;   // darker deep water inside
