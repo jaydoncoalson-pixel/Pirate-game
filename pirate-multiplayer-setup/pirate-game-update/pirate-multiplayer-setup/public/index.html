@@ -3309,8 +3309,8 @@ window.__pgBoot = () => {
       g.add(buildBlade((SWORDS[ch.swordId] || SWORDS.rusty).look));
       g.position.set(0, -0.4, 0.02); ch.forearms[1].add(g);
     } else if (kind === 'pistol') {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, 0.2), M(0x5a3a22)); body.position.set(0, -0.02, 0.05); g.add(body);
-      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.42, 8), M(0x2a2a2a)); br.position.set(0, -0.25, 0.02); g.add(br);
+      const P0 = typeof PISTOLS !== 'undefined' && PISTOLS ? PISTOLS[ch.pistolId] || PISTOLS.flint : null;
+      const gun = buildPistol(P0 && P0.look); g.add(gun); g.userData.drum = gun.userData.drum; g.userData.muzzleY = gun.userData.muzzleY;
       g.position.set(0, -0.38, 0.03); ch.forearms[1].add(g);
     } else if (kind === 'crate') {
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.45), M(0xa57b4a)));
@@ -7646,6 +7646,7 @@ window.__pgBoot = () => {
       }
       card.appendChild(b); swordList.appendChild(card);
     });
+    renderPistols(swordList);
     renderArmor(swordList);
   }
   const tmpF = new THREE.Vector3();
@@ -7670,7 +7671,217 @@ window.__pgBoot = () => {
   function setWeapon(w) { PLAYER.weapon = w; weaponEls.forEach(e => e.classList.toggle('on', e.dataset.w === w)); weaponEls[0].textContent = `1 · ${curSword().name}`; }
   weaponEls.forEach(e => e.addEventListener('click', () => setWeapon(e.dataset.w)));
   setWeapon('cutlass');
-  function equipWeapons(ch) { ch.swordId = STATE.sword; addProp(ch, 'blade'); addProp(ch, 'pistol'); }
+  // ===================== Pistols =====================
+  // Seven sidearms, from the rusty starter to a brass hand-mortar, each with its own model and way of fighting:
+  // single heavy shots, a double barrel, a four-barrel pepperbox, a blunderbuss scattergun, a long duelling pistol
+  // and an exploding shell. Tom the smith works the gun-locks at his forge. Shots draw a tracer, auto-aim at the foe
+  // nearest where ye're looking, and hit bandits ashore and fighters on deck alike.
+  var PISTOLS = {
+    flint:   { name: 'Rusty Flintlock', desc: 'The pistol ye started with. Slow to load and none too true, but it still bites.', dmg: 40, rounds: 1, reload: 1.6, fire: 0.3, range: 55, cone: 0.93, gold: 0, cost: {},
+               look: { wood: 0x5a3a22, metal: 0x3a3a3a, trim: 0x6a5a3a, len: 0.4 } },
+    navy:    { name: 'Navy Pistol', desc: 'A brass-mounted service pistol off a navy cutter. Harder hitting, quicker to load, and true at range.', dmg: 58, rounds: 1, reload: 1.25, fire: 0.3, range: 80, cone: 0.95, gold: 90, cost: { iron: 3, wood: 1 },
+               look: { wood: 0x6b3f1f, metal: 0x50565e, trim: 0xd4ae4a, len: 0.46, bands: 2 } },
+    twin:    { name: 'Twin-Barrel Flintlock', desc: 'Two barrels side by side, each with its own lock: fire twice before ye reload.', dmg: 48, rounds: 2, reload: 2.0, fire: 0.25, range: 62, cone: 0.94, gold: 160, cost: { iron: 4, wood: 2 },
+               look: { wood: 0x4e2e18, metal: 0x44484e, trim: 0xb8b8c0, len: 0.42, barrels: 2 } },
+    blunder: { name: 'Blunderbuss Pistol', desc: 'A flared brass muzzle packed with shot. Seven pellets in a wide cone: ruinous up close, useless far off, and it knocks foes off their feet.', dmg: 16, pellets: 7, rounds: 1, reload: 1.9, fire: 0.35, range: 20, cone: 0.72, kb: true, gold: 140, cost: { iron: 4, steel: 1 },
+               look: { wood: 0x6a4024, metal: 0xb08a3a, trim: 0xd4ae4a, len: 0.34, flare: true } },
+    pepper:  { name: 'Pepperbox', desc: 'Four barrels that turn with every pull of the trigger: rattle off four quick shots, then a long reload.', dmg: 34, rounds: 4, reload: 2.8, fire: 0.18, range: 55, cone: 0.93, gold: 260, cost: { steel: 3, iron: 3 },
+               look: { wood: 0x3a2414, metal: 0x5e646c, trim: 0xc0c4cc, len: 0.3, barrels: 4 } },
+    duelist: { name: "Duelist's Pistol", desc: 'A long rifled barrel, a hair trigger and silver inlay. The longest reach and hardest single shot, and double damage against a foe who is staggered or reeling.', dmg: 95, rounds: 1, reload: 2.2, fire: 0.3, range: 120, cone: 0.975, duel: true, gold: 420, cost: { steel: 4, pearl: 3 },
+               look: { wood: 0x2a1a10, metal: 0x2c3038, trim: 0xdfe4ea, len: 0.62, bands: 3, slim: true } },
+    thunder: { name: 'The Thunderer', desc: 'A brass hand-mortar with a dragon for a muzzle. Every shell bursts on impact, blasting everything within four metres.', dmg: 70, splash: 4, splashDmg: 45, rounds: 1, reload: 2.6, fire: 0.4, range: 70, cone: 0.93, gold: 650, cost: { gem: 2, steel: 4 },
+               look: { wood: 0x3a1a10, metal: 0xc9962e, trim: 0xffd76a, len: 0.4, dragon: true } },
+  };
+  if (!Array.isArray(STATE.pistols)) STATE.pistols = ['flint'];
+  if (!STATE.pistols.includes('flint')) STATE.pistols.unshift('flint');
+  if (!PISTOLS[STATE.pistol]) STATE.pistol = 'flint';
+  const curPistol = () => PISTOLS[STATE.pistol] || PISTOLS.flint;
+  PLAYER.rounds = curPistol().rounds; PLAYER.idleT = 0; PLAYER.shots = 0;
+  // the model: held in the right hand, barrel pointing down the forearm (-y), the grip hanging toward +z
+  function buildPistol(lk) {
+    lk = lk || { wood: 0x5a3a22, metal: 0x3a3a3a, trim: 0x6a5a3a, len: 0.4 };
+    const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c }), wood = M(lk.wood), metal = M(lk.metal), trim = M(lk.trim);
+    const len = lk.len, br = lk.slim ? 0.017 : 0.021, y0 = -0.07;
+    const cyl = (r0, r1, h, m, x, y, z, seg = 10) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), m); c.position.set(x, y, z); g.add(c); return c; };
+    const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); g.add(b); return b; };
+    // lock plate and frame
+    box(0.052, 0.13, 0.065, metal, 0, -0.03, 0);
+    box(0.054, 0.05, 0.03, trim, 0, 0.0, -0.02);
+    // the grip: a curved stock in two angled pieces, with a metal butt cap
+    const s1 = box(0.046, 0.06, 0.12, wood, 0, 0.005, 0.075); s1.rotation.x = 0.25;
+    const s2 = box(0.05, 0.065, 0.09, wood, 0, 0.035, 0.16); s2.rotation.x = 0.55;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.034, 10, 8), lk.dragon ? trim : metal); cap.scale.set(0.85, 0.9, 0.7); cap.position.set(0, 0.06, 0.205); g.add(cap);
+    // trigger guard and trigger
+    const tg = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.005, 6, 12, Math.PI * 1.25), trim); tg.rotation.set(0, Math.PI / 2, 0.4); tg.position.set(0, -0.03, 0.05); g.add(tg);
+    const tr = box(0.008, 0.008, 0.03, metal, 0, -0.025, 0.045); tr.rotation.x = 0.4;
+    // hammer (the cock) and frizzen on top
+    const hm = box(0.012, 0.05, 0.016, metal, 0, 0.02, -0.04); hm.rotation.x = -0.5;
+    box(0.016, 0.03, 0.012, metal, 0, -0.06, -0.038);
+    // barrels
+    const yc = y0 - len / 2, nb = lk.barrels || 1;
+    if (nb === 4) {   // the pepperbox: four barrels round a spindle
+      const drum = new THREE.Group(); drum.position.set(0, 0, -0.005); g.add(drum); g.userData.drum = drum;
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, c = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.015, len, 8), metal); c.position.set(Math.cos(a) * 0.019, yc, Math.sin(a) * 0.019); drum.add(c); }
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.018, 12), trim); ring.position.set(0, y0 - 0.01, 0); drum.add(ring);
+      const ring2 = ring.clone(); ring2.position.y = y0 - len + 0.01; drum.add(ring2);
+    } else if (nb === 2) {
+      for (const x of [-0.021, 0.021]) { cyl(br * 0.9, br, len, metal, x, yc, -0.008); cyl(br * 1.15, br * 1.15, 0.016, trim, x, y0 - len + 0.008, -0.008); }
+      box(0.012, len * 0.9, 0.02, wood, 0, yc, 0.012);
+    } else {
+      cyl(br * 0.9, br * 1.08, len, metal, 0, yc, -0.008);
+      if (lk.flare) { const f = cyl(0.058, br, 0.11, metal, 0, y0 - len - 0.045, -0.008, 14); const lip = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.006, 6, 16), trim); lip.rotation.x = Math.PI / 2; lip.position.set(0, y0 - len - 0.1, -0.008); g.add(lip); }
+      else if (lk.dragon) {   // a dragon's head for a muzzle: snout, open jaws, horns and ruby eyes
+        const hd = box(0.05, 0.07, 0.055, trim, 0, y0 - len - 0.02, -0.008);
+        const jawU = box(0.044, 0.07, 0.02, trim, 0, y0 - len - 0.075, -0.026); jawU.rotation.x = -0.3;
+        const jawL = box(0.04, 0.065, 0.018, trim, 0, y0 - len - 0.072, 0.012); jawL.rotation.x = 0.3;
+        for (const x of [-0.018, 0.018]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.05, 6), trim); h.position.set(x, y0 - len + 0.03, -0.04); h.rotation.x = -2.4; g.add(h);
+          const e = new THREE.Mesh(new THREE.SphereGeometry(0.007, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff2a2a })); e.position.set(x * 1.3, y0 - len - 0.02, -0.03); g.add(e); }
+        for (let i = 0; i < 3; i++) { const sc = box(0.03, 0.012, 0.012, trim, 0, y0 - len * (0.2 + i * 0.25), -0.032); sc.rotation.x = 0.6; }   // scales down the barrel
+      } else cyl(br * 1.2, br * 1.2, 0.018, trim, 0, y0 - len + 0.009, -0.008);
+      box(0.026, len * (lk.flare ? 0.85 : 0.7), 0.022, wood, 0, y0 - len * 0.35, 0.014);   // the forestock under the barrel
+      if (!lk.flare && !lk.dragon) box(0.006, 0.012, 0.008, trim, 0, y0 - len + 0.03, -0.03);   // front sight
+    }
+    for (let i = 0; i < (lk.bands || 0); i++) cyl(br * 1.25, br * 1.25, 0.012, trim, 0, y0 - len * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -0.006);
+    if (lk.slim) { const inl = box(0.004, len * 0.6, 0.004, trim, 0.02, yc, -0.008); box(0.004, len * 0.6, 0.004, trim, -0.02, yc, -0.008); }   // silver inlay
+    g.userData.muzzleY = y0 - len - (lk.flare ? 0.1 : lk.dragon ? 0.09 : 0.01);
+    return g;
+  }
+  function refreshPistol() {
+    const old = player.props.pistol; if (old && old.parent) old.parent.remove(old);
+    delete player.props.pistol; player.pistolId = STATE.pistol; addProp(player, 'pistol'); showWeapon();
+  }
+  function drawPistolIcon(cv, lk) {
+    const g = cv.getContext('2d'), hex = c => '#' + c.toString(16).padStart(6, '0'), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H); g.save(); g.translate(W * 0.2, H * 0.42);
+    const L = 130 * lk.len / 0.46;
+    // grip
+    g.fillStyle = hex(lk.wood); g.beginPath(); g.moveTo(0, -6); g.lineTo(14, -6); g.quadraticCurveTo(4, 14, -14, 26); g.lineTo(-26, 22); g.quadraticCurveTo(-10, 8, 0, -6); g.fill();
+    g.fillStyle = hex(lk.dragon ? lk.trim : lk.metal); g.beginPath(); g.ellipse(-21, 24, 7, 5, -0.6, 0, Math.PI * 2); g.fill();
+    // trigger guard
+    g.strokeStyle = hex(lk.trim); g.lineWidth = 2; g.beginPath(); g.arc(6, 4, 7, 0.2, Math.PI); g.stroke();
+    // lock and hammer
+    g.fillStyle = hex(lk.metal); g.fillRect(-2, -10, 22, 10); g.fillRect(-4, -18, 5, 9);
+    // barrel(s)
+    const nb = lk.barrels || 1, bh = lk.slim ? 5 : 7;
+    for (let i = 0; i < (nb === 4 ? 2 : nb); i++) { g.fillStyle = hex(lk.metal); g.fillRect(18, -10 - i * (bh + 1), L, bh); }
+    if (nb === 4) { g.fillStyle = hex(lk.trim); g.fillRect(18, -18, 4, 16); g.fillRect(18 + L - 4, -18, 4, 16); }
+    g.fillStyle = hex(lk.wood); g.fillRect(18, -4, L * 0.7, 4);
+    g.fillStyle = hex(lk.trim);
+    for (let i = 0; i < (lk.bands || 0); i++) g.fillRect(18 + L * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -11, 3, bh + 2);
+    if (lk.flare) { g.fillStyle = hex(lk.metal); g.beginPath(); g.moveTo(18 + L, -10); g.lineTo(18 + L + 22, -20); g.lineTo(18 + L + 22, 6); g.lineTo(18 + L, -3); g.fill(); }
+    if (lk.dragon) { g.fillStyle = hex(lk.trim); g.beginPath(); g.moveTo(18 + L, -14); g.lineTo(18 + L + 20, -12); g.lineTo(18 + L + 12, -7); g.lineTo(18 + L + 20, -2); g.lineTo(18 + L, 0); g.fill(); g.fillStyle = '#ff3030'; g.fillRect(18 + L + 6, -12, 3, 3); }
+    g.restore();
+  }
+  function renderPistols(host) {
+    const tom = npcs.find(n => n.def.name === 'Tom the smith');
+    const atForge = !!tom && !inInterior && Math.hypot(tom.pos.x - P.pos.x, tom.pos.z - P.pos.z) < 8;
+    const h = document.createElement('h3'); h.textContent = 'Pistols'; h.style.cssText = 'margin:18px 0 4px'; host.appendChild(h);
+    const n = document.createElement('p'); n.className = 'note'; n.style.margin = '0 0 10px'; n.innerHTML = 'Tom works the gun-locks too. Press <b>2</b> to draw yer pistol and <b>F</b> to fire: it aims at the foe nearest where ye\'re looking.'; host.appendChild(n);
+    Object.entries(PISTOLS).forEach(([id, G]) => {
+      const owned = STATE.pistols.includes(id), eq = STATE.pistol === id;
+      const afford = Object.entries(G.cost).every(([k, v]) => (STATE.mats[k] || 0) >= v) && STATE.gold >= G.gold;
+      const card = document.createElement('div'); card.className = 'sword' + (eq ? ' eq' : '');
+      const cv = document.createElement('canvas'); cv.width = 200; cv.height = 68; drawPistolIcon(cv, G.look); card.appendChild(cv);
+      const info = document.createElement('div');
+      const reqs = owned ? '<span>Owned</span>' : [...Object.entries(G.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= G.gold ? '' : 'no'}">${G.gold} gold</span>`].join('');
+      const dmg = G.pellets ? `${G.dmg} × ${G.pellets}` : G.splash ? `${G.dmg} + ${G.splashDmg} blast` : G.dmg;
+      info.innerHTML = `<h3>${G.name}</h3><p>${G.desc}</p><div class="stats"><span>Damage <b>${dmg}</b></span><span>Shots <b>${G.rounds}</b></span><span>Reload <b>${G.reload.toFixed(1)}s</b></span><span>Range <b>${G.range}m</b></span></div><div class="reqs">${reqs}</div>`;
+      card.appendChild(info);
+      const b = document.createElement('button');
+      if (eq) { b.textContent = 'Equipped'; b.disabled = true; }
+      else if (owned) { b.textContent = 'Equip'; b.addEventListener('click', () => { pistolEquip(id); renderForge(); }); }
+      else {
+        b.textContent = 'Forge'; b.disabled = !atForge || !afford;
+        b.addEventListener('click', () => {
+          for (const [k, v] of Object.entries(G.cost)) STATE.mats[k] -= v;
+          STATE.gold -= G.gold; updateGold(); STATE.pistols.push(id); pistolEquip(id);
+          toast(`Tom built ye a ${G.name}!`); SFX.anvil(); renderForge();
+        });
+      }
+      card.appendChild(b); host.appendChild(card);
+    });
+  }
+  function pistolEquip(id) { STATE.pistol = id; save(); PLAYER.rounds = curPistol().rounds; PLAYER.reload = 0; refreshPistol(); setWeapon('pistol'); toast(`Equipped the ${curPistol().name}.`); }
+
+  // ---- firing ----
+  const TRACERS = [], tracerGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 5, 1, true); tracerGeo.translate(0, 0.5, 0); tracerGeo.rotateX(Math.PI / 2);
+  function tracer(a, b, col = 0xffe6a0, w = 1) {
+    const m = new THREE.Mesh(tracerGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.position.copy(a); m.lookAt(b); m.scale.set(w, w, a.distanceTo(b)); scene.add(m); TRACERS.push({ m, t: 0 });
+  }
+  function updateTracers(dt) { for (let i = TRACERS.length - 1; i >= 0; i--) { const T = TRACERS[i]; T.t += dt; T.m.material.opacity = Math.max(0, 0.95 * (1 - T.t / 0.14)); if (T.t > 0.14) { scene.remove(T.m); T.m.material.dispose(); TRACERS.splice(i, 1); } } }
+  function pistolTargets() {
+    const out = [];
+    for (const b of bandits) if (b.state !== 'dead' && b.state !== 'gone') out.push({ o: b, pos: b.pos, k: 'b' });
+    for (const c of activeFighters()) out.push({ o: c, pos: c.pos, k: 'f' });
+    return out;
+  }
+  function pistolHit(t, dm, fx, fz, heavy, tag) {
+    if (t.k === 'b') { hitBandit(t.o, dm); dmgNum(t.o.pos, tag ? `${dm}${tag}` : `${dm}`, tag ? 'crit' : heavy ? 'heavy' : ''); banditFlinch(t.o, heavy, fx, fz); }
+    else { if (hitFighter(t.o, dm, heavy) !== false) dmgNum(t.o.pos, tag ? `${dm}${tag}` : `${dm}`, tag ? 'crit' : heavy ? 'heavy' : ''); if (t.o.st === 'dead') try { swordOnKill(); } catch (e) {} }
+  }
+  const _pmV = new THREE.Vector3(), _pmT = new THREE.Vector3();
+  function firePistol() {
+    const G = curPistol();
+    if (PLAYER.reload > 0 || PLAYER.rounds <= 0) { if (!(PLAYER.toldT > 0)) { toast('Reloadin\'...'); PLAYER.toldT = 1.2; } return; }
+    P.facing = yaw + Math.PI;                       // aim where the camera is looking
+    { const DS = GUEST.on ? GUEST.S : onShip ? ship : null; if (DS) PS.facing = yaw + Math.PI - DS.heading; }   // (on a deck, turn there too)
+    PLAYER.aimT = 0.45; PLAYER.cool = G.fire; PLAYER.rounds--; PLAYER.idleT = 0; PLAYER.shots++;
+    if (PLAYER.rounds <= 0) PLAYER.reload = G.reload;
+    const fx = Math.sin(P.facing), fz = Math.cos(P.facing);
+    // the muzzle: at the pistol in yer hand
+    player.root.getWorldPosition(_pmV); const mz = _pmV.clone().add(new THREE.Vector3(fx * 0.9, 1.55 * (player.root.scale.y || 1), fz * 0.9));
+    if (player.props.pistol && player.props.pistol.visible) { player.props.pistol.updateWorldMatrix(true, false); player.props.pistol.localToWorld(_pmT.set(0, player.props.pistol.userData.muzzleY || -0.5, -0.01)); if (_pmT.distanceTo(mz) < 2) mz.copy(_pmT); }
+    const big = !!(G.pellets || G.splash);
+    SFX.pistol(); if (big) SFX.cannon({ x: mz.x, z: mz.z });
+    puff(mz.x, mz.y, mz.z, { color: 0xffb04a, size: big ? 1.4 : 0.8, life: 0.1, grow: 0.6, op: 1 });
+    for (let k = 0; k < (big ? 3 : 1); k++) puff(mz.x + fx * k * 0.5, mz.y, mz.z + fz * k * 0.5, { color: 0xcfcfcf, size: big ? 1.5 : 1.0, life: 1.5, grow: 2.4, vy: 0.5, vx: fx * 1.5, vz: fz * 1.5, op: 0.65 });
+    CMB.shake = Math.max(CMB.shake, big ? 0.35 : 0.12);
+    if (player.props.pistol && player.props.pistol.userData.drum) player.props.pistol.userData.drum.rotation.y += Math.PI / 2;   // the pepperbox turns to the next barrel
+    const all = pistolTargets(), inCone = (t, cone, range) => { const dx = t.pos.x - mz.x, dz = t.pos.z - mz.z, d = Math.hypot(dx, dz); return d < range && Math.abs(t.pos.y - P.pos.y) < 6 && (dx * fx + dz * fz) / Math.max(d, 0.01) > cone ? d : -1; };
+    const chest = t => new THREE.Vector3(t.pos.x, t.pos.y + 1.3, t.pos.z);
+    if (G.pellets) {   // the blunderbuss: a cone of shot, more pellets for the nearer foe
+      let any = false;
+      for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; any = true;
+        const n = Math.max(1, Math.round(G.pellets * Math.max(0.25, Math.min(1, 1.15 - d / G.range)))), dx = (t.pos.x - mz.x) / Math.max(d, 0.01), dz = (t.pos.z - mz.z) / Math.max(d, 0.01);
+        pistolHit(t, G.dmg * n, dx, dz, true, n >= G.pellets - 1 ? '!' : ''); }
+      for (let k = 0; k < G.pellets; k++) { const a = P.facing + (Math.random() - 0.5) * 0.7, r = G.range * (0.6 + Math.random() * 0.4); tracer(mz, _pmT.set(mz.x + Math.sin(a) * r, mz.y + (Math.random() - 0.6) * 2, mz.z + Math.cos(a) * r).clone(), 0xffd890, 0.6); }
+      if (!any) for (let k = 0; k < 4; k++) puff(mz.x + fx * (8 + k * 3), mz.y - 0.5, mz.z + fz * (8 + k * 3), { color: 0xd8c8a8, size: 0.6, life: 0.4, grow: 1, op: 0.5 });
+    } else {
+      let best = null, bs = 1e9;
+      for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; const dx = t.pos.x - mz.x, dz = t.pos.z - mz.z, dot = (dx * fx + dz * fz) / Math.max(d, 0.01), s = (1 - dot) * 60 + d / G.range; if (s < bs) { bs = s; best = t; } }
+      let hitP;
+      if (best) {
+        hitP = chest(best);
+        const stag = (best.o.stagT || 0) > 0, head = Math.random() < 0.12, mul = (head ? 1.6 : 1) * (G.duel && stag ? 2 : 1), dm = Math.round(G.dmg * mul);
+        pistolHit(best, dm, fx, fz, !!G.splash, head ? ' HEADSHOT' : G.duel && stag ? '!' : '');
+        puff(hitP.x, hitP.y, hitP.z, { color: 0xffe0a0, size: 0.35, life: 0.12, grow: 0.4, op: 1 });
+      } else { const r = Math.min(G.range, 45); hitP = new THREE.Vector3(mz.x + fx * r, mz.y - 0.6, mz.z + fz * r); }
+      tracer(mz, hitP, G.splash ? 0xffa040 : 0xffe6a0, G.splash ? 1.8 : 1);
+      if (G.splash) {   // the Thunderer's shell bursts
+        CMB.shake = Math.max(CMB.shake, 0.5); SFX.crash({ x: hitP.x, z: hitP.z });
+        for (let k = 0; k < 16; k++) { const a = Math.random() * 6.28, s = 2 + Math.random() * 6; puff(hitP.x, hitP.y, hitP.z, { color: k % 3 ? 0xff8a2a : 0x3a3a3a, size: 0.9 + Math.random() * 1.2, life: 0.6 + Math.random() * 0.5, grow: 1.6, vx: Math.cos(a) * s, vy: 1 + Math.random() * 4, vz: Math.sin(a) * s, op: 0.95 }); }
+        for (const t of all) { if (best && t.o === best.o) continue; const d = Math.hypot(t.pos.x - hitP.x, t.pos.z - hitP.z); if (d < G.splash && Math.abs(t.pos.y + 1.3 - hitP.y) < 4) pistolHit(t, Math.round(G.splashDmg * (1 - d / G.splash * 0.5)), (t.pos.x - hitP.x) / Math.max(d, 0.01), (t.pos.z - hitP.z) / Math.max(d, 0.01), true, ''); }
+      }
+    }
+  }
+  function updatePistol(dt) {
+    const G = curPistol(); PLAYER.idleT += dt; PLAYER.toldT = (PLAYER.toldT || 0) - dt;
+    if (PLAYER.rounds <= 0 && PLAYER.reload <= 0) { PLAYER.rounds = G.rounds; if (PLAYER.weapon === 'pistol') SFX.click && SFX.click(); }
+    else if (PLAYER.rounds < G.rounds && PLAYER.reload <= 0 && PLAYER.idleT > G.reload) PLAYER.rounds = G.rounds;   // a moment's peace: top up the barrels
+    updateTracers(dt);
+  }
+  function pistolLabel() {
+    const G = curPistol();
+    if (PLAYER.reload > 0) return `2 · ${G.name} (reloading ${Math.round(100 * (1 - PLAYER.reload / G.reload))}%)`;
+    return `2 · ${G.name}` + (G.rounds > 1 ? ' ' + '●'.repeat(PLAYER.rounds) + '○'.repeat(Math.max(0, G.rounds - PLAYER.rounds)) : '');
+  }
+  setTimeout(() => { try { refreshPistol(); } catch (e) {} }, 0);
+  window.__pis = { equip: pistolEquip, fire: firePistol, PLAYER, curPistol, PISTOLS,
+    near: () => { const b = bandits.find(b => b.state !== 'dead' && b.state !== 'gone'); if (!b) return null; P.pos.set(b.pos.x - 10, b.pos.y, b.pos.z); yaw = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z) + Math.PI; b.state = 'idle'; return { hp: b.hp, name: b.name }; },
+    bhp: () => { const b = bandits.filter(b => b.state !== 'gone').sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z)); return b.slice(0, 6).map(b => [Math.round(Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z)), Math.round(b.hp), b.state]); },
+    show: () => { const g = new THREE.Group(); Object.values(PISTOLS).forEach((G, i) => { const o = new THREE.Group(), m = buildPistol(G.look); m.rotation.x = Math.PI / 2; o.add(m); o.rotation.y = -Math.PI / 2; o.position.set((i % 4) * 0.62 - 0.9, -Math.floor(i / 4) * 0.42 + 0.2, 0); g.add(o); }); g.scale.setScalar(10); g.position.set(P.pos.x, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x, 300, P.pos.z - 46, P.pos.x, 300, P.pos.z - 60]; return true; } };
+  function equipWeapons(ch) { ch.swordId = STATE.sword; ch.pistolId = STATE.pistol; addProp(ch, 'blade'); addProp(ch, 'pistol'); }
   equipWeapons(player);
 
   // smoke, splashes, sparks
@@ -9534,20 +9745,7 @@ window.__pgBoot = () => {
       else { PLAYER.slashDur = Math.max(0.34, Math.min(0.62, sw.cool * 1.05)) * (fin ? 1.3 : 1); PLAYER.cool = Math.max(sw.cool * (fin ? 1.5 : 0.85), PLAYER.slashDur * 0.62); }
       PLAYER.slashT = PLAYER.slashDur; PLAYER.hitPending = PLAYER.slashDur * (KF.w + (KF.s - KF.w) * 0.55);
       CMB.comboT = PLAYER.cool + 0.6; CMB.lungeT = fin ? 0.16 : 0.1; CMB.lungeV = fin ? 7 : 4; SFX.swing(); if (fin) setTimeout(() => SFX.swing(), 60); if (window.__mpSlash) window.__mpSlash(PLAYER.slashDur * 0.45); return; }
-    if (PLAYER.reload > 0) { toast('Reloadin\' the pistol...'); return; }
-    P.facing = yaw + Math.PI;                       // aim where the camera is looking
-    { const DS = GUEST.on ? GUEST.S : onShip ? ship : null; if (DS) PS.facing = yaw + Math.PI - DS.heading; }   // (on a deck, turn there too)
-    PLAYER.aimT = 0.45; PLAYER.cool = 0.3; PLAYER.reload = 1.6; SFX.pistol();
-    const fx = Math.sin(P.facing), fz = Math.cos(P.facing), mx = P.pos.x + fx * 1.3, my = P.pos.y + 1.65, mz = P.pos.z + fz * 1.3;
-    puff(mx, my, mz, { color: 0xffb04a, size: 0.9, life: 0.12, grow: 0.5, op: 1 });
-    puff(mx, my, mz, { color: 0xcccccc, size: 1.2, life: 1.6, grow: 2.5, vy: 0.6, op: 0.7 });
-    let best = null, bd = 60;
-    for (const b of bandits) {
-      if (b.state === 'dead' || b.state === 'gone') continue;
-      const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
-      if (d < bd && (dx * fx + dz * fz) / Math.max(d, 0.01) > 0.92) { bd = d; best = b; }
-    }
-    if (best) hitBandit(best, 40);
+    firePistol();
   }
 
   // ---------- Cannons ----------
@@ -9836,6 +10034,7 @@ window.__pgBoot = () => {
 
   function updateCombat(dt, t) {
     for (const k of ['slashT', 'aimT', 'cool', 'reload']) PLAYER[k] = Math.max(0, PLAYER[k] - dt);
+    updatePistol(dt);
     try { updateSwordExtras(dt); } catch (e) { console.error(e); }
     { const want = (STATE.sword === 'seasword' ? (SEAF.on ? SEAF.HP : TYRANT.hp) : 100) + ((gear() && gear().hp) || 0); if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
     updateCombatFeel(dt, t);
@@ -9901,7 +10100,7 @@ window.__pgBoot = () => {
       if (gunTxt.textContent !== txt) gunTxt.textContent = txt;
     } else { hullBar.style.display = 'none'; if (gunTxt.textContent) gunTxt.textContent = ''; }
     const op = parseFloat(hurtEl.style.opacity || 0); if (op > 0) hurtEl.style.opacity = Math.max(0, op - dt * 1.5);
-    const pl = PLAYER.reload > 0 ? '2 · Pistol (reloading)' : '2 · Pistol';
+    const pl = pistolLabel();
     if (weaponEls[1].textContent !== pl) weaponEls[1].textContent = pl;
   }
   addEventListener('keyup', e => { if (e.key.toLowerCase() !== 'f') return; const c = CMB.charge; CMB.fHeld = false; CMB.charge = 0; if (c > 0.05 && !uiOpen && !talk) chargedSlam(c); });
@@ -15561,6 +15760,7 @@ window.__pgBoot = () => {
           sl: ELD.on && STATE.serpLook && Object.keys(STATE.serpLook).length ? STATE.serpLook : null,   // yer serpent's colours, so others see him as ye've painted him
           swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
           w: player.props.blade && player.props.blade.visible ? 1 : player.props.pistol && player.props.pistol.visible ? 2 : 0,   // w: weapon in hand
+          pi: STATE.pistol, ps: PLAYER.shots,   // pi: which pistol; ps: shots fired (each new one is a muzzle flash for everyone else)
           el: ELD.on ? [r(ELD.x), r(ELD.z), r(ELD.h), r(ELD.lift || 0), r(ELD.emerge), ELD.mode === 'mount' && ELD.waiting && !RIDE.on ? 2 : RIDE.on ? 1 : 0, ELD.fighting ? 1 : 0, ELD.K.elder ? 1 : 0, ELD.st === 'strike' ? r(ELD.sk) : -1, ELD.idle ? ELD_IDLE.indexOf(ELD.idle.k) : 0, ELD.idle ? r(ELD.idle.u) : 0, ELD.leaving || ELD.stkDive ? 1 : 0, ELD.grab ? r(ELD.grab.t) : -1, ELD.call ? r(ELD.call.t) : -1, ELD.devour ? (ELD.devour.snap ? 2 : 1) : 0, ELD.clash ? r(ELD.clash.t) : -1, ...(ELD.mode === 'stalk' && ELD.stk ? [r(ELD.stk.sil), ELD.pick.peer, ELD.stk.ev, ELD.stk.evK, r(ELD.stk.evX), r(ELD.stk.evZ), r(ELD.stk.lift || 0), r(ELD.stk.pitch || 0), ELD.stk.calm ? 1 : 0, ...(ELD.stkDive ? [-1, -1] : (ELD.stk.win || [-1, -1])), ELD.stk.hush ? 1 : 0, r(ELD.stk.tension), r(ELD.stk.jaw || 0), ...(ELD.stk.arch ? [r(ELD.stk.arch.x0), r(ELD.stk.arch.z0), r(ELD.stk.arch.h), ELD.stk.arch.L, ELD.stk.arch.H] : [])] : [0, 0])] : 0,   // [16] shadow, [17] who he stalks, [18..21] the latest scare
           al: BROOD.list.map(a => [r(a.x), r(a.z), r(a.h), a.st === 'strike' ? r(a.sk) : -1, r(a.emerge), a.tg ? 1 : 0, a.leaving ? 1 : 0]) };   // el: their horn's serpent ([7] 1 Elder/0 common, [8] strike time, [9] idle move, [10] its progress)
         if ((onShip || sailing) && ship && !ship.sinking && !inInterior) st.ob = { o: MP.me, x: r(PL.x), y: r(PL.y), z: r(PL.z), f: r(PS.facing) };
@@ -15579,7 +15779,7 @@ window.__pgBoot = () => {
         p.lookKey = lk; p.swordKey = swordId; if (p.ch.root.parent) p.ch.root.parent.remove(p.ch.root);
         p.ch = makeCharacter(remoteLook(d)); if (swordId === 'ghost') ghostify(p.ch, 0.45);
         // Build the remote pirate's blade using THEIR equipped sword, not the local player's.
-        p.ch.swordId = swordId; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
+        p.ch.swordId = swordId; p.ch.pistolId = d.pi || 'flint'; addProp(p.ch, 'blade'); addProp(p.ch, 'pistol');
         if (p.ch.props && p.ch.props.blade) p.ch.props.blade.visible = true;
         scene.add(p.ch.root);
       }
@@ -15607,7 +15807,14 @@ window.__pgBoot = () => {
         // ch.update() hides all props, so the weapon has to be shown after it, the same way the local player does.
         const w = d.w === undefined ? 1 : d.w;
         if (p.ch.props.blade) p.ch.props.blade.visible = w === 1 || !!d.a;
+        if (d.pi && p.ch.pistolId !== d.pi && PISTOLS[d.pi]) { const o = p.ch.props.pistol; if (o && o.parent) o.parent.remove(o); delete p.ch.props.pistol; p.ch.pistolId = d.pi; addProp(p.ch, 'pistol'); }
         if (p.ch.props.pistol) p.ch.props.pistol.visible = w === 2 && !d.a;
+        if (d.ps !== undefined && p.lastPs !== undefined && d.ps !== p.lastPs && p.ch.props.pistol) {   // they fired: flash, smoke and a tracer down their aim
+          const gp = p.ch.props.pistol, mz = gp.localToWorld(new THREE.Vector3(0, gp.userData.muzzleY || -0.5, 0)), G = PISTOLS[d.pi] || PISTOLS.flint, fx = Math.sin(p.f), fz = Math.cos(p.f), r = Math.min(G.range, 40);
+          puff(mz.x, mz.y, mz.z, { color: 0xffb04a, size: 0.9, life: 0.1, grow: 0.5, op: 1 }); puff(mz.x, mz.y, mz.z, { color: 0xcfcfcf, size: 1.1, life: 1.4, grow: 2.3, vy: 0.5, op: 0.6 });
+          tracer(mz, new THREE.Vector3(mz.x + fx * r, mz.y - 0.4, mz.z + fz * r), G.splash ? 0xffa040 : 0xffe6a0, G.splash ? 1.8 : 1);
+          if (Math.hypot(mz.x - P.pos.x, mz.z - P.pos.z) < 90) SFX.pistol(); }
+        p.lastPs = d.ps;
       } catch (e) {}
       // their ship
       const sh = d.sh;
