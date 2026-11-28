@@ -2021,6 +2021,102 @@ window.__pgBoot = () => {
           colliders.push({ x: p.x, z: p.z, r: 5.5 }); SPOTS.push({ x: p.x, z: p.z, r: 12 }); X.shell = { x: p.x, z: p.z }; } }
       { const p = scatter(I, 1, (x, z, h) => h > 3.5 && h < 8 && free(I, x, z, 10), 3000)[0]; if (p) { const g = grp(G, p.x, p.z, Math.random() * 6, 0); for (const sx of [-2, 2]) for (const sz of [-1.5, 1.5]) mk(new THREE.CylinderGeometry(0.15, 0.15, 3, 5), DARK_WOOD, sx, 1.5, sz, g); const rf = mk(new THREE.ConeGeometry(3.6, 1.6, 4), thatch, 0, 3.6, 0, g, 0, Math.PI / 4); rf.scale.z = 0.8; mk(new THREE.BoxGeometry(3, 0.8, 1.2), WOOD, 0, 0.5, 0, g); colliders.push({ x: p.x, z: p.z, r: 2.6 }); SPOTS.push({ x: p.x, z: p.z, r: 10 }); X.shelter = { x: p.x, z: p.z }; } } }
   }
+  // ---------- Beyond the edge of the chart: the Watcher ----------
+  // sail past the edge of the known world and stay there, and something vast and black rises out of the sea ahead of ye:
+  // a giant shaped like a man, two white eyes, wrapped in black mist. It rises, raises its arms, and brings them down
+  // on yer ship. Turn back over the edge before the blow falls and it sinks away again.
+  const tmp2v = new THREE.Vector3();
+  const VOID = { st: 'none', t: 0, out: 0, x: 0, z: 0, face: 0, hit: false, told: 0 };
+  const VOID_T = { rise: 5, stare: 7, slam: 8.2, gone: 13 };
+  const voidShade = document.createElement('div');
+  voidShade.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;background:radial-gradient(ellipse at center, rgba(0,0,0,0.15) 30%, rgba(0,0,0,0.92) 100%);transition:opacity 0.3s';
+  document.body.appendChild(voidShade);
+  function makeWatcher() {
+    const g = new THREE.Group(), blk = new THREE.MeshBasicMaterial({ color: 0x040406 }), body = new THREE.Group(); g.add(body); scene.add(g);
+    const add = (geo, x, y, z, par, sx, sy, sz) => { const m = new THREE.Mesh(geo, blk); m.position.set(x, y, z); if (sx) m.scale.set(sx, sy, sz); (par || body).add(m); return m; };
+    add(new THREE.CylinderGeometry(30, 24, 120, 14), 0, 0, 0, body, 1, 1, 0.65);            // belly and waist, sunk in the sea
+    add(new THREE.CylinderGeometry(46, 30, 90, 14), 0, 100, 0, body, 1, 1, 0.6);            // a broad chest
+    add(new THREE.SphereGeometry(30, 14, 10), 0, 140, 0, body, 1.5, 0.45, 0.6);             // the slope of the shoulders
+    for (const sd of [-1, 1]) add(new THREE.SphereGeometry(19, 12, 10), sd * 50, 138, 0);   // shoulder joints
+    add(new THREE.CylinderGeometry(11, 15, 34, 10), 0, 160, 0);                             // a long neck
+    const head = new THREE.Group(); head.position.set(0, 196, 4); body.add(head);
+    add(new THREE.SphereGeometry(24, 16, 12), 0, 0, 0, head, 0.85, 1.25, 0.9); add(new THREE.SphereGeometry(14, 10, 8), 0, -18, 8, head, 1, 0.8, 1);   // a long skull and a jaw
+    const eyes = [];
+    for (const sd of [-1, 1]) {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(4.2, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })); e.position.set(sd * 8, 5, 19.5); e.scale.set(1.3, 0.75, 0.5); head.add(e);
+      const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); gl.scale.setScalar(26); gl.position.copy(e.position).z += 2; head.add(gl);
+      eyes.push(e, gl); }
+    const arms = [];
+    for (const sd of [-1, 1]) {
+      const sh = new THREE.Group(); sh.position.set(sd * 50, 140, 0); body.add(sh);
+      add(new THREE.CylinderGeometry(13, 16, 110, 10), 0, -55, 0, sh);                      // upper arm
+      const el = new THREE.Group(); el.position.y = -110; sh.add(el);
+      add(new THREE.CylinderGeometry(10, 13, 95, 10), 0, -47, 0, el);                       // forearm
+      const hand = new THREE.Group(); hand.position.y = -98; el.add(hand);
+      add(new THREE.SphereGeometry(15, 10, 8), 0, -4, 0, hand, 1, 1.2, 0.6);
+      for (let f = 0; f < 4; f++) { const fg = add(new THREE.CylinderGeometry(2.6, 1.4, 30, 6), -9 + f * 6, -26, 0, hand); fg.rotation.z = (f - 1.5) * 0.08; }
+      add(new THREE.CylinderGeometry(3, 2, 22, 6), sd * -14, -14, 4, hand).rotation.z = sd * 0.9;
+      arms.push({ sh, el, sd }); }
+    // the aura: billows of black mist clinging round it, drifting and turning
+    const mist = [];
+    for (let i = 0; i < 30; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })); const a = Math.random() * 6.28, y = -10 + Math.random() * 200, r = 30 + Math.random() * 30;
+      s.userData = { a, y, r, sp: (Math.random() - 0.5) * 0.4, sz: 35 + Math.random() * 40, ph: Math.random() * 6 }; g.add(s); mist.push(s); }
+    g.scale.setScalar(1.7);   // some 330 m tall from the waterline
+    return { g, body, head, eyes, arms, mist, puffT: 0 };
+  }
+  const sm3 = q => { q = Math.max(0, Math.min(1, q)); return q * q * (3 - 2 * q); };
+  // pose the Watcher for a moment in its rising: t seconds in; leaving = it's sinking back without striking
+  function poseWatcher(W, x, z, face, t, leaving, dt) {
+    const T = VOID_T, rise = leaving ? 1 - sm3(leaving / 4) : t < T.rise ? sm3(t / T.rise) : t < T.slam ? 1 : 1 - sm3((t - T.slam - 0.6) / (T.gone - T.slam - 0.6));
+    W.g.visible = rise > 0.002; if (!W.g.visible) return;
+    W.g.position.set(x, -440 + 440 * rise + Math.sin(t * 0.7) * 3, z); W.g.rotation.y = face;
+    const up = leaving ? 0 : sm3((t - T.rise) / (T.stare - T.rise)), down = leaving ? 0 : sm3((t - T.stare) / (T.slam - T.stare - 0.4));
+    W.arms.forEach(A => { A.sh.rotation.x = -2.85 * up * (1 - down) - 1.05 * down; A.sh.rotation.z = A.sd * (0.12 + 0.25 * up * (1 - down)); A.el.rotation.x = -0.5 * up * (1 - down) + 0.1 * down; });
+    W.body.rotation.x = -0.12 * up * (1 - down) + 0.38 * down; W.head.rotation.x = 0.25 + 0.15 * down;   // leans back to strike, then throws itself into it, looking down at ye
+    W.eyes.forEach((e, i) => { if (i % 2) e.material.opacity = 0.7 + 0.3 * Math.sin(t * 3.1); });
+    W.mist.forEach(s => { const u = s.userData; u.a += u.sp * dt; s.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(t * 0.6 + u.ph) * 8, Math.sin(u.a) * u.r * 0.7); s.scale.setScalar(u.sz * (0.9 + 0.15 * Math.sin(t + u.ph))); });
+    if ((W.puffT -= dt) <= 0) { W.puffT = 0.08; const a = Math.random() * 6.28, r = 50 + Math.random() * 70;   // black mist pouring off it, and the sea boiling round its base
+      puff(x + Math.cos(a) * r, W.g.position.y + 50 + Math.random() * 300, z + Math.sin(a) * r, { color: 0x050505, size: 35 + Math.random() * 35, life: 3, grow: 1.6, vy: 3, op: 0.45 });
+      if (rise < 1 && rise > 0.02) puff(x + Math.cos(a) * 60, 2, z + Math.sin(a) * 60, { color: 0xe8f4f8, size: 30 + Math.random() * 25, life: 1.6, grow: 1.8, vy: 10, op: 0.7 }); }
+  }
+  let VW = null;
+  function updateVoid(dt, t) {
+    const out = ship && !ship.sinking && (Math.abs(ship.x) > EDGE || Math.abs(ship.z) > EDGE);
+    VOID.out = out ? VOID.out + dt : 0;
+    if (out && clock.elapsedTime - VOID.told > 10 && VOID.st === 'none') { VOID.told = clock.elapsedTime; toast("Beyond the edge of the chart. The sea's gone black and still, and the crew won't stop whisperin'. Turn back, captain."); }
+    if (VOID.st === 'none' && VOID.out > 4) {   // it comes
+      const h = ship.heading; VOID.st = 'rise'; VOID.t = 0; VOID.hit = false; VOID.leaveT = 0;
+      VOID.x = ship.x + Math.sin(h) * 260; VOID.z = ship.z + Math.cos(h) * 260; VOID.face = h + Math.PI;
+      SFX.roar(); SFX.wail && SFX.wail(); toast('Something is rising out of the black water ahead...');
+    }
+    if (VOID.st !== 'none') {
+      VOID.t += dt;
+      if (VOID.st === 'rise' && VOID.t > VOID_T.rise - 0.5 && !VOID.warned) { VOID.warned = true; toast('TURN BACK! Sail back inside the chart before it strikes!'); }
+      if (VOID.st === 'rise' && !out && VOID.t < VOID_T.slam - 0.4) { VOID.st = 'leave'; VOID.leaveT = 0; toast('It watches ye go... and sinks back into the dark.'); }
+      if (VOID.st === 'rise' && ship && !ship.sinking) { const want = VOID.face; ship.speed *= Math.pow(0.85, dt); }   // the sea itself drags at the hull
+      if (VOID.st === 'rise' && !VOID.hit && VOID.t > VOID_T.slam - 0.35) {   // the blow
+        VOID.hit = true; const hx = ship ? ship.x : VOID.x, hz = ship ? ship.z : VOID.z;
+        SFX.crash({ x: hx, z: hz }); SFX.roar(); SFX.splash && SFX.splash({ x: hx, z: hz }, true); SEACTL.shake = Math.max(SEACTL.shake || 0, 2); flashT = 0.25;
+        for (let i = 0; i < 50; i++) { const a = Math.random() * 6.28, r = Math.random() * 40; puff(hx + Math.cos(a) * r, 3 + Math.random() * 20, hz + Math.sin(a) * r, { color: i % 3 ? 0xffffff : 0x6a4a2a, size: 12 + Math.random() * 18, life: 2, grow: 1.7, vx: Math.cos(a) * 25, vz: Math.sin(a) * 25, vy: 20 + Math.random() * 30, op: 0.9 }); }
+        if (ship && !ship.sinking) { damageShip(ship, ship.hp + 1, true); if (!ship.sinking) sinkPlayerShip(); }
+        toast('The Watcher at the edge of the world smashes yer ship to splinters.');
+      }
+      if (VOID.st === 'leave') VOID.leaveT += dt;
+      if ((VOID.st === 'rise' && VOID.t > VOID_T.gone) || (VOID.st === 'leave' && VOID.leaveT > 4)) { VOID.st = 'none'; VOID.warned = false; VOID.out = 0; }
+    }
+    if (!VW && VOID.st !== 'none') VW = makeWatcher();
+    if (VW) { if (VOID.st === 'none') VW.g.visible = false; else poseWatcher(VW, VOID.x, VOID.z, VOID.face, VOID.t, VOID.st === 'leave' ? VOID.leaveT : 0, dt); }
+    // the dark closes in out past the edge
+    const far = ship ? Math.max(Math.abs(ship.x), Math.abs(ship.z)) - EDGE : -1, near = sailing || onShip ? far : Math.max(Math.abs(P.pos.x), Math.abs(P.pos.z)) - EDGE;
+    voidShade.style.opacity = String(Math.max(0, Math.min(1, (near + 300) / 600)) * (VOID.st !== 'none' ? 1 : 0.75));
+  }
+  // another captain who strayed past the edge: everyone near sees what comes for them
+  function voidRemote(p, d, dt) {
+    const v = d && d.vw;
+    if (!v) { if (p.vw) { p.vw.g.visible = false; } return; }
+    if (!p.vw) p.vw = makeWatcher();
+    poseWatcher(p.vw, v[0], v[1], v[2], v[3] + (p.vwT = (p.vwKey === v[0] + ',' + v[1] ? (p.vwT || 0) + dt : 0)), v[4] ? v[4] : 0, dt); p.vwKey = v[0] + ',' + v[1];
+  }
   function updateHome(dt, t) {
     if (HMX.sails) HMX.sails.rotation.z -= dt * 0.55;
     for (const F of HMX.flames) { const k = 0.8 + 0.25 * Math.sin(t * 9 + F.ph) + 0.15 * Math.sin(t * 23 + F.ph * 2); F.f.scale.set(F.s * (0.85 + 0.15 * Math.sin(t * 7 + F.ph)), F.s * k * 1.2, 1); F.f.material.opacity = 0.75 + 0.25 * Math.sin(t * 13 + F.ph); }
@@ -4613,9 +4709,8 @@ window.__pgBoot = () => {
     const requestedStep = ship.speed * dt;
     const step = autoRoute && autoRoute.active ? Math.min(requestedStep, T.speed * 1.6 * dt) : requestedStep;
     const nx = ship.x + sx * step, nz = ship.z + sz * step;
-    if (Math.abs(nx) > EDGE || Math.abs(nz) > EDGE) {   // the edge of the chart: the crew won't sail on into nothing
-      ship.x = Math.max(-EDGE, Math.min(EDGE, ship.x)); ship.z = Math.max(-EDGE, Math.min(EDGE, ship.z)); ship.speed *= 0.5;
-      if (clock.elapsedTime - (ship.edgeT ?? -99) > 8) { ship.edgeT = clock.elapsedTime; toast("The edge of the known world. The crew won't sail past it, captain. Turn her about!"); }
+    if (Math.abs(nx) > EDGE + 2500 || Math.abs(nz) > EDGE + 2500) {   // far past the edge of the chart there's nothing at all to sail on (the Watcher comes long before this)
+      ship.speed *= 0.5;
     }
     else if (!shipBlocked(nx, nz, ship.heading)) { ship.x = nx; ship.z = nz; }
     else {
@@ -15225,7 +15320,7 @@ window.__pgBoot = () => {
         player.root.getWorldPosition(_mpV); player.root.getWorldQuaternion(_mpQ); _mpE.setFromQuaternion(_mpQ, 'YXZ');
         if (DUN.on) { const d = dunDoor(); _mpV.set(d.x, heightAt(d.x, d.z) - 30, d.z); }   // down in the vaults: out of sight under the skull
         const r = v => Math.round(v * 100) / 100;
-        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: gearLook(), lg: STATE.legacy || 0, sw: STATE.sword, tf: STATE.sword === 'seasword' && (SEAF.on || SEAF.intro > 0) ? 1 : 0, kd: SEAF.on && KA.dive ? 1 : 0, kb: SEAF.on && KA.breachT > 0 ? 1 : 0, ks: SEAF.on && KA.spinT > 0 ? 1 : 0, ki: SEAF.on && KA.inkT > 0 ? 1 : 0, kg: SEAF.on && KA.grab ? Math.round(KA.grab.d || 0) : 0, kt: SEAF.on && KA.stormT > 0 ? 1 : 0, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null, eat: ELD.on && !ELD.leaving && ELD.mode === 'attack' && ELD.pick && (ELD.pick.kind === 'player' || ELD.pick.kind === 'person') ? ELD.pick.peer : null, esr: ELD.on && !ELD.leaving ? (() => { const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg; return T && T.kind === 'rserp' ? T.peer : null; })() : null,   /* eat: whose ship or self his serpent's been sent after; esr: whose serpent he's going for */   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
+        const st = { x: r(_mpV.x), y: r(_mpV.y), z: r(_mpV.z), f: r(_mpE.y), cy: r(yaw), s: r(P.speed || 0), look: gearLook(), lg: STATE.legacy || 0, sw: STATE.sword, vw: VOID.st !== 'none' ? [Math.round(VOID.x), Math.round(VOID.z), +VOID.face.toFixed(2), +VOID.t.toFixed(1), VOID.st === 'leave' ? +VOID.leaveT.toFixed(1) : 0] : 0, tf: STATE.sword === 'seasword' && (SEAF.on || SEAF.intro > 0) ? 1 : 0, kd: SEAF.on && KA.dive ? 1 : 0, kb: SEAF.on && KA.breachT > 0 ? 1 : 0, ks: SEAF.on && KA.spinT > 0 ? 1 : 0, ki: SEAF.on && KA.inkT > 0 ? 1 : 0, kg: SEAF.on && KA.grab ? Math.round(KA.grab.d || 0) : 0, kt: SEAF.on && KA.stormT > 0 ? 1 : 0, a: PLAYER.slashT > 0 ? 1 : 0, sh: null, ob: null, eat: ELD.on && !ELD.leaving && ELD.mode === 'attack' && ELD.pick && (ELD.pick.kind === 'player' || ELD.pick.kind === 'person') ? ELD.pick.peer : null, esr: ELD.on && !ELD.leaving ? (() => { const T = ELD.mode === 'attack' ? ELD.pick : ELD.tg; return T && T.kind === 'rserp' ? T.peer : null; })() : null,   /* eat: whose ship or self his serpent's been sent after; esr: whose serpent he's going for */   /* ob must be cleared every send: presence is merged, so a stale 'aboard' would glue them to their deck after they jump off */
           md: playerTargetable() && PLAYER.hp > 0 ? 1 : 0,   // md: on foot and fair game for bandits
           sl: ELD.on && STATE.serpLook && Object.keys(STATE.serpLook).length ? STATE.serpLook : null,   // yer serpent's colours, so others see him as ye've painted him
           swm: krSwimming() ? 1 : 0, wwk: seaRunning() ? 1 : 0, rid: RIDE.on ? (ELD.K.elder ? 2 : 1) : 0,   // (2 = riding the Elder Serpent) rid: riding a serpent (fair game for Blackwater ships, the Beast and the mist serpents)   // wwk: running on the water (Blackwater ships and the Beast will come for ye)   // swm: swimming in deep water, where the Kraken can take ye
@@ -15272,7 +15367,7 @@ window.__pgBoot = () => {
       p.sl = d.a ? Math.min(1, (p.sl || 0) + dt / 0.3) : 0;
       try {
         p.ch.slashP = p.sl; p.ch.seaSwing = d.sw === 'seasword'; p.ch.update(dt, p.sp, false, false, d.a ? 'slash' : null);
-        seaAuraRemote(p, d, dt); seaFormRemote(p, d, dt);
+        seaAuraRemote(p, d, dt); seaFormRemote(p, d, dt); voidRemote(p, d, dt);
         // ch.update() hides all props, so the weapon has to be shown after it, the same way the local player does.
         const w = d.w === undefined ? 1 : d.w;
         if (p.ch.props.blade) p.ch.props.blade.visible = w === 1 || !!d.a;
@@ -15743,14 +15838,15 @@ window.__pgBoot = () => {
     if (sailing) {
       // When submerged, keep the camera above the deck and below the surface.
       // A target inside the hull made the camera appear to clip through the ship.
-      camTarget.lerp(tmp.set(ship.x, ship.group.position.y + (ship.submerged ? 4.5 : ship.T.H + 3), ship.z), Math.min(1, dt * (ship.submerged ? 4.5 : 6)));
+      camTarget.lerp(tmp.set(ship.x, ship.group.position.y + (ship.submerged ? 4.5 : ship.T.H + 3), ship.z).lerp(tmp2v.set((ship.x + VOID.x) / 2, 150, (ship.z + VOID.z) / 2), (VOID.cam || 0) * 0.85), Math.min(1, dt * (ship.submerged ? 4.5 : 6)));
       if (!drag && performance.now() > userOrbitUntil && Math.abs(ship.speed) > 1) yaw = angLerp(yaw, ship.heading + Math.PI, Math.min(1, dt * 0.35));
     } else if (RIDE.on) {
       camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 8, P.pos.z), Math.min(1, dt * 6));
       if (!drag && performance.now() > userOrbitUntil && ELD.speed > 3) yaw = angLerp(yaw, ELD.h + Math.PI, Math.min(1, dt * 0.6));
     } else camTarget.lerp(tmp.set(P.pos.x, P.pos.y + 1.7 + SEAF.k * 3.2 * SEAF.SIZE, P.pos.z), Math.min(1, dt * 8));
     if (snapCam) { camTarget.set(P.pos.x, P.pos.y + 1.7, P.pos.z); snapCam = false; }
-    { const dd = sailing || RIDE.on ? dist : dist + SEAF.k * 11 * SEAF.SIZE;   // pull back so the Elder Kraken fits on screen
+    VOID.cam = (VOID.cam || 0) + ((VOID.st !== 'none' ? 1 : 0) - (VOID.cam || 0)) * Math.min(1, dt * 1.5);
+    { const dd = (sailing || RIDE.on ? dist : dist + SEAF.k * 11 * SEAF.SIZE) + VOID.cam * 260;   // (and back further still, to see the Watcher)   // pull back so the Elder Kraken fits on screen
     camera.position.set(
       camTarget.x + Math.sin(yaw) * Math.cos(pitch) * dd,
       camTarget.y + Math.sin(pitch) * dd,
@@ -15833,6 +15929,7 @@ window.__pgBoot = () => {
     try { updateJungle(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateFauna(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateHome(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateVoid(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
