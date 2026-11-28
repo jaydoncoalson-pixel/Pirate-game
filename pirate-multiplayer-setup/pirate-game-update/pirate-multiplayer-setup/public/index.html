@@ -2167,7 +2167,7 @@ window.__pgBoot = () => {
     for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283, h = 18 + (i % 3) * 9; const m = new THREE.Mesh(new THREE.ConeGeometry(5 + (i % 2) * 2, h, 5), i % 2 ? rk : rk2); m.position.set(Math.cos(a) * 16, h / 2 - 4, Math.sin(a) * 16); m.rotation.set(Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.25); g.add(m); }
     const plat = new THREE.Mesh(new THREE.CylinderGeometry(12, 15, 10, 9), rk); plat.position.y = 0; g.add(plat);
     const bl = buildBlade(SWORDS.cursed.look); bl.scale.setScalar(6); bl.rotation.x = Math.PI / 2; bl.position.y = 22; g.add(bl);
-    const L = new THREE.PointLight(0x8a2aff, 2.5, 120, 2); L.position.y = 22; g.add(L);
+    const L = new THREE.PointLight(0x9a9aa8, 1.5, 120, 2); L.position.y = 22; g.add(L);
     const mist = []; for (let i = 0; i < 26; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })); s.userData = { a: Math.random() * 6.28, r: 6 + Math.random() * 18, y: 6 + Math.random() * 30, sz: 14 + Math.random() * 16, sp: (Math.random() - 0.5) * 0.6 }; g.add(s); mist.push(s); }
     return { g, bl, L, mist, toldT: -99 };
   };
@@ -7029,7 +7029,7 @@ window.__pgBoot = () => {
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep: the strongest blade a captain can earn. Passives: every hit throws an undertow that strikes foes around yer target and mends ye, yer ship sails 20% faster and mends 3x faster, swim 60% faster and heal while swimming, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them. T: Riptide carries ye forward on a rush of water, cutting down everything in the way.", dmg: 100, cool: 0.36, reach: 3.9, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
-    cursed: { name: 'The Cursed Blade', desc: "A blade of black steel that drinks the light, whispering in a voice only its bearer hears. Passives: every hit drains life to heal ye (12% of the damage), +25% damage against ships' crews and Blackwater soldiers. Claiming it raises the Revenant, a black ship with torn sails, faster than any afloat.", dmg: 105, cool: 0.37, reach: 3.8, arc: 0, cost: {}, gold: 0, legendary: true, claim: 'Only a chosen few can claim it, from a black altar in the uncharted waters, due north past the edge of the chart.', look: { blade: 0x141418, guard: 0x2a0e36, len: 1.32, curve: 0.16, width: 0.14, glow: true, glowColor: 0x7a1aff } },
+    cursed: { name: 'The Cursed Blade', desc: "A blade of black steel that drinks the light, whispering in a voice only its bearer hears. Passives: every hit drains life to heal ye (12% of the damage), +25% damage against ships' crews and Blackwater soldiers. Claiming it raises the Revenant, a black ship with torn sails, faster than any afloat.", dmg: 105, cool: 0.37, reach: 4.4, arc: 0, cost: {}, gold: 0, legendary: true, claim: 'Only a chosen few can claim it, from a black altar in the uncharted waters, due north past the edge of the chart.', look: { style: 'cursed', blade: 0x060608, guard: 0x0b0a0c, len: 1.8, curve: 0.18, width: 0.2, glow: false } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (for as long as ye like, ye become a colossal scarred grey kraken, as vast as the Elder Serpent, scarred by a thousand fights, that walks the land, swims and dives: its own attacks Z Crushing Grab, R Tentacle Storm, G Ink Cloud, T Maelstrom Spin, B Dive and Breach; 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
@@ -7091,7 +7091,7 @@ window.__pgBoot = () => {
     PLAYER.move = { mul: 2.1 + power * 1.3, reach: 1.25 + power * 0.25, arc: -1, heavy: true, slam: true, kb: 10 + power * 6 }; CMB.comboT = 0;
     SFX.swing(); setTimeout(() => SFX.swing(), 90); if (window.__mpSlash) window.__mpSlash(0.3);
   }
-  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a, cursed: 0x6a1ad8 };
+  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a, cursed: 0x1a181c };
   function updateSwordExtras(dt) {
     SWP.dashCd = Math.max(0, (SWP.dashCd || 0) - dt);
     if (SWP.cmdT > 0) { SWP.cmdT -= dt; if (SWP.cmdT <= 0) SWP.cmdN = 0; }
@@ -7282,6 +7282,20 @@ window.__pgBoot = () => {
       const R = Math.random;
       bladeKit(g, { len: lk.len, curve: lk.curve, body: iron, edge: metal(0xc4c8cc, 60), w: t => 0.1 * (1 - 0.45 * t) + 0.012,
         each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0 || i === 5) { const sp = new THREE.Mesh(new THREE.CircleGeometry(0.012 + (i % 3) * 0.006, 6), rust); sp.position.set(0.012, cy + (i % 2 ? -1 : 1) * w * 0.15, cz); sp.rotation.y = Math.PI / 2; g.add(sp); } if (i === 3 || i === 7) { const nick = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.025), matte(0x1a1612)); nick.position.set(0, cy - w / 2, cz); g.add(nick); } } });
+      return g;
+    }
+    if (S === 'cursed') {
+      // The Cursed Blade: a broad, heavy blade of blackened steel with only a dull grey line where the edge is honed, a
+      // long grip bound in black leather and iron, a cross-guard whose quillons hook down like claws, and a spiked pommel
+      const blk = metal(0x0b0b0d, 45), edgeM = metal(0x45454c, 110), iron = metal(0x161518, 60), leather = matte(0x0a090a);
+      gripKit(g, { len: 0.27, r: 0.034, mat: leather, band: iron, bands: 9 });
+      g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 6), iron), 0, 0, -0.3, -Math.PI / 2));   // the spiked pommel
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), iron), 0, 0, -0.255));
+      g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.05), iron), 0, 0, 0.03));
+      for (const sd of [-1, 1]) {   // quillons, sweeping out then hooking down at the tips
+        const q = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.17, 6), iron); q.position.set(0, sd * 0.09, 0.03); q.rotation.set(sd * 0.25, 0, 0); g.add(q);
+        const hook = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.07, 6), iron); hook.position.set(0, sd * 0.175, 0.0); hook.rotation.set(Math.PI * (sd > 0 ? 0.75 : 0.25), 0, 0); g.add(hook); }
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: blk, edge: edgeM, fuller: matte(0x050505), fullerEnd: 0.7, w: t => lk.width * (1 - 0.38 * t) + 0.016, thick: 0.03 });
       return g;
     }
     if (S === 'steel') {
