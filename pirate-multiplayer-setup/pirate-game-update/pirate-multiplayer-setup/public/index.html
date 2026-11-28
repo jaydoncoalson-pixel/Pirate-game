@@ -3272,7 +3272,7 @@ window.__pgBoot = () => {
             const j = ch.blockHit || 0; t.elR += 0.35 * j; t.elL += 0.3 * j; t.lean -= 0.18 * j; t.bob -= 0.05 * j;   // a blocked blow jolts the guard back
             if (still) { t.hipL = -0.42; t.kneeL = 0.45; t.hipR = 0.32; t.kneeR = 0.32; t.bob -= 0.06; }   // feet set wide, knees bent
             rate = action === 'parry' ? 60 : 22; snapArms = false; break; }
-          case 'aim': t.shR = -1.55; t.elR = 0; t.shRz = -0.1; t.shL = -0.2; t.elL = -0.7; t.twist = -0.25; t.headY = 0.2; t.headX = 0; stance(); rate = 24; break;
+          case 'aim': t.shR = -1.12; t.elR = -0.42; t.shRz = -0.1; t.shL = -0.2; t.elL = -0.7; t.twist = -0.25; t.headY = 0.2; t.headX = 0; stance(); rate = 24; break;
         }
       }
       for (const key in t) {
@@ -3310,9 +3310,9 @@ window.__pgBoot = () => {
       g.position.set(0, -0.4, 0.02); ch.forearms[1].add(g);
     } else if (kind === 'pistol') {
       const P0 = typeof PISTOLS !== 'undefined' && PISTOLS ? PISTOLS[ch.pistolId] || PISTOLS.flint : null;
-      // turned so the grip sits in the palm and the hammer's on top, and set down into the fist
+      // turned so the grip sits in the palm and the hammer's on top
       const gun = buildPistol(P0 && P0.look); gun.rotation.y = Math.PI; g.add(gun); g.userData.drum = gun.userData.drum; g.userData.muzzleY = gun.userData.muzzleY;
-      g.position.set(0, -0.42, -0.07); ch.forearms[1].add(g);
+      g.position.set(0, -0.38, 0.03); ch.forearms[1].add(g);
     } else if (kind === 'crate') {
       g.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.45), M(0xa57b4a)));
       g.position.set(0, 1.2 - 0.95, 0.45); ch.upper.add(g);
