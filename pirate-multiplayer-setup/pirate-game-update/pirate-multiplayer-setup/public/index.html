@@ -7814,9 +7814,11 @@ window.__pgBoot = () => {
     const out = [];
     for (const b of bandits) if (b.state !== 'dead' && b.state !== 'gone') out.push({ o: b, pos: b.pos, k: 'b' });
     for (const c of activeFighters()) out.push({ o: c, pos: c.pos, k: 'f' });
+    if (window.__mpGunTargets) try { for (const t of window.__mpGunTargets()) out.push(t); } catch (e) {}   // other captains
     return out;
   }
   function pistolHit(t, dm, fx, fz, heavy, tag) {
+    if (t.k === 'p') { const pd = Math.min(70, Math.round(dm * 0.6)); if (window.__mpGunHit) window.__mpGunHit(t.peer, pd); dmgNum(t.pos, tag ? `${pd}${tag}` : `${pd}`, tag ? 'crit' : 'heavy'); puff(t.pos.x, t.pos.y + 1.3, t.pos.z, { color: 0xb02020, size: 0.7, life: 0.35, grow: 1, op: 0.9 }); return; }   // vs players: 60% damage, at most 70 a shot
     if (t.k === 'b') { hitBandit(t.o, dm); dmgNum(t.o.pos, tag ? `${dm}${tag}` : `${dm}`, tag ? 'crit' : heavy ? 'heavy' : ''); banditFlinch(t.o, heavy, fx, fz); }
     else { if (hitFighter(t.o, dm, heavy) !== false) dmgNum(t.o.pos, tag ? `${dm}${tag}` : `${dm}`, tag ? 'crit' : heavy ? 'heavy' : ''); if (t.o.st === 'dead') try { swordOnKill(); } catch (e) {} }
   }
@@ -7853,7 +7855,7 @@ window.__pgBoot = () => {
       let hitP;
       if (best) {
         hitP = chest(best);
-        const stag = (best.o.stagT || 0) > 0, head = Math.random() < 0.12, mul = (head ? 1.6 : 1) * (G.duel && stag ? 2 : 1), dm = Math.round(G.dmg * mul);
+        const stag = !!best.o && (best.o.stagT || 0) > 0, head = Math.random() < 0.12, mul = (head ? 1.6 : 1) * (G.duel && stag ? 2 : 1), dm = Math.round(G.dmg * mul);
         pistolHit(best, dm, fx, fz, !!G.splash, head ? ' HEADSHOT' : G.duel && stag ? '!' : '');
         puff(hitP.x, hitP.y, hitP.z, { color: 0xffe0a0, size: 0.35, life: 0.12, grow: 0.4, op: 1 });
       } else { const r = Math.min(G.range, 45); hitP = new THREE.Vector3(mz.x + fx * r, mz.y - 0.6, mz.z + fz * r); }
@@ -7861,7 +7863,7 @@ window.__pgBoot = () => {
       if (G.splash) {   // the Thunderer's shell bursts
         CMB.shake = Math.max(CMB.shake, 0.5); SFX.crash({ x: hitP.x, z: hitP.z });
         for (let k = 0; k < 16; k++) { const a = Math.random() * 6.28, s = 2 + Math.random() * 6; puff(hitP.x, hitP.y, hitP.z, { color: k % 3 ? 0xff8a2a : 0x3a3a3a, size: 0.9 + Math.random() * 1.2, life: 0.6 + Math.random() * 0.5, grow: 1.6, vx: Math.cos(a) * s, vy: 1 + Math.random() * 4, vz: Math.sin(a) * s, op: 0.95 }); }
-        for (const t of all) { if (best && t.o === best.o) continue; const d = Math.hypot(t.pos.x - hitP.x, t.pos.z - hitP.z); if (d < G.splash && Math.abs(t.pos.y + 1.3 - hitP.y) < 4) pistolHit(t, Math.round(G.splashDmg * (1 - d / G.splash * 0.5)), (t.pos.x - hitP.x) / Math.max(d, 0.01), (t.pos.z - hitP.z) / Math.max(d, 0.01), true, ''); }
+        for (const t of all) { if (best && t === best) continue; const d = Math.hypot(t.pos.x - hitP.x, t.pos.z - hitP.z); if (d < G.splash && Math.abs(t.pos.y + 1.3 - hitP.y) < 4) pistolHit(t, Math.round(G.splashDmg * (1 - d / G.splash * 0.5)), (t.pos.x - hitP.x) / Math.max(d, 0.01), (t.pos.z - hitP.z) / Math.max(d, 0.01), true, ''); }
       }
     }
   }
@@ -7877,7 +7879,7 @@ window.__pgBoot = () => {
     return `2 · ${G.name}` + (G.rounds > 1 ? ' ' + '●'.repeat(PLAYER.rounds) + '○'.repeat(Math.max(0, G.rounds - PLAYER.rounds)) : '');
   }
   setTimeout(() => { try { refreshPistol(); } catch (e) {} }, 0);
-  window.__pis = { equip: pistolEquip, fire: firePistol, PLAYER, curPistol, PISTOLS,
+  window.__pis = { equip: pistolEquip, fire: firePistol, PLAYER, curPistol, PISTOLS, yaw: v => { yaw = v; },
     near: () => { const b = bandits.find(b => b.state !== 'dead' && b.state !== 'gone'); if (!b) return null; P.pos.set(b.pos.x - 10, b.pos.y, b.pos.z); yaw = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z) + Math.PI; b.state = 'idle'; return { hp: b.hp, name: b.name }; },
     bhp: () => { const b = bandits.filter(b => b.state !== 'gone').sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z)); return b.slice(0, 6).map(b => [Math.round(Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z)), Math.round(b.hp), b.state]); },
     show: () => { const g = new THREE.Group(); Object.values(PISTOLS).forEach((G, i) => { const o = new THREE.Group(), m = buildPistol(G.look); m.rotation.x = Math.PI / 2; o.add(m); o.rotation.y = -Math.PI / 2; o.position.set((i % 4) * 0.62 - 0.9, -Math.floor(i / 4) * 0.42 + 0.2, 0); g.add(o); }); g.scale.setScalar(10); g.position.set(P.pos.x, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x, 300, P.pos.z - 46, P.pos.x, 300, P.pos.z - 60]; return true; } };
@@ -15548,7 +15550,10 @@ window.__pgBoot = () => {
       window.__mpPeerLook = peer => { const p = MP.peers.get(peer); if (p && p.tgt && typeof p.tgt.cy === 'number') return p.tgt.cy + Math.PI; return p && p.ship ? p.ship.heading : 0; };   // the way their camera faces
       window.__mpPeople = () => [...MP.peers.values()].filter(p => p.tgt && typeof p.tgt.x === 'number').map(p => ({ peer: p.peer, name: p.name, x: p.pos.x, z: p.pos.z, where: p.tgt.sh && p.tgt.sh.a === 1 ? 'aboard their ship' : p.tgt.swm ? 'in the water' : 'ashore' }));
       window.__mpElderBitePerson = (peer, big) => { MP.room.emit('ebite', big ? { to: peer, person: 1, kill: 1, dmg: 1 } : { to: peer, person: 1, dmg: 45 }).catch(() => {}); };
-      MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { ELD.threats.set(m.peer, clock.elapsedTime); hurtPlayer(Math.min(40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + ' struck ye!'); } catch (e) {} });
+      MP.room.on('pvp', m => { const d = m.data; if (m.isMe || !d || d.to !== MP.me || !(d.dmg > 0)) return; try { ELD.threats.set(m.peer, clock.elapsedTime); hurtPlayer(Math.min(d.g ? 70 : 40, d.dmg)); toast((MP.peers.get(m.peer)?.name || 'A pirate') + (d.g ? ' shot ye!' : ' struck ye!')); } catch (e) {} });
+      // pistols vs players: other captains are targets too (their game applies the hit, capped at 70 for a gunshot)
+      window.__mpGunTargets = () => online() ? [...MP.peers.values()].filter(q => q.pos && q.tgt).map(q => ({ peer: q.peer, pos: q.pos, k: 'p' })) : [];
+      window.__mpGunHit = (peer, dmg) => { MP.room.emit('pvp', { to: peer, dmg: Math.max(1, Math.round(dmg)), g: 1 }).catch(() => {}); };
       // Kraken strikes are applied by the ship owner, so hull damage is authoritative.
       // Sword of the Sea vs players: the target's own game runs its kraken on their ship (full attack, they can fight back);
       // ours plays the same fight on our copy of their ship, and they tell us how it ends.
