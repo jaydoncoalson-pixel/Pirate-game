@@ -15920,7 +15920,10 @@ window.__pgBoot = () => {
       #tutObj .it { white-space: nowrap; } #tutObj .it.ok { color: #9fe39a; } #tutObj .it.ok::before { content: '\\2714  '; } #tutObj .it:not(.ok)::before { content: '\\2610  '; }
       #tutObj button { margin-top: 6px; background: none; border: 1px solid #6a5434; color: #bfae8a; border-radius: 4px; font: 11px Georgia, serif; padding: 2px 8px; cursor: pointer; }
       body.tutCine #hud, body.tutCine #hudR, body.tutCine #mini, body.tutCine #btns, body.tutCine #weapons, body.tutCine #toast, body.tutCine #toasts, body.tutCine #tags, body.tutCine #quest, body.tutCine #prompt, body.tutCine #tutObj { visibility: hidden !important; }
-      body.tutOn #quest { visibility: hidden !important; }`;
+      body.tutOn #quest, body.tutOn #clock, body.tutOn #gold, body.tutOn #mini, body.tutOn #btns, body.tutOn #weapons, body.tutOn #toasts, body.tutOn #toast,
+      body.tutOn #tags .tag:not(.etag), body.tutOn #mpBanner, body.tutNoPrompt #prompt { visibility: hidden !important; }
+      body.tutOn #hud h1, body.tutOn #hud p { display: none !important; }
+      body.tutOn #hud { min-width: 0; min-height: 0; }`;
     document.head.appendChild(st);
     const mk = (tag, id, cls) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; document.body.appendChild(e); return e; };
     const top = mk('div', null, 'tutBar'), bot = mk('div', null, 'tutBar'); top.style.top = '0'; bot.style.bottom = '0';
@@ -16165,7 +16168,7 @@ window.__pgBoot = () => {
     if (!TUT.on) return;
     if (skipped) { tutCleanup(); P.pos.set(startP.x, DOCK_TOP, startP.y); P.vy = 0; P.grounded = true; snapCam = true; tutFadeTo(0, 0.6); }
     TUT.on = false; TUT.stage = 'done'; TUT.lie = 0; player.root.rotation.order = 'XYZ'; tutObj(null); tutBars(false);
-    document.body.classList.remove('tutOn');
+    document.body.classList.remove('tutOn', 'tutNoPrompt');
     STATE.seen = true; save();
     setTimeout(() => toast(skipped ? 'Talk to the townsfolk for work, and sail through floating cargo for gold!' : 'Shipwrecked on Gull Island. Find Harbormaster Hal at the dock: he can get ye a new ship. The townsfolk will have work for ye.'), 600);
   }
@@ -16316,7 +16319,7 @@ window.__pgBoot = () => {
       else if (TUT.stage === 'wheel' || TUT.stage === 'cannon') tutPin(r1, Math.max(tutLat(r1) + 10, 85), 0, dt, 0.6);
     }
     // overboard? the crew haul ye back
-    if (['combat', 'wheel', 'cannon', 'sail'].includes(TUT.stage) && !onShip && !sailing && !inInterior && !cine) { TUT.wet = (TUT.wet || 0) + dt; if (TUT.wet > 2.5) { TUT.wet = 0; tutBackAboard(); toast('Hargreave throws ye a line and the crew haul ye back aboard!'); } } else TUT.wet = 0;
+    if (['combat', 'wheel', 'cannon', 'sail'].includes(TUT.stage) && !onShip && !sailing && !inInterior && !cine) { TUT.wet = (TUT.wet || 0) + dt; if (TUT.wet > 2.5) { TUT.wet = 0; tutBackAboard(); tutSay('<b>Hargreave</b> throws ye a line and the crew haul ye back aboard!', 3); } } else TUT.wet = 0;
     if (TUT.stage === 'combat' && TUT.cp) tutCombat(dt);
     if (TUT.stage === 'wheel' && sailing) tutCannons();
     if (TUT.stage === 'cannon') {
@@ -16338,6 +16341,8 @@ window.__pgBoot = () => {
       player.root.rotation.order = 'YXZ'; player.root.rotation.set(-Math.PI / 2 * TUT.lie, P.facing, 0); player.root.position.y = P.pos.y + 0.18 * TUT.lie;
       player.knees.forEach(k => { k.rotation.x += 0.4 * TUT.lie; });
     }
+    { const tx = promptEl.style.display === 'none' ? '' : promptEl.textContent, need = TUT.stage === 'cabin' ? /deck/i.test(tx) : TUT.stage === 'wheel' ? /wheel/i.test(tx) && !/away/i.test(tx) : false;
+      document.body.classList.toggle('tutNoPrompt', !!tx && !need); }   // talk-to-the-crew and the like: not now
     if (TUT.cine) { tutCineStep(dt); if (TUT.cine) TUT.cine.cam(); }
   }
   window.__tut = { TUT, tutStart, tutFinish, tutBeast, tutCineEnd, tutGrapple,
