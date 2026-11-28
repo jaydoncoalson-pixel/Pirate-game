@@ -3468,7 +3468,12 @@ window.__pgBoot = () => {
         ['rook', 8, { name: 'Gunner Rook', look: Object.assign({}, crew, { coat: 0x5a2a22, hat: 'none', hair: 0x1a1410, skin: 0x8a5a3a }), lines: ["The guns are all at the bottom of the sea now. Breaks my heart.", "She had green hair. The mermaid. Did I mention the mermaid?"] }],
       ]) {
         const I = ISLANDS[idx]; if (!I) continue;
-        const b = beachAt(I); if (!b) continue;
+        let b = null;
+        if (key === 'rook' && X8 && X8.arch) {   // Rook: on the open beach beside Mermaid Cove's sea arch, where the current carried him in
+          const A = X8.arch, ca = Math.cos(A.a), sa = Math.sin(A.a);
+          for (const side of [24, -24, 34, -34, 46, -46]) { for (let inl = 3; inl <= 18 && !b; inl += 1.5) { const x = A.x - ca * inl - sa * side, z = A.z - sa * inl + ca * side, h = heightAt(x, z); if (h > 0.6 && h < 3) b = { x, z, f: Math.atan2(ca, sa) }; } if (b) break; }
+        }
+        if (!b) b = beachAt(I); if (!b) continue;
         def.beach = b; add(key, v2(b.x, b.z), { x: b.x + Math.sin(b.f) * 10, z: b.z + Math.cos(b.f) * 10 }, def);
       }
     }
