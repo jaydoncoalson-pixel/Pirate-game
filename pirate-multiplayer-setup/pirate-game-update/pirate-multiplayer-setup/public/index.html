@@ -2184,18 +2184,25 @@ window.__pgBoot = () => {
     // a thin black smoke curls off the blade while it's in yer hand
     if (STATE.sword === 'cursed' && player && PLAYER.weapon === 'cutlass' && Math.random() < dt * 14) { const w = new THREE.Vector3(); (player.props && player.props.blade || player.root).getWorldPosition(w); puff(w.x + (Math.random() - 0.5) * 0.6, w.y + Math.random() * 0.8, w.z + (Math.random() - 0.5) * 0.6, { color: 0x050307, size: 0.35 + Math.random() * 0.3, life: 0.9, grow: 1.2, vy: 0.8, op: 0.7 }); }
     // the Revenant's aura: a thick black cloud clinging round her hull, and black smoke streaming off her
-    for (let i = REV_AURAS.length - 1; i >= 0; i--) { const R = REV_AURAS[i]; if (!R.m.group.parent) { REV_AURAS.splice(i, 1); continue; }
-      for (const s of R.sprites) { const u = s.userData; u.ph += dt * u.sp; s.position.set(u.x + Math.sin(u.ph) * 1.5, u.y + Math.sin(u.ph * 0.7) * 1.2, u.z + Math.cos(u.ph * 0.8) * 2); s.material.opacity = u.op * (0.8 + 0.2 * Math.sin(u.ph * 1.3)); }
+    // (the mist isn't fastened to her: each wisp is born somewhere about her hull, then hangs in the air where it was left,
+    // drifting and thinning, so she sails through her own fog and drags a trail of it behind her)
+    for (let i = REV_AURAS.length - 1; i >= 0; i--) { const R = REV_AURAS[i]; if (!R.m.group.parent) { for (const s of R.sprites) { scene.remove(s); s.material.dispose(); } REV_AURAS.splice(i, 1); continue; }
+      const T = R.m.T; R.m.group.updateMatrixWorld(); const gp = R.m.group.position, mvx = R.lx == null ? 0 : gp.x - R.lx, mvz = R.lz == null ? 0 : gp.z - R.lz; R.lx = gp.x; R.lz = gp.z; const near = Math.abs(R.m.group.position.x - camera.position.x) < 2500 && Math.abs(R.m.group.position.z - camera.position.z) < 2500;
+      for (const s of R.sprites) { const u = s.userData; u.age += dt;
+        if (u.age >= u.life) {   // reborn about the hull
+          const K = R.m.K || 1, w = new THREE.Vector3((Math.random() < 0.5 ? -1 : 1) * T.B / K * (0.15 + Math.random() * 0.5), -0.5 + Math.random() * (T.D + 6), (Math.random() - 0.5) * T.L / K * 1.05).applyMatrix4(R.m.group.matrixWorld);   // (her group is scaled by K; T.B and T.L are already full size)
+          s.position.copy(w); u.age = 0; u.life = 3 + Math.random() * 3; u.sz = (7 + Math.random() * 9) * (R.m.K || 1); u.vx = (Math.random() - 0.5) * 1.5; u.vz = (Math.random() - 0.5) * 1.5; u.vy = 0.3 + Math.random() * 0.8; u.op = 0.4 + Math.random() * 0.3; }
+        const q = u.age / u.life, drag = 0.85 * (1 - q) * (1 - q);   // dragged along in her wake when it's new, then let go to hang and thin
+        s.visible = near; s.position.x += u.vx * dt + mvx * drag; s.position.y += u.vy * dt; s.position.z += u.vz * dt + mvz * drag; s.scale.setScalar(u.sz * (0.7 + q * 0.9)); s.material.opacity = u.op * Math.min(1, q * 5) * (1 - q * q); }
       if (Math.abs(R.m.group.position.x - camera.position.x) < 2500 && Math.abs(R.m.group.position.z - camera.position.z) < 2500 && Math.random() < dt * 18) {
-        const T = R.m.T, K = R.m.K || 1, lx = (Math.random() - 0.5) * T.B * 1.2, lz = (Math.random() - 0.5) * T.L; const w = new THREE.Vector3(lx, T.D + Math.random() * 6, lz).applyMatrix4(R.m.group.matrixWorld);
+        const T = R.m.T, K = R.m.K || 1, lx = (Math.random() - 0.5) * T.B / K * 1.1, lz = (Math.random() - 0.5) * T.L / K; const w = new THREE.Vector3(lx, T.D + Math.random() * 4, lz).applyMatrix4(R.m.group.matrixWorld);
         puff(w.x, w.y, w.z, { color: 0x030204, size: (5 + Math.random() * 6) * K, life: 2.4, grow: 1.6, vy: 1.5, op: 0.6 }); } }
   }
   const REV_AURAS = [];
   function addRevenantAura(m) {
     const T = m.T, sprites = [];
-    for (let i = 0; i < 46; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
-      const side = Math.random() < 0.5 ? -1 : 1; s.userData = { x: side * T.B * (0.35 + Math.random() * 0.45), y: -0.5 + Math.random() * (T.D + 10), z: (Math.random() - 0.5) * T.L * 1.05, ph: Math.random() * 6, sp: 0.3 + Math.random() * 0.5, op: 0.4 + Math.random() * 0.3 };
-      s.scale.setScalar(7 + Math.random() * 9); m.group.add(s); sprites.push(s); }
+    for (let i = 0; i < 70; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+      s.userData = { age: 99, life: 1 + Math.random() * 5 }; scene.add(s); sprites.push(s); }   // (in the world, not on the ship: see updateCursed)
     REV_AURAS.push({ m, sprites });
   }
   function updateHome(dt, t) {
