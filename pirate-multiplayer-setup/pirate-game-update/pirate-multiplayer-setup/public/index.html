@@ -3425,6 +3425,27 @@ window.__pgBoot = () => {
       ['Saltmarsh', 'morg', { name: 'Eel-catcher Morg', look: { shirt: 0x5a6a4a, pants: 0x3a3424, hat: 'bandana', hatColor: 0x4a5a3a, beard: 0x5a4a2a, hair: 0x5a4a2a, skin: 0xa8784e }, lines: ["Eels, captain. Smoked, stewed, pickled, pied. Saltmarsh runs on eels.", "There's one out there as long as yer ship. I've seen it."] }]]) {
       const V = SITES.find(q => q.name === vn); if (V) add(key, v2(V.x - 7, V.z + 5), { x: V.x, z: V.z }, def); }
     { const V = HOME.vil; add('mabel', v2(V.x + 6, V.z + 6), { x: V.x, z: V.z }, { name: 'Mabel of Brackenford', look: { shirt: 0xc87a8a, dress: 0x8a4a5a, hair: 0x6a4a2a, longHair: true, skin: 0xe0b08a }, lines: ["Brackenford's quiet, captain. We like it that way.", "My Finn went to sea a year ago and never came home."] }); }
+    // the opening's survivors, washed up on three beaches, looking out to sea (they move to the Gull Island dock once found)
+    {
+      const H = ISLANDS[0].c;
+      const beachAt = I => { const a0 = Math.atan2(H.y - I.c.y, H.x - I.c.x);
+        for (const top of [3.5, 6, 12]) {   // a low sandy shore if there is one; failing that, wherever the land meets the sea
+          for (let k = 0; k < 24; k++) { const a = a0 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.27, dx = Math.cos(a), dz = Math.sin(a), pts = [];
+            for (let d = 0; d < I.r * 1.8; d += 1.5) { const x = I.c.x + dx * d, z = I.c.y + dz * d, h = heightAt(x, z);
+              if (h < 0.9) { const q = pts[Math.max(0, pts.length - 4)]; if (q) return { x: q.x, z: q.z, f: Math.atan2(dx, dz) }; break; }
+              if (h < top) pts.push({ x, z }); else pts.length = 0; } } }
+        return { x: I.c.x + Math.cos(a0) * I.r * 0.7, z: I.c.y + Math.sin(a0) * I.r * 0.7, f: a0 }; };
+      const crew = { coat: 0x2a3a5a, shirt: 0xe8e0cc, pants: 0x3a3428 };
+      for (const [key, idx, def] of [
+        ['hargreave', 7, { name: 'First Mate Hargreave', look: Object.assign({}, crew, { hat: 'tricorn', hatColor: 0x1c1c24, beard: 0x8a8a84, hair: 0x8a8a84, skin: 0xd8a070 }), lines: ["I've been watching the horizon for sails. Ye came.", "The sea took a lot from us that night."] }],
+        ['briggs', 1, { name: 'Bosun Briggs', look: { shirt: 0xc8b898, pants: 0x3a3428, hat: 'bandana', hatColor: 0x8a2a2a, beard: 0x5a3a1a, hair: 0x5a3a1a, skin: 0xb07848, scale: 1.12 }, lines: ["Lost my boots, my hat and my pipe. Kept my life, though. Fair trade.", "Ever had seawater come out yer nose for two days? Don't."] }],
+        ['rook', 8, { name: 'Gunner Rook', look: Object.assign({}, crew, { coat: 0x5a2a22, hat: 'none', hair: 0x1a1410, skin: 0x8a5a3a }), lines: ["The guns are all at the bottom of the sea now. Breaks my heart.", "She had green hair. The mermaid. Did I mention the mermaid?"] }],
+      ]) {
+        const I = ISLANDS[idx]; if (!I) continue;
+        const b = beachAt(I); if (!b) continue;
+        def.beach = b; add(key, v2(b.x, b.z), { x: b.x + Math.sin(b.f) * 10, z: b.z + Math.cos(b.f) * 10 }, def);
+      }
+    }
     return G;
   })();
   const tagLayer = document.getElementById('tags');
@@ -5425,6 +5446,11 @@ window.__pgBoot = () => {
   }
   // ---- what's on show in yer quarters: trophies from finished quests, the swords ye own, and yer gold ----
   const TROPHIES = {
+    beasthunt: ["The Blackwater Beast's claw", (g, M) => { const m = M(0x5a1410), d = M(0x2a0a08);
+      const a = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.18, 8), m); a.rotation.z = 0.5; a.position.set(0, 0.1, -0.02); g.add(a);
+      const f1 = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.2, 8), d); f1.rotation.z = -0.6; f1.position.set(0, 0.2, 0.05); g.add(f1);
+      const f2 = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.15, 8), d); f2.rotation.z = -1.1; f2.position.set(0, 0.16, 0.1); g.add(f2);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.16), M(0x3a2414)); base.position.y = 0.012; g.add(base); }],
     treasure: ["Blackwater's gold", (g, M) => { [[-0.06, 0, 0], [0.06, 0, 0], [0, 0.05, 0]].forEach(([x, y]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.07), M(0xe0b23c)); b.position.set(0, y + 0.025, x); g.add(b); }); }],
     ledger: ["Gus's ledger", (g, M) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.26), M(0x5a2d16)); b.position.y = 0.03; b.rotation.y = 0.3; g.add(b); const s = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.065, 0.03), M(0xc9a646)); s.position.y = 0.03; s.rotation.y = 0.3; g.add(s); }],
     oranges: ["Jonah's thank-you oranges", (g, M) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.09, 0.26), M(0x8a5a33)); c.position.y = 0.045; g.add(c); [[-0.05, -0.06], [0.05, -0.06], [-0.05, 0.06], [0.05, 0.06], [0, 0]].forEach(([x, z], i) => { const o = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), M(0xf28a1c)); o.position.set(x, 0.12 + (i === 4 ? 0.04 : 0), z); g.add(o); }); }],
@@ -6256,6 +6282,90 @@ window.__pgBoot = () => {
     };
     for (const k in MQ) QUESTS[k] = MQ[k];
   }
+  // ===================== The Beast of the Blackwater: the story after the opening =====================
+  // Four quests that pick up where the opening leaves off. Harbormaster Hal has word of survivors; three of the crew
+  // washed up on three beaches (Hargreave on Turtle Cay, Briggs on Palm Key, Rook at Mermaid Cove). Hargreave saw iron
+  // on the Beast's claws: somebody keeps it. A Beast-keeper's log taken off Skull Isle, read by the schoolmistress in
+  // Port Coral, says where it hunts. Tom forges barbed beast-shot, and the captain sails into the Blackwater Deep to
+  // finish it. Captains who skipped the opening (or never saw it) get the same story about another ship's crew.
+  const STORY = {};
+  {
+    const I = ISLANDS[4];   // Skull Isle
+    let k = { x: (I.c.x + SPOT_X.x) / 2, z: (I.c.y + SPOT_X.z) / 2 }; if (heightAt(k.x, k.z) < 1.2) k = { x: SPOT_X.x, z: SPOT_X.z };
+    STORY.keeper = k;
+    // the Blackwater Deep: open water off Skull Isle, well clear of every island
+    let deep = null;
+    for (const a of [0.25, -0.25, 0.8, -0.8, 1.4, -1.4, 2.2, -2.2, 3.0]) { for (let d = I.r + 600; d < I.r + 2600 && !deep; d += 100) { const p = { x: I.c.x + Math.cos(a) * d, z: I.c.y + Math.sin(a) * d };
+        if (Math.abs(p.x) < EDGE - 600 && Math.abs(p.z) < EDGE - 600 && heightAt(p.x, p.z) < -12 && ISLANDS.every(J => Math.hypot(p.x - J.c.x, p.z - J.c.y) > J.r + 700)) deep = p; } if (deep) break; }
+    STORY.deep = deep || { x: I.c.x + I.r + 1200, z: I.c.y };
+  }
+  const wrecked = () => !!STATE.wrecked;   // did this captain live through the opening's shipwreck?
+  const STORYQ = {
+    survivors: { title: 'Washed ashore', reward: 700, giver: 'Harbormaster Hal', hint: 'Harbormaster Hal, at the end of the Gull Island dock, has news of survivors.',
+      get start() { return wrecked()
+        ? ["Ye're the captain they found on the beach! Ye've had a hard few days, by the look of ye.", "Fishermen came in this morning. They saw men clinging to wreckage, drifting toward the islands.", "If any of yer crew made it, they'll be on a beach somewhere. Turtle Cay first, I'd say. And come back to me after: I'll find ye a boat."]
+        : ["Captain, a word. A galleon went down beyond the charts. Something came up out of the sea and broke her in two.", "Fishermen saw men clinging to wreckage, drifting toward the islands.", "If any made it, they'll be on a beach somewhere. Turtle Cay first, I'd say. Will ye look?"]; },
+      done: ["Three souls the sea gave back. That's three more than it usually does."],
+      stages: [
+        { type: 'talk', npc: 'First Mate Hargreave', text: 'Search the beaches for survivors: start on Turtle Cay', get lines() { return wrecked()
+          ? ["Captain? CAPTAIN! I thought ye were dead! I thought we ALL were!", "I held on to a hatch cover all night. Briggs was on a spar near me; the current took him toward Palm Key.", "That thing... Captain, it had iron bands on its claws. Chains. Somebody KEEPS that beast."]
+          : ["A ship! Thank the deep! I'm Hargreave, first mate of the galleon that went down.", "Our bosun, Briggs, drifted off toward Palm Key on a spar. Please, find him.", "And mark this: the thing that sank us had iron bands on its claws. Somebody keeps that beast."]; } },
+        { type: 'talk', npc: 'Bosun Briggs', text: 'Find Bosun Briggs, washed up on Palm Key', get lines() { return wrecked()
+          ? ["Cap'n! Ha! Takes more than a sea monster to drown a Briggs!", "Rook went under right beside me. Then something pulled him away under the water. Something with a tail.", "If it was what I think it was, he'll be at the cove where they sing. Mermaid Cove."]
+          : ["Hargreave's alive? Oh, bless ye.", "Our gunner, Rook, went under beside me. Something with a tail pulled him away. Try Mermaid Cove."]; } },
+        { type: 'talk', npc: 'Gunner Rook', text: 'Find Gunner Rook at Mermaid Cove', get lines() { return wrecked()
+          ? ["Cap'n... ye won't believe me. A MERMAID dragged me ashore. Kissed me on the forehead and swam off.", "I'll never live it down with the lads. Don't tell Briggs.", "Is that all of us? Pike, the others... no. Just us three. Let's get home."]
+          : ["A mermaid pulled me out. Don't laugh.", "Briggs and Hargreave made it? Then let's get home."]; } },
+        { type: 'talk', npc: 'Harbormaster Hal', text: 'Tell Harbormaster Hal ye found three survivors', get lines() { return wrecked()
+          ? ["Three of yer crew alive! They'll bunk at the dock till ye've a deck under 'em again.", "And ye'll need one. Take a sloop from my yard: talk to me again and pick one out. A captain needs a ship."]
+          : ["Three alive! They'll bunk at the dock. Ye've done a kind thing, captain."]; } },
+      ] },
+    beastlog: { title: 'Chains on its claws', reward: 900, giver: 'First Mate Hargreave', req: () => STATE.quests.survivors === 'done',
+      hint: 'Once ye\'ve found the survivors, First Mate Hargreave will have more to say about the Beast.',
+      start: ["Captain, I can't stop thinking about those chains. That beast isn't wild. It answers to someone.", "Blackwater, it has to be. Their thugs camp on Skull Isle. If anyone has orders about that beast, they'll have them.", "Rough 'em up, search their camp, and bring me whatever ye find."],
+      done: ["Every night I hear that screech. Not for much longer, eh, captain?"],
+      stages: [
+        { type: 'kill', what: 'Blackwater thug', n: 4, text: 'Defeat Blackwater thugs on Skull Isle', at: () => STORY.keeper },
+        { type: 'spot', at: () => STORY.keeper, r: 9, label: 'Search the Beast-keeper\'s chest', text: 'Search the Blackwater camp on Skull Isle for orders about the Beast',
+          act: () => toast('Under the bedrolls: a heavy logbook bound in sharkskin, stamped with a claw. Every page is written in cipher.') },
+        { type: 'talk', npc: 'Schoolmistress Imelda', text: 'Take the cipher log to Schoolmistress Imelda in Coral Heights, Port Coral', lines: ["A cipher? Oh, how lovely! It's a simple letter-shift, captain. My twelve-year-olds could crack it.", "'The Beast is kept in the Vaults beneath the Skull. It is loosed by the keeper's horn to hunt the ships the Admiral marks.'", "'Between hunts it is fed in the Blackwater Deep, off the Skull's coast, where the wrecks are sunk for it.' Oh dear. That's dreadful.", "There's a chart on the last page. Here, I've marked the Deep for ye."] },
+        { type: 'talk', npc: 'First Mate Hargreave', text: 'Tell First Mate Hargreave what the log says', lines: ["Fed on wrecks. On OUR ship, maybe.", "Then we know where it'll be. But cannonballs bounced off that shell like hail. We'll need something meaner."] },
+      ] },
+    beastiron: { title: 'Iron for the Beast', reward: 600, giver: 'First Mate Hargreave', req: () => STATE.quests.beastlog === 'done',
+      hint: 'First Mate Hargreave, on the Gull Island dock, is planning something.',
+      start: ["Rook's got an idea. Barbed shot: iron balls with hooks forged on, so they bite into the shell instead of bouncing off.", "Tom the smith could make 'em, if we bring him the iron. Six iron and two Blackwater steel, Rook reckons."],
+      done: ["Rook's been stroking those barbed balls like they're puppies. Worrying, honestly."],
+      stages: [
+        { type: 'mats', mats: { iron: 6, steel: 2 }, text: 'Gather 6 iron and 2 Blackwater steel' },
+        { type: 'talk', npc: 'Tom the smith', need: { mats: { iron: 6, steel: 2 } }, text: 'Bring the iron and steel to Tom the smith for barbed beast-shot', lines: ["Barbed shot? For the Blackwater Beast?! Ye're madder than my anvil, captain.", "*CLANG* *CLANG* *CLANG*... There. Hooks like a shark's teeth. That'll bite.", "Every ball ye fire at that thing will hit half again as hard."] },
+        { type: 'talk', npc: 'Gunner Rourke', text: 'Have Gunner Rourke at the harbour battery check the shot', lines: ["Let's see... good weight, hooks set true. Tom does fine work.", "Load these and aim for the joints of the shell. Don't let it get its claws on yer hull: sail away when it charges, then turn and give it a broadside."] },
+        { type: 'talk', npc: 'First Mate Hargreave', text: 'Tell First Mate Hargreave the shot is ready', lines: ["Then we're ready. As ready as anyone ever is for a thing like that."] },
+      ] },
+    beasthunt: { title: 'The Beast of the Blackwater', reward: 3000, giver: 'First Mate Hargreave', req: () => STATE.quests.beastiron === 'done',
+      hint: 'First Mate Hargreave, on the Gull Island dock, is waiting for the barbed shot.',
+      get start() { return [wrecked() ? "It broke our ship, captain. It killed Pike and the others. Let's go and finish it." : "It broke our ship and killed our mates. Will ye finish it, captain?", "Sail into the Blackwater Deep, off Skull Isle. When it rises, keep moving: don't let it grab ye.", "And captain... come back."]; },
+      done: ["The Beast is dead. I still can't believe it. Drinks at the Salty Gull are on me. For a year."],
+      stages: [
+        { type: 'beast', at: () => STORY.deep, r: 420, text: 'Sail into the Blackwater Deep off Skull Isle and kill the Blackwater Beast' },
+        { type: 'talk', npc: 'First Mate Hargreave', text: 'Tell First Mate Hargreave the Beast is dead', lines: ["Ye... ye did it. Ye killed it.", "Rook pulled this off the carcass when it washed up on Skull Isle. A claw, big as a door.", "And Tom made ye something from the iron of its chains. It's yours, captain. Ye earned it for all of us."],
+          end: () => { if (!STATE.pistols.includes('beastbane')) STATE.pistols.push('beastbane'); save(); setTimeout(() => toast("Ye received Beastbane, a harpoon pistol forged from the Beast's chains! Equip it in the Pistols section (I)."), 1200); } },
+      ] },
+  };
+  { const rest = Object.assign({}, QUESTS); for (const k in QUESTS) delete QUESTS[k]; Object.assign(QUESTS, STORYQ, rest); }   // (the story comes first in the quest list)
+  // where the survivors stand: on their beaches until they're found, then on the Gull Island dock
+  window.__story = { STORY, get STB() { return STB; }, qs: () => JSON.stringify(STATE.quests), prog: () => JSON.stringify(STATE.qprog),
+    talk: name => { const q = questTalk(name); if (q && q.end) q.end(); return q ? q.lines : null; }, ev: (k, i) => questEvent(k, i),
+    spot: () => { const q = nearQSpot(); if (q) q.act(); return !!q; }, npc: name => { const n = npcs.find(m => m.def.name === name); return n ? [Math.round(n.pos.x), Math.round(n.pos.z), n.def.storyAt] : null; },
+    tp: (x, z) => { P.pos.set(x, heightAt(x, z) + 0.5, z); P.vy = 0; snapCam = true; }, hit: n => stbBallHit(STB.x, STB.y + 20, STB.z, n), tick: () => questTick(), ship: k => spawnShip(k) };
+  function storyNpcs() {
+    const found = STATE.quests.survivors === 'done';
+    for (const [name, key, dock] of [['First Mate Hargreave', 'hargreave', [4, DOCK_LEN + 1]], ['Bosun Briggs', 'briggs', [4.5, DOCK_LEN - 5]], ['Gunner Rook', 'rook', [-4, DOCK_LEN - 3]]]) {
+      const n = npcs.find(m => m.def.name === name); if (!n) continue;
+      const want = found ? (() => { const w = dockWorld(dock[0], dock[1]); return { x: w.x, z: w.y, f: Math.atan2(-DOCK_DIR.x, -DOCK_DIR.y) }; })() : n.def.beach;
+      if (!want || (n.def.storyAt === (found ? 'dock' : 'beach'))) continue;
+      n.def.storyAt = found ? 'dock' : 'beach'; n.pos.set(want.x, groundAt(want.x, want.z), want.z); n.facing = n.homeFacing = want.f;
+    }
+  }
   // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
   STATE.qprog = STATE.qprog || {};
   for (const id in STATE.quests) { const s = STATE.quests[id]; if (!QUESTS[id]) delete STATE.quests[id]; else if (typeof s === 'number' && s >= QUESTS[id].stages.length) STATE.quests[id] = QUESTS[id].stages.length - 1; }
@@ -6296,12 +6406,20 @@ window.__pgBoot = () => {
   }
   // checked a few times a second: materials gathered, markers reached at sea, the deep stirring
   function questTick() {
+    try { storyNpcs(); } catch (e) {}
     for (const id in QUESTS) {
       const st = curStage(id); if (!st) continue;
       // it got away (or ye fled): ye must sail clear of the spot and come back to call it again. A beaten Kraken
       // (dying or dead) doesn't count as getting away, and it's never called straight back up the moment it sinks
       if (st.type === 'kraken' && STATE.qprog[id] === 1 && (KR.st === 'roam' || KR.st === 'leaving')) { STATE.qprog[id] = -1; save(); }
       if (st.type === 'kraken' && STATE.qprog[id] === -1 && ship) { const a = st.at(); if (Math.hypot(ship.x - a.x, ship.z - a.z) > st.r * 2) { STATE.qprog[id] = 0; save(); } }
+      if (st.type === 'beast') {
+        if (!ship || STB.on) continue;
+        const a = st.at(), d = Math.hypot(ship.x - a.x, ship.z - a.z);
+        if (STATE.qprog[id] === -1) { if (d > st.r * 2) { STATE.qprog[id] = 0; save(); } continue; }
+        if (sailing && !ship.sinking && d < st.r) stbStart(id);
+        continue;
+      }
       if (st.type === 'mats') { if (haveMats(st.mats)) advanceQuest(id); else if (STATE.track === id && qObj.textContent !== stageText(id)) refreshQuestHud(); }
       else if ((st.type === 'sail' || st.type === 'kraken') && ship && sailing && !ship.sinking) {
         const a = st.at(), d = Math.hypot(ship.x - a.x, ship.z - a.z);
@@ -6341,6 +6459,7 @@ window.__pgBoot = () => {
     for (const id in QUESTS) {
       const Q = QUESTS[id]; if (Q.giver !== name) continue;
       const s = STATE.quests[id];
+      if (s === undefined && Q.req && !Q.req()) continue;   // (a story quest waits for the one before it)
       if (s === undefined) return say(Q.start, () => startQuest(id));
       if (s !== 'done') return say([`Still waitin' on ye, captain: ${stageText(id).charAt(0).toLowerCase() + stageText(id).slice(1)}.`]);
     }
@@ -6421,7 +6540,7 @@ window.__pgBoot = () => {
     const id = STATE.track, s = id ? STATE.quests[id] : undefined;
     qBox.style.display = 'block';
     if (typeof s !== 'number') {
-      const avail = Object.keys(QUESTS).find(k => STATE.quests[k] === undefined);
+      const avail = Object.keys(QUESTS).find(k => STATE.quests[k] === undefined && (!QUESTS[k].req || QUESTS[k].req()));
       qTitle.textContent = avail ? 'Looking for work?' : 'Every quest complete!';
       qObj.textContent = avail ? QUESTS[avail].hint : "Ye're the most famous captain on the seas. Floating cargo still pays.";
       qDistRow.style.display = 'none';
@@ -6995,7 +7114,7 @@ window.__pgBoot = () => {
     if (nearSwordStone()) { summonMermaid(); return; }
     const n = nearestNpc();
     if (n) {
-      if (n.def.shop) openShop(n);
+      if (n.def.shop && !(questTalk(n.def.name) || {}).end) openShop(n);
       else if (n.def.name === 'Tom the smith' && !(questTalk('Tom the smith') || {}).end) openForgeChat(n);   // quest business first, otherwise his forge
       else if (n.def.name === 'Trader Quint' && !(questTalk('Trader Quint') || {}).end) openTrade(n);
       else { const q = npcs.includes(n) ? questTalk(n.def.name) : null; talk = { npc: n, line: 0, lines: q ? q.lines : null, end: q ? q.end : null }; if ((talk.lines || n.def.lines).length) showLine(); else talk = null; }
@@ -7690,6 +7809,8 @@ window.__pgBoot = () => {
                look: { wood: 0x3a2414, metal: 0x5e646c, trim: 0xc0c4cc, len: 0.3, barrels: 4 } },
     duelist: { name: "Duelist's Pistol", desc: 'A long rifled barrel, a hair trigger and silver inlay. The longest reach and hardest single shot, and double damage against a foe who is staggered or reeling.', dmg: 95, rounds: 1, reload: 2.2, fire: 0.3, range: 120, cone: 0.975, duel: true, gold: 420, cost: { steel: 4, pearl: 3 },
                look: { wood: 0x2a1a10, metal: 0x2c3038, trim: 0xdfe4ea, len: 0.62, bands: 3, slim: true } },
+    beastbane: { name: 'Beastbane', desc: "A harpoon pistol forged from the iron of the Blackwater Beast's chains, its muzzle set with three of the Beast's own claw-tips. Each barbed bolt drives straight through up to three foes in a line.", dmg: 85, pierce: 3, rounds: 1, reload: 1.7, fire: 0.3, range: 90, cone: 0.95, legendary: true, claim: 'Finish the story: The Beast of the Blackwater.', gold: 0, cost: {},
+               look: { wood: 0x2a1410, metal: 0x26262a, trim: 0x8a1a14, len: 0.5, bands: 2, claw: true } },
     thunder: { name: 'The Thunderer', desc: 'A brass hand-mortar with a dragon for a muzzle. Every shell bursts on impact, blasting everything within four metres.', dmg: 70, splash: 4, splashDmg: 45, rounds: 1, reload: 2.6, fire: 0.4, range: 70, cone: 0.93, gold: 650, cost: { gem: 2, steel: 4 },
                look: { wood: 0x3a1a10, metal: 0xc9962e, trim: 0xffd76a, len: 0.4, dragon: true } },
   };
@@ -7738,13 +7859,18 @@ window.__pgBoot = () => {
         for (const x of [-0.018, 0.018]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.05, 6), trim); h.position.set(x, y0 - len + 0.03, -0.04); h.rotation.x = -2.4; g.add(h);
           const e = new THREE.Mesh(new THREE.SphereGeometry(0.007, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff2a2a })); e.position.set(x * 1.3, y0 - len - 0.02, -0.03); g.add(e); }
         for (let i = 0; i < 3; i++) { const sc = box(0.03, 0.012, 0.012, trim, 0, y0 - len * (0.2 + i * 0.25), -0.032); sc.rotation.x = 0.6; }   // scales down the barrel
+      } else if (lk.claw) {   // three of the Beast's claw-tips round the muzzle, curling forward, and the barbed bolt head between them
+        cyl(br * 1.5, br * 1.2, 0.03, trim, 0, y0 - len + 0.01, -0.008);
+        const clawM = M(0x3a0e0a);
+        for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3, c = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.09, 6), clawM); c.position.set(Math.cos(a) * 0.03, y0 - len - 0.035, -0.008 + Math.sin(a) * 0.03); c.rotation.set(Math.PI + Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5); g.add(c); }
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05, 6), M(0xc8c8d0)); tip.position.set(0, y0 - len - 0.03, -0.008); tip.rotation.x = Math.PI; g.add(tip);
       } else cyl(br * 1.2, br * 1.2, 0.018, trim, 0, y0 - len + 0.009, -0.008);
       box(0.026, len * (lk.flare ? 0.85 : 0.7), 0.022, wood, 0, y0 - len * 0.35, 0.014);   // the forestock under the barrel
       if (!lk.flare && !lk.dragon) box(0.006, 0.012, 0.008, trim, 0, y0 - len + 0.03, -0.03);   // front sight
     }
     for (let i = 0; i < (lk.bands || 0); i++) cyl(br * 1.25, br * 1.25, 0.012, trim, 0, y0 - len * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -0.006);
     if (lk.slim) { const inl = box(0.004, len * 0.6, 0.004, trim, 0.02, yc, -0.008); box(0.004, len * 0.6, 0.004, trim, -0.02, yc, -0.008); }   // silver inlay
-    g.userData.muzzleY = y0 - len - (lk.flare ? 0.1 : lk.dragon ? 0.09 : 0.01);
+    g.userData.muzzleY = y0 - len - (lk.flare ? 0.1 : lk.dragon ? 0.09 : lk.claw ? 0.06 : 0.01);
     return g;
   }
   function refreshPistol() {
@@ -7770,6 +7896,7 @@ window.__pgBoot = () => {
     g.fillStyle = hex(lk.trim);
     for (let i = 0; i < (lk.bands || 0); i++) g.fillRect(18 + L * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -11, 3, bh + 2);
     if (lk.flare) { g.fillStyle = hex(lk.metal); g.beginPath(); g.moveTo(18 + L, -10); g.lineTo(18 + L + 22, -20); g.lineTo(18 + L + 22, 6); g.lineTo(18 + L, -3); g.fill(); }
+    if (lk.claw) { g.fillStyle = '#3a0e0a'; for (const dy of [-16, -7, 2]) { g.beginPath(); g.moveTo(18 + L, -7 + dy * 0.4); g.quadraticCurveTo(18 + L + 14, dy - 4, 18 + L + 20, dy + 2); g.lineTo(18 + L + 4, -4 + dy * 0.4); g.fill(); } }
     if (lk.dragon) { g.fillStyle = hex(lk.trim); g.beginPath(); g.moveTo(18 + L, -14); g.lineTo(18 + L + 20, -12); g.lineTo(18 + L + 12, -7); g.lineTo(18 + L + 20, -2); g.lineTo(18 + L, 0); g.fill(); g.fillStyle = '#ff3030'; g.fillRect(18 + L + 6, -12, 3, 3); }
     g.restore();
   }
@@ -7784,13 +7911,14 @@ window.__pgBoot = () => {
       const card = document.createElement('div'); card.className = 'sword' + (eq ? ' eq' : '');
       const cv = document.createElement('canvas'); cv.width = 200; cv.height = 68; drawPistolIcon(cv, G.look); card.appendChild(cv);
       const info = document.createElement('div');
-      const reqs = owned ? '<span>Owned</span>' : [...Object.entries(G.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= G.gold ? '' : 'no'}">${G.gold} gold</span>`].join('');
-      const dmg = G.pellets ? `${G.dmg} × ${G.pellets}` : G.splash ? `${G.dmg} + ${G.splashDmg} blast` : G.dmg;
+      const reqs = owned ? '<span>Owned</span>' : G.legendary ? `<span>${G.claim}</span>` : [...Object.entries(G.cost).map(([k, v]) => `<span class="${(STATE.mats[k] || 0) >= v ? '' : 'no'}">${v} ${MATS[k].name.toLowerCase()}</span>`), `<span class="${STATE.gold >= G.gold ? '' : 'no'}">${G.gold} gold</span>`].join('');
+      const dmg = G.pellets ? `${G.dmg} × ${G.pellets}` : G.pierce ? `${G.dmg}, pierces ${G.pierce}` : G.splash ? `${G.dmg} + ${G.splashDmg} blast` : G.dmg;
       info.innerHTML = `<h3>${G.name}</h3><p>${G.desc}</p><div class="stats"><span>Damage <b>${dmg}</b></span><span>Shots <b>${G.rounds}</b></span><span>Reload <b>${G.reload.toFixed(1)}s</b></span><span>Range <b>${G.range}m</b></span></div><div class="reqs">${reqs}</div>`;
       card.appendChild(info);
       const b = document.createElement('button');
       if (eq) { b.textContent = 'Equipped'; b.disabled = true; }
       else if (owned) { b.textContent = 'Equip'; b.addEventListener('click', () => { pistolEquip(id); renderForge(); }); }
+      else if (G.legendary) { b.textContent = 'Legendary'; b.disabled = true; }
       else {
         b.textContent = 'Forge'; b.disabled = !atForge || !afford;
         b.addEventListener('click', () => {
@@ -7850,6 +7978,12 @@ window.__pgBoot = () => {
         pistolHit(t, G.dmg * n, dx, dz, true, n >= G.pellets - 1 ? '!' : ''); }
       for (let k = 0; k < G.pellets; k++) { const a = P.facing + (Math.random() - 0.5) * 0.7, r = G.range * (0.6 + Math.random() * 0.4); tracer(mz, _pmT.set(mz.x + Math.sin(a) * r, mz.y + (Math.random() - 0.6) * 2, mz.z + Math.cos(a) * r).clone(), 0xffd890, 0.6); }
       if (!any) for (let k = 0; k < 4; k++) puff(mz.x + fx * (8 + k * 3), mz.y - 0.5, mz.z + fz * (8 + k * 3), { color: 0xd8c8a8, size: 0.6, life: 0.4, grow: 1, op: 0.5 });
+    } else if (G.pierce) {   // Beastbane: a barbed bolt straight through everyone in a line
+      const line = all.map(t => ({ t, d: inCone(t, 0.985, G.range) })).filter(o => o.d >= 0).sort((a, b) => a.d - b.d).slice(0, G.pierce);
+      if (!line.length) { const aim = []; for (const t of all) { const d = inCone(t, G.cone, G.range); if (d >= 0) aim.push({ t, d }); } aim.sort((a, b) => a.d - b.d); if (aim[0]) line.push(aim[0]); }
+      line.forEach(({ t }, i) => { const head = Math.random() < 0.12; pistolHit(t, Math.round(G.dmg * (head ? 1.6 : 1) * (1 - i * 0.15)), fx, fz, true, head ? ' HEADSHOT' : ''); const c = chest(t); puff(c.x, c.y, c.z, { color: 0x8a1a14, size: 0.5, life: 0.3, grow: 0.8, op: 1 }); });
+      const end = line.length ? chest(line[line.length - 1].t).addScaledVector(new THREE.Vector3(fx, 0, fz), 6) : new THREE.Vector3(mz.x + fx * 50, mz.y - 0.4, mz.z + fz * 50);
+      tracer(mz, end, 0xd8e8ff, 1.5); CMB.shake = Math.max(CMB.shake, 0.22);
     } else {
       let best = null, bs = 1e9;
       for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; const dx = t.pos.x - mz.x, dz = t.pos.z - mz.z, dot = (dx * fx + dz * fz) / Math.max(d, 0.01), s = (1 - dot) * 60 + d / G.range; if (s < bs) { bs = s; best = t; } }
@@ -9855,7 +9989,7 @@ window.__pgBoot = () => {
         }
       }
       if (!hit && !b.enemy && serpentBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
-      if (!hit && !b.enemy && bwBallHit(x, y, z, b.dmg || 11)) { hit = true; SFX.crash({ x, z }); }
+      if (!hit && !b.enemy && (bwBallHit(x, y, z, b.dmg || 11) || stbBallHit(x, y, z, b.dmg || 11))) { hit = true; SFX.crash({ x, z }); }
       if (!hit && !b.enemy && BALL_HOOKS.some(f => f(x, y, z, b))) { hit = true; SFX.crash({ x, z }); }
       if (!hit && y < waveHeight(x, z, t)) {
         hit = true; if (b.mortar) mortarBurst(x, z, b);
@@ -10714,6 +10848,7 @@ window.__pgBoot = () => {
   function musicDanger() {
     try {
       if (LEV.on && levNear()) return 0;
+      if (STB.on) return 0;
       if (VOID.st !== 'none') return 0;
       if (bwLive() && Math.hypot(BWS.m.B.position.x - P.pos.x, BWS.m.B.position.z - P.pos.z) < 2600) return 0;
       if (KR.lock && KR.lock === ship && (KR.st === 'attack' || KR.st === 'grip')) return 0.15;
@@ -13130,6 +13265,85 @@ window.__pgBoot = () => {
     SFX.crash({ x: ship.x, z: ship.z }); SFX.clawClack({ x: ship.x, z: ship.z });
     if ((onShip || sailing) && Math.random() < 0.5) hurtPlayer(8);
     if (!BWS.told) { BWS.told = true; toast('The Blackwater Beast has yer ship in its claws! Fire everything ye\'ve got, or run for the shallows!'); }
+  }
+  // ---------- the story's Blackwater Beast: the finale in the Blackwater Deep ----------
+  // Only for the captain on the quest (it's this captain's own fight, online too). It rises near yer ship, circles,
+  // charges, and if it reaches ye it locks its claws on the hull and slams three times before diving; it comes up
+  // again somewhere else. Cannonballs hurt it (half again with Tom's barbed shot). Its health is set by yer guns, so a
+  // sloop's fight is as long as a galleon's. Sail too far off, or lose yer ship, and it sinks away to wait.
+  const STB = { on: false, st: '', t: 0, hp: 0, max: 0, x: 0, z: 0, h: 0, y: -100, m: null, tag: null, bar: null, qid: null, ang: 0, slams: 0, slamT: 0, wt: 0 };
+  function stbStart(qid) {
+    if (!STB.m) {
+      const c = makeBWCrab(); c.B.scale.setScalar(4.05); scene.add(c.B); c.eyeLight.distance = 240; c.eyeLight.intensity = 3; STB.m = c;
+      const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = 'The Blackwater Beast<div class="ehp"><div></div></div>'; tag.style.display = 'none'; tagLayer.appendChild(tag); STB.tag = tag; STB.bar = tag.querySelector('.ehp div');
+    }
+    const fire = Math.max(12, gunCount(ship) * shotDamage(ship, false));
+    STB.max = STB.hp = Math.round(Math.min(6000, Math.max(900, fire * 15)));
+    STB.on = true; STB.qid = qid; STB.ang = Math.random() * Math.PI * 2; STB.x = ship.x + Math.sin(STB.ang) * 300; STB.z = ship.z + Math.cos(STB.ang) * 300; STB.y = -100;
+    STB.h = Math.atan2(ship.x - STB.x, ship.z - STB.z); STB.m.B.visible = true; stbSt('rise');
+    SFX.beastRoar({ x: STB.x, z: STB.z, range: 4000 }, 1.7, 1.6, DUN_PITCH); SEACTL.shake = Math.max(SEACTL.shake, 0.8);
+    try { tutCard('THE BLACKWATER BEAST', 'IT REMEMBERS YE', 3.6); } catch (e) {}
+    toast('The sea boils... the Blackwater Beast is rising! Keep moving and give it every gun ye have!');
+  }
+  function stbSt(s) { STB.st = s; STB.t = 0; }
+  function stbEnd(won) {
+    const id = STB.qid; STB.on = false; STB.tag.style.display = 'none'; STB.m.B.visible = false;
+    if (won) { addMat('steel', 4); addMat('gem', 1); toast('The Blackwater Beast is dead! Its carcass rolls over and sinks into the Deep.'); if (id && curStage(id) && curStage(id).type === 'beast') advanceQuest(id); }
+    else { if (id) { STATE.qprog[id] = -1; save(); } toast('The Beast sinks back into the Deep. It will be waiting when ye return.'); }
+  }
+  function stbBallHit(x, y, z, dmg) {
+    if (!STB.on || STB.st === 'dying' || STB.y < -60) return false;
+    const d = Math.hypot(x - STB.x, z - STB.z); if (d > 74 || y > STB.y + 72) return false;
+    const n = dmg * (STATE.quests.beastiron === 'done' ? 1.5 : 1); STB.hp -= n;
+    puff(x, y, z, { color: 0x5a1010, size: 5, life: 1, grow: 1.6, vy: 3, op: 0.9 }); dmgNum({ x, y: y + 2, z }, `${Math.round(n)}`, 'heavy');
+    if (STB.hp <= 0) { STB.hp = 0; stbSt('dying'); SFX.beastRoar({ x: STB.x, z: STB.z, range: 5000 }, 1.6, 2.2, DUN_PITCH * 0.8); CMB.shake = Math.max(CMB.shake, 1); }
+    else if (STB.st === 'circle' && Math.random() < 0.15) stbSt('charge');   // hurt, it comes for ye
+    return true;
+  }
+  function updateStoryBeast(dt, t) {
+    if (!STB.on) return;
+    const C = STB.m, B = C.B; STB.t += dt;
+    if (STB.st !== 'dying' && (!ship || ship.sinking || ship.tutWreck || Math.hypot(ship.x - STB.x, ship.z - STB.z) > 1700)) { stbEnd(false); return; }
+    const sx = ship ? ship.x : STB.x, sz = ship ? ship.z : STB.z, d = Math.hypot(sx - STB.x, sz - STB.z), reachD = (ship ? ship.T.B / 2 : 10) + 46;
+    let wantY = -16, spd = 0, tx = sx, tz = sz, raise = 0.3, open = 0;
+    switch (STB.st) {
+      case 'rise': wantY = -100 + 84 * Math.min(1, STB.t / 5); if (STB.t > 5.2) stbSt('circle'); break;
+      case 'circle': STB.ang += dt * 0.17; tx = sx + Math.sin(STB.ang) * 240; tz = sz + Math.cos(STB.ang) * 240; spd = 42; if (STB.t > 9 + (STB.hp / STB.max) * 4) stbSt('charge'); break;
+      case 'charge': spd = 64; raise = 0.75; open = 1; if (STB.t < 0.1) SFX.beastRoar({ x: STB.x, z: STB.z, range: 3000 }, 1.4, 1.0, DUN_PITCH);
+        if (d < reachD) { stbSt('grab'); STB.slams = 0; STB.slamT = 0.6; } if (STB.t > 11) stbSt('circle'); break;
+      case 'grab': {   // locked on the hull: three claw slams, then it lets go and dives
+        const ax = (STB.x - sx) / Math.max(d, 1), az = (STB.z - sz) / Math.max(d, 1); tx = sx + ax * reachD; tz = sz + az * reachD; STB.x += (tx - STB.x) * Math.min(1, dt * 4); STB.z += (tz - STB.z) * Math.min(1, dt * 4); tx = sx; tz = sz;
+        STB.slamT -= dt; raise = STB.slamT < 0.25 ? 0.05 : 0.8; open = STB.slamT < 0.3 ? 0 : 1;
+        if (STB.slamT <= 0) { STB.slams++; STB.slamT = 1.05; damageShip(ship, Math.max(10, ship.maxHp * 0.08)); ship.krJolt = 1.8; ship.krRz = (ship.krRz || 0) + (Math.random() < 0.5 ? -1 : 1) * 0.15;
+          SFX.crash({ x: ship.x, z: ship.z }); SFX.clawClack({ x: ship.x, z: ship.z }); SEACTL.shake = Math.max(SEACTL.shake, 1); if ((onShip || sailing) && Math.random() < 0.5) hurtPlayer(8);
+          if (STB.slams === 1 && !STB.told) { STB.told = true; toast('It has yer hull in its claws! Pour fire into it, it can\'t hold on for long!'); } }
+        if (STB.slams >= 3 && STB.slamT < 0.6) stbSt('dive');
+        break; }
+      case 'dive': wantY = -125; spd = 30; tx = STB.x + (STB.x - sx); tz = STB.z + (STB.z - sz);
+        if (STB.t > 5) { STB.ang = Math.random() * Math.PI * 2; STB.x = sx + Math.sin(STB.ang) * 320; STB.z = sz + Math.cos(STB.ang) * 320; STB.y = -125; stbSt('resurface'); } break;
+      case 'resurface': wantY = -125 + 109 * Math.min(1, STB.t / 2.6); for (let k = 0; k < 2; k++) puff(STB.x + (Math.random() - 0.5) * 90, 1, STB.z + (Math.random() - 0.5) * 90, { color: 0xffffff, size: 14, life: 1.4, grow: 2, vy: 6, op: 0.7 });
+        if (STB.t < 0.1) SFX.beastRoar({ x: STB.x, z: STB.z, range: 3000 }, 1.6, 1.2, DUN_PITCH); if (STB.t > 2.7) stbSt('circle'); break;
+      case 'dying': wantY = -16 - STB.t * 11; raise = -0.2; if (STB.t > 7) { stbEnd(true); return; } break;
+    }
+    if (spd > 0) { const want = Math.atan2(tx - STB.x, tz - STB.z); STB.h += angDiff(STB.h, want) * Math.min(1, dt * 1.6); STB.x += Math.sin(STB.h) * spd * dt; STB.z += Math.cos(STB.h) * spd * dt; }
+    else STB.h += angDiff(STB.h, Math.atan2(sx - STB.x, sz - STB.z)) * Math.min(1, dt * 2);
+    STB.y += (wantY - STB.y) * Math.min(1, dt * 3);
+    B.position.set(STB.x, STB.y + waveHeight(STB.x, STB.z, t) * 0.5, STB.z); B.rotation.y = STB.h;
+    B.rotation.z = STB.st === 'dying' ? Math.min(0.6, STB.t * 0.09) : Math.sin(t * 0.6) * 0.02;
+    // legs, claws, mouth and eyes
+    const mv = Math.min(1, spd / 40); STB.wt += dt * (2 + mv * 8);
+    C.legs.forEach(({ g, sd, i }) => { const ph = STB.wt + (i % 2 ? Math.PI : 0) + (sd > 0 ? Math.PI / 2 : 0); g.rotation.z = sd * (Math.max(0, Math.sin(ph)) * 0.25 * (0.3 + mv)); g.rotation.y = Math.cos(ph) * 0.18 * (0.3 + mv); });
+    C.claws.forEach((c, k) => { c.arm.rotation.x += (-raise - c.arm.rotation.x) * Math.min(1, dt * (STB.st === 'grab' && STB.slamT < 0.25 ? 16 : 3)); c.arm.rotation.y = c.sd * (-0.15 + Math.sin(t * 0.9 + k * 2) * 0.08);
+      c.fing.rotation.x += ((-0.05 - open * 0.6) - c.fing.rotation.x) * Math.min(1, dt * 10); });
+    C.mouth.forEach((m, i) => { m.rotation.x = Math.sin(t * (STB.st === 'grab' ? 14 : 4) + i * 1.5) * 0.35; });
+    C.body.position.y = 7.5 + Math.sin(t * 1.1) * 0.2;
+    C.eyes.forEach(e => { e.material.opacity = STB.st === 'dying' ? Math.max(0, 1 - STB.t / 4) : 0.85 + 0.15 * Math.sin(t * 1.3); });
+    if (mv > 0.4 && STB.y > -34 && Math.random() < 0.3) puff(STB.x + (Math.random() - 0.5) * 60, 1, STB.z + (Math.random() - 0.5) * 60, { color: 0xffffff, size: 12, life: 1.2, grow: 2, vy: 4, op: 0.6 });
+    // its name and how hurt it is
+    const camD = Math.hypot(STB.x - camera.position.x, STB.z - camera.position.z);
+    if (camD < 2200 && STB.y > -60 && STB.st !== 'dying' && !inInterior) { tmp2.set(STB.x, B.position.y + 78, STB.z).project(camera);
+      if (tmp2.z < 1) { STB.tag.style.display = 'block'; STB.tag.style.transform = `translate(-50%,-100%) translate(${(tmp2.x * 0.5 + 0.5) * innerWidth}px, ${(-tmp2.y * 0.5 + 0.5) * innerHeight}px)`; STB.bar.style.width = Math.max(0, STB.hp / STB.max * 100) + '%'; } else STB.tag.style.display = 'none'; }
+    else STB.tag.style.display = 'none';
   }
   // the raid banner: how long the raid has left and which wave is coming
   let raidEl = null;
@@ -16176,7 +16390,7 @@ window.__pgBoot = () => {
     return { top, bot, cap, card, fade, skip, obj };
   })();
   let tutCapT = 0;
-  function tutSay(html, dur = 3.5) { tutUI.cap.innerHTML = html; tutUI.cap.style.opacity = 1; tutCapT = dur; }
+  function tutSay(html, dur = 3.5) { tutUI.cap.innerHTML = html; tutUI.cap.style.opacity = 1; tutCapT = Math.max(dur, 1.2 + html.replace(/<[^>]+>/g, '').length / 16); }   // (long enough to read, whatever it was given)
   function tutCard(title, sub, dur = 3.5) { tutUI.card.innerHTML = `<div style="font-size:clamp(30px,6vw,68px);letter-spacing:.16em">${title}</div><div style="font-size:clamp(13px,2vw,21px);letter-spacing:.32em;margin-top:8px;color:#e8c98a">${sub || ''}</div>`; tutUI.card.style.opacity = 1; clearTimeout(tutCard.h); tutCard.h = setTimeout(() => tutUI.card.style.opacity = 0, dur * 1000); }
   function tutBars(on) { tutUI.top.style.height = tutUI.bot.style.height = on ? '11vh' : '0'; tutUI.skip.style.opacity = on ? 0.8 : 0; document.body.classList.toggle('tutCine', on); }
   function tutObj(title, items) {   // the lesson card: what to do, ticked off as it's done
@@ -16199,7 +16413,7 @@ window.__pgBoot = () => {
   function tutCineEnd(skipped) {
     const C = TUT.cine; if (!C) return; TUT.cine = null;
     for (const e of C.ev) if (!skipped || e[2]) try { e[1](); } catch (er) { console.error(er); }   // skipping: only the events the story needs
-    tutBars(false); tutUI.cap.style.opacity = 0; tutUI.card.style.opacity = 0; snapCam = true;
+    tutBars(false); if (skipped) { tutUI.cap.style.opacity = 0; tutCapT = 0; } tutUI.card.style.opacity = 0; snapCam = true;
     if (C.end) C.end();
   }
   addEventListener('keydown', e => {   // nothing but Enter (skip) gets through while a cutscene plays
@@ -16244,14 +16458,14 @@ window.__pgBoot = () => {
     musicCue(1, 1.5);   // the shanty, under full sail
     TUT.stage = 'intro'; tutUI.fade.style.transition = 'none'; tutUI.fade.style.opacity = 1; requestAnimationFrame(() => tutFadeTo(0, 1.6));
     const L = ship.T.L;
-    tutCine(11.5, u => {   // chase her from astern, catch up, and sweep round her side to the bow
+    tutCine(12.5, u => {   // chase her from astern, catch up, and sweep round her side to the bow
       const t = TUT.cine.t, a = tEase((t - 3.2) / 7) * 2.05, d = L * (1.55 - 0.65 * tEase((t - 2) / 6)), y = 26 - 14 * tEase((t - 3) / 6);
       const p = tsw(Math.sin(a) * d, y, -Math.cos(a) * d + Math.min(t, 3) * 2, tutV), l = tsw(0, 9, L * 0.18 * (1 - tEase((t - 4) / 5)), tutL);
       tutCam(p, l);
     }, [
       [1.6, () => tutCard('PIRATE GAME', 'THE OCEAN', 4.2)],
-      [7.6, () => tutSay('Somewhere far beyond the charts, off the edge of the known sea...', 3.4)],
-      [10.6, () => tutFadeTo(1, 0.8), true],
+      [6.4, () => tutSay('Somewhere far beyond the charts, off the edge of the known sea...', 5.4)],
+      [11.6, () => tutFadeTo(1, 0.8), true],
     ], () => tutCabin());
   }
   // ---- the great cabin: at the desk, then the hull shakes ----
@@ -16260,17 +16474,17 @@ window.__pgBoot = () => {
     IP.set(0, 0, -4.7); P.facing = 0; TUT.sit = 1; TUT.seat = true;
     tutFadeTo(0, 1.0);
     const at = (x, y, z, o) => interior.root.localToWorld((o || new THREE.Vector3()).set(x, y, z));
-    tutCine(7.4, () => {
-      const t = TUT.cine.t;
+    tutCine(9.0, () => {
+      const t = TUT.cine.t * 3.4 / 4.6;   // (the shots, stretched to the longer scene)
       if (t < 3.4) tutCam(at(1.9 - t * 0.12, 1.75, -1.6 - t * 0.1, tutV), at(0, 1.25, -4.6, tutL));   // across the desk at the captain, poring over a chart
       else { const u = tEase((t - 3.4) / 3.5); tutCam(at(1.5 - u * 2.6, 1.8 + u * 0.3, -1.9 + u * 0.4, tutV), at(-0.3 * u, 1.4 + u * 0.3, -4.6 + u * 0.5, tutL)); }
     }, [
-      [0.4, () => tutSay('The great cabin. Yer charts, yer lamp, and the long night\'s watch...', 2.8)],
-      [3.0, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 1.2); SFX.creak(); }],
-      [3.0, () => musicCue(0, 0.12), true],   // the music dies with the crash: silence and the fight from here
-      [3.2, () => tutSay('<b>*CRASH*</b>', 1.2)],
-      [4.0, () => { TUT.seat = false; }, true],
-      [4.4, () => tutSay('<b>First Mate Hargreave</b> (from the deck): CAPTAIN! Blackwater colours off the starboard side! She\'s rammed us!', 3.4)],
+      [0.5, () => tutSay('The great cabin, and the long night\'s watch...', 3.6)],
+      [4.6, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 1.2); SFX.creak(); }],
+      [4.6, () => musicCue(0, 0.12), true],   // the music dies with the crash: silence and the fight from here
+      [4.8, () => tutSay('<b>*CRASH*</b>', 1.2)],
+      [5.4, () => { TUT.seat = false; }, true],
+      [6.0, () => tutSay('<b>First Mate Hargreave</b> (from the deck): CAPTAIN! Blackwater colours off the starboard side! She\'s rammed us!', 3.4)],
     ], () => {
       TUT.seat = false; TUT.sit = 0; IP.set(1.0, 0, -4.95); P.facing = 0; yaw = P.facing + Math.PI; pitch = 0.3;
       tutObj('GET ON DECK', [['door', 'Walk to the cabin doors (WASD) and press <b>E</b>']]);
@@ -16283,22 +16497,22 @@ window.__pgBoot = () => {
     const r = tutMakeRaider(170, 20); TUT.r1 = r;
     const L = ship.T.L, lat0 = 170, latEnd = tutLat(r);
     TUT.pinLat = lat0; TUT.pinAlong = 20;
-    tutCine(7.2, () => {
+    tutCine(8.8, () => {
       const t = TUT.cine.t;
       TUT.pinLat = t < 3.6 ? lat0 + (latEnd - lat0) * tEase(t / 3.6) : latEnd; TUT.pinAlong = 20 * (1 - tEase(t / 3.6));
       if (t < 3.8) tutCam(tsw(-L * 0.3, 50 - t * 4, -L * 1.15, tutV), tsw(TUT.pinLat * 0.5, 2, L * 0.1, tutL));   // high over our stern, the raider closing on the starboard side
       else { const c = Math.cos(ship.heading), s2 = Math.sin(ship.heading), o = (lx, ly, lz, v) => v.set(P.pos.x + lx * c + lz * s2, P.pos.y + ly, P.pos.z - lx * s2 + lz * c); tutCam(o(-5, 4.5, -7, tutV), o(7, 1.2, 5, tutL)); }   // at the captain's shoulder: boarders over the starboard rail
     }, [
-      [0.3, () => tutSay('<b>Hargreave:</b> There she is, a Blackwater raider, coming in fast!', 3)],
+      [0.3, () => tutSay('<b>Hargreave:</b> There she is, coming in fast!', 3.4)],
       [3.5, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 0.9); ship.krJolt = 0.8; }],
       [3.7, () => { tutSiege(r); }, true],
-      [4.6, () => { if (!TUT.cp) tutPhase('slash'); }, true],
-      [4.0, () => tutSay('<b>Hargreave:</b> Grapples! They\'re boarding us! Draw yer blade, Captain, they\'re coming for YOU!', 3.2)],
+      [7.6, () => { if (!TUT.cp) tutPhase('slash'); }, true],
+      [4.0, () => tutSay('<b>Hargreave:</b> Grapples! They\'re boarding us! Draw yer blade, Captain!', 4.4)],
     ], () => {
       TUT.pinLat = latEnd; TUT.pinAlong = 0; TUT.stage = 'combat';
       if (!SIEGE.on) tutSiege(r);
       if (!TUT.cp) tutPhase('slash');
-      tutSay('<b>Hargreave:</b> The lads have their own to deal with! That one\'s yours, Captain! <b>F</b> to slash!', 3.6);
+      tutSay('<b>Hargreave:</b> The lads have their own fights! That one\'s yours: <b>F</b> to slash!', 4);
     });
   }
   // ---- the wheel and the guns ----
@@ -16418,7 +16632,7 @@ window.__pgBoot = () => {
     musicCue(null); if (skipped) MUSDIR.f = Math.max(MUSDIR.f, 0.3);
     TUT.on = false; TUT.stage = 'done'; TUT.lie = 0; player.root.rotation.order = 'XYZ'; tutObj(null); tutBars(false);
     document.body.classList.remove('tutOn', 'tutNoPrompt');
-    STATE.seen = true; save();
+    STATE.seen = true; if (!skipped) STATE.wrecked = true; save();
     setTimeout(() => toast(skipped ? 'Talk to the townsfolk for work, and sail through floating cargo for gold!' : 'Shipwrecked on Gull Island. Find Harbormaster Hal at the dock: he can get ye a new ship. The townsfolk will have work for ye.'), 600);
   }
 
@@ -16465,14 +16679,14 @@ window.__pgBoot = () => {
         if (L.onLand) L.onLand(); }
     }
   }
-  const STB = [Math.PI / 2, Math.PI / 3, Math.PI * 2 / 3, 0, Math.PI, -Math.PI / 2, -Math.PI / 4, Math.PI / 4];   // starboard first: that's where they come over
+  const STBD = [Math.PI / 2, Math.PI / 3, Math.PI * 2 / 3, 0, Math.PI, -Math.PI / 2, -Math.PI / 4, Math.PI / 4];   // starboard first: that's where they come over
   function tutPhase(p) {
     TUT.cp = p; TUT.cpT = 0; const dmg = curSword().dmg;
     if (p === 'slash') {
-      TUT.foe = tutBoarder(Math.round(dmg * 3.6), STB);
+      TUT.foe = tutBoarder(Math.round(dmg * 3.6), STBD);
       tutObj('COMBAT 1/3: ATTACK', [['slash', '<b>F</b>: slash the boarder'], ['combo', 'Tap <b>F</b> three times in a row: full combo'], ['k1', 'Cut him down']]);
     } else if (p === 'block') {
-      TUT.foe = tutBoarder(Math.round(dmg * 1.6), STB, 3.5); TUT.foe.tutGuard = true; TUT.nBlock = 0;
+      TUT.foe = tutBoarder(Math.round(dmg * 1.6), STBD, 3.5); TUT.foe.tutGuard = true; TUT.nBlock = 0;
       tutSay('<b>Hargreave:</b> Watch this one, Captain, he\'s a real swordsman! Ye\'ll not get through his guard. Block him!', 4);
       tutObj('COMBAT 2/3: DEFEND', [['block', 'Hold <b>X</b> or right-click to block his blows (0/2)'], ['parry', 'Block just as his blade swings: <b>PARRY</b>'], ['riposte', 'Strike while he reels']]);
     } else if (p === 'slam') {
@@ -16502,7 +16716,7 @@ window.__pgBoot = () => {
       if (down(F)) { tutTick('slash'); tutTick('k1'); if (!TUT.nextT) { TUT.nextT = 1.4; tutSay('<b>Hargreave:</b> That\'s the way! Here comes another!', 2); } }
     } else if (TUT.cp === 'block') {
       if (!TUT.done.parry && F.st === 'fight') {
-        if (F.guardT > 0.3 && !(TUT.guardT > 0)) { TUT.guardT = 4; tutSay('<b>Hargreave:</b> He\'s catching every cut! Block him, then <b>PARRY</b>!', 2.6); }
+        if (F.guardT > 0.3 && !(TUT.guardT > 0) && tutCapT <= 0.5) { TUT.guardT = 4; tutSay('<b>Hargreave:</b> He\'s catching every cut! Block him, then <b>PARRY</b>!', 2.6); }
         if (F.slashT <= 0 && F.windT <= 0) F.atkT = Math.min(F.atkT, 1.5);   // he keeps coming
       }
       TUT.guardT = (TUT.guardT || 0) - dt;
@@ -16627,7 +16841,7 @@ window.__pgBoot = () => {
       if (TUT.pair) { const n = TUT.pair.filter(r => r.state === 'sinking' || r.state === 'gone').length; const e = tutUI.obj.querySelector('[data-k="sink2"]'); if (e) e.innerHTML = `Sink the two raiders (${n}/2)`;
         if (n === 2) { tutTick('sink2'); TUT.stage = 'lull'; TUT.t = 0; musicCue(0.75, 1.2, true); tutSay('<b>Hargreave:</b> Ha! That\'s the last of \'em! Not a Blackwater sail left on the...', 3.2); } }
     }
-    if (TUT.stage === 'lull' && TUT.t > 3.4) tutBeast();
+    if (TUT.stage === 'lull' && TUT.t > 5.6) tutBeast();
     // waking on the beach: flat on yer back, then up
     if (TUT.lie > 0.001 && !inInterior) {
       player.root.rotation.order = 'YXZ'; player.root.rotation.set(-Math.PI / 2 * TUT.lie, P.facing, 0); player.root.position.y = P.pos.y + 0.18 * TUT.lie;
@@ -16882,6 +17096,7 @@ window.__pgBoot = () => {
     updateClash(dt, t);
     updateSerpents(dt, t);
     updateSeaBeast(dt, t);
+    try { updateStoryBeast(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     updateEnvironment(dt);
     try { updateTut(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }   // the opening: its cutscenes take the camera
     try { applyAbyss(dt); } catch (e) { console.error(e); }
