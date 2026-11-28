@@ -3650,15 +3650,34 @@ window.__pgBoot = () => {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, len, 7), mat);
     m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); return m;
   }
-  // torn sailcloth, for the Revenant: white is cloth, black is gone. The foot hangs in ragged tongues, the edges are
-  // bitten away, long rips run up from the hem and holes are shot right through
-  const TATTER_TEX = (() => canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#000';
-    g.beginPath(); g.moveTo(0, h); for (let x = 0; x <= w; x += 8) g.lineTo(x, h - 10 - Math.random() * (x % 48 < 24 ? 70 : 28)); g.lineTo(w, h); g.closePath(); g.fill();   // the foot: hanging tongues
-    for (const sd of [0, 1]) { g.beginPath(); const x0 = sd ? w : 0; g.moveTo(x0, 0); for (let y = 0; y <= h; y += 10) g.lineTo(sd ? w - 4 - Math.random() * 18 : 4 + Math.random() * 18, y); g.lineTo(x0, h); g.closePath(); g.fill(); }   // bitten edges
-    for (let k = 0; k < 6; k++) { let x = 30 + Math.random() * (w - 60), y = h - 20; g.beginPath(); g.moveTo(x - 4, y); for (let n = 0; n < 6; n++) { x += (Math.random() - 0.5) * 18; y -= 12 + Math.random() * 18; g.lineTo(x, y); } g.lineTo(x + 3, y); for (let n = 0; n < 6; n++) { g.lineTo(x + 5 + Math.random() * 4, y += 15); } g.closePath(); g.fill(); }   // rips up from the hem
-    for (let k = 0; k < 9; k++) { const x = 30 + Math.random() * (w - 60), y = 25 + Math.random() * (h - 90), r = 5 + Math.random() * 16; g.beginPath(); for (let a = 0; a < 6.3; a += 0.5) { const rr = r * (0.6 + Math.random() * 0.6); a ? g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : g.moveTo(x + rr, y); } g.closePath(); g.fill(); }   // holes
-  }))();
+  // torn sailcloth, for the Revenant: white is cloth, black is gone. Ten different ruins, so no two sails tear alike:
+  // ragged hems, bitten edges, rips up from the foot, shot holes, a great slash, a corner torn away, the foot shredded into
+  // ribbons, a gaping hole blown through the middle, a split down the centre, or the head half torn from its yard
+  const TATTER_TEXS = [];
+  function tatterTex(k) {
+    k %= 10; if (TATTER_TEXS[k]) return TATTER_TEXS[k];
+    return (TATTER_TEXS[k] = canvasTex(256, 256, (g, w, h) => {
+      const R = Math.random, blob = (x, y, r, j) => { g.beginPath(); for (let a = 0; a <= 6.3; a += 0.45) { const rr = r * (1 - j + R() * j * 2); a ? g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : g.moveTo(x + rr, y); } g.closePath(); g.fill(); };
+      const rip = (x, y, len, dx, wid) => { g.beginPath(); g.moveTo(x - wid, y); let cx = x, cy = y; const pts = []; for (let n = 0; n < 7; n++) { cx += dx * len / 7 + (R() - 0.5) * 14; cy -= len / 7; pts.push([cx, cy]); g.lineTo(cx - wid * (1 - n / 7), cy); } for (let n = pts.length - 1; n >= 0; n--) g.lineTo(pts[n][0] + wid * (1 - n / 7), pts[n][1] + 4); g.lineTo(x + wid, y); g.closePath(); g.fill(); };
+      g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#000';
+      // every sail: a ragged foot and nibbled edges, some worse than others
+      const footD = [40, 70, 25, 55, 90, 35, 20, 60, 45, 30][k];
+      g.beginPath(); g.moveTo(0, h); for (let x = 0; x <= w; x += 6 + R() * 6) g.lineTo(x, h - 6 - R() * footD * (R() < 0.3 ? 1.6 : 0.6)); g.lineTo(w, h); g.closePath(); g.fill();
+      for (const sd of [0, 1]) { g.beginPath(); g.moveTo(sd ? w : 0, 0); for (let y = 0; y <= h; y += 8 + R() * 6) g.lineTo(sd ? w - 2 - R() * (8 + k % 3 * 8) : 2 + R() * (8 + k % 4 * 6), y); g.lineTo(sd ? w : 0, h); g.closePath(); g.fill(); }
+      switch (k) {
+        case 0: for (let n = 0; n < 5; n++) rip(30 + R() * 196, h - 15, 90 + R() * 60, (R() - 0.5) * 0.4, 4); for (let n = 0; n < 6; n++) blob(30 + R() * 196, 30 + R() * 150, 6 + R() * 10, 0.4); break;   // rips and shot holes
+        case 1: blob(w * (0.4 + R() * 0.2), h * (0.4 + R() * 0.15), 55 + R() * 20, 0.35); for (let n = 0; n < 4; n++) blob(w * 0.5 + (R() - 0.5) * 150, h * 0.45 + (R() - 0.5) * 120, 8 + R() * 8, 0.5); break;   // a great hole blown through the middle
+        case 2: { g.beginPath(); const y0 = 40 + R() * 40; g.moveTo(10, y0); for (let x = 10; x <= w - 10; x += 16) g.lineTo(x, y0 + (x / w) * 150 + (R() - 0.5) * 14 - 9); for (let x = w - 10; x >= 10; x -= 16) g.lineTo(x, y0 + (x / w) * 150 + (R() - 0.5) * 14 + 9); g.closePath(); g.fill(); break; }   // a long slash corner to corner
+        case 3: { g.beginPath(); const sx = R() < 0.5; g.moveTo(sx ? w : 0, h); g.lineTo(sx ? w : 0, h * (0.25 + R() * 0.2)); for (let n = 0; n <= 8; n++) { const u = n / 8; g.lineTo(sx ? w - u * w * 0.6 + (R() - 0.5) * 18 : u * w * 0.6 + (R() - 0.5) * 18, h * (0.3 + u * 0.7) + (R() - 0.5) * 18); } g.closePath(); g.fill(); break; }   // a whole corner torn away
+        case 4: for (let x = 12; x < w - 12; x += 20 + R() * 10) { g.fillRect(x, h * (0.35 + R() * 0.2), 5 + R() * 5, h); } break;   // the foot shredded into hanging ribbons
+        case 5: for (let n = 0; n < 22; n++) blob(20 + R() * 216, 20 + R() * 180, 3 + R() * 8, 0.5); break;   // riddled with grapeshot
+        case 6: rip(w * (0.45 + R() * 0.1), h - 5, h * 0.85, 0, 7); for (let n = 0; n < 3; n++) blob(30 + R() * 196, 40 + R() * 140, 9 + R() * 8, 0.4); break;   // split up the middle
+        case 7: { g.beginPath(); g.moveTo(0, 0); for (let x = 0; x <= w * 0.7; x += 14) g.lineTo(x, 20 + R() * 50 + Math.sin(x / 30) * 12); g.lineTo(w * 0.7, 0); g.closePath(); g.fill(); for (let n = 0; n < 3; n++) rip(40 + R() * 176, h - 10, 70 + R() * 40, (R() - 0.5) * 0.6, 4); break; }   // the head half torn from its yard
+        case 8: for (let n = 0; n < 3; n++) blob(40 + R() * 176, 50 + R() * 130, 25 + R() * 18, 0.45); break;   // three big ragged holes
+        default: for (let n = 0; n < 8; n++) rip(20 + R() * 216, h - 10, 60 + R() * 110, (R() - 0.5) * 0.8, 3 + R() * 3); break;   // torn to strips from the hem up
+      }
+    }));
+  }
   function quadSail(g, p00, p10, p01, p11, bulge, mat, square) {
     const A = 10, Bn = 8, pos = [], uv = [], idx = [], v = new THREE.Vector3();
     for (let j = 0; j <= Bn; j++) for (let i = 0; i <= A; i++) {
@@ -4124,7 +4143,8 @@ window.__pgBoot = () => {
 
     // masts, sails, rigging
     const sailMat = new THREE.MeshLambertMaterial({ map: sailTex(S.sail, S.pattern, S.emblem), side: THREE.DoubleSide });
-    if (S.tattered) { sailMat.alphaMap = TATTER_TEX; sailMat.alphaTest = 0.5; }   // rotten canvas: ragged hems, rips and holes
+    let tk = Math.floor(Math.random() * 10);   // each sail gets its own ruin
+    const sm = () => { if (!S.tattered) return sailMat; const m2 = sailMat.clone(); m2.alphaMap = tatterTex(tk++); m2.alphaTest = 0.5; return m2; };
     const mastMat = lam(0x5e4028), rig = [], flags = [], furl = [], rigMat = new THREE.LineBasicMaterial({ color: 0x2a2018 });
     const addLine = (a, b) => rig.push(a.x, a.y, a.z, b.x, b.y, b.z);
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -4155,7 +4175,7 @@ window.__pgBoot = () => {
         spar(g, V(-ww / 2 - 0.5, yy, sz - 0.1), V(ww / 2 + 0.5, yy, sz - 0.1), 0.16, mastMat);
         // the sail hangs from a pivot at its yard so the crew can furl it up and let it drop
         const pv = new THREE.Group(); pv.position.set(0, yy, sz); g.add(pv);
-        quadSail(pv, V(-ww / 2, -hh, 0), V(ww / 2, -hh, 0), V(-wt / 2, 0, 0), V(wt / 2, 0, 0), V(0, 0, ww * 0.14), sailMat, true);
+        quadSail(pv, V(-ww / 2, -hh, 0), V(ww / 2, -hh, 0), V(-wt / 2, 0, 0), V(wt / 2, 0, 0), V(0, 0, ww * 0.14), sm(), true);
         const sl = [], L2 = (a, b) => sl.push(a.x, a.y, a.z, b.x, b.y, b.z);
         L2(V(-ww / 2 - 0.4, 0, 0), V(-ww * 0.3, -hh, ww * 0.08)); L2(V(ww / 2 + 0.4, 0, 0), V(ww * 0.3, -hh, ww * 0.08));
         [-1 / 3, 0, 1 / 3].forEach(f => { const x = f * ww, mid = V(x * 0.97, -hh / 2, ww * 0.14 * (1 - 2 * f * f) * 0.95 + 0.06); L2(V(x * 0.92, 0.05, 0.05), mid); L2(mid, V(x, -hh, 0.04)); });
@@ -4169,7 +4189,7 @@ window.__pgBoot = () => {
         spar(g, V(0, y0, mz), boomEnd, 0.15, mastMat); spar(g, V(0, y1, mz), peak, 0.13, mastMat);
         const gp = new THREE.Group(); gp.position.set(0, 0, mz); g.add(gp);
         const rel = v => v.clone().sub(V(0, 0, mz));
-        quadSail(gp, V(0, y0 + 0.1, 0), rel(boomEnd), V(0, y1 - 0.1, 0), rel(peak), V(m.gaff.boom * 0.1, 0, 0), sailMat, false);
+        quadSail(gp, V(0, y0 + 0.1, 0), rel(boomEnd), V(0, y1 - 0.1, 0), rel(peak), V(m.gaff.boom * 0.1, 0, 0), sm(), false);
         furl.push({ pv: gp, kind: 'gaff' });
         addLine(peak, V(0, tip - 1, m.z)); addLine(boomEnd, V(0, F.deckY(-L / 2) + 0.3, -L / 2 + 0.5));
       }
@@ -4177,7 +4197,7 @@ window.__pgBoot = () => {
         const fore = V(0, base + m.h * 0.3, m.z + m.lateen * 0.42), aft = V(0, base + m.h * 0.95, m.z - m.lateen * 0.58);
         const clew = V(0, base + 8.6, m.z - m.lateen * 0.48);
         spar(g, fore.clone().add(V(0, -0.4, 0.8)), aft.clone().add(V(0, 0.5, -0.9)), 0.16, mastMat);
-        quadSail(g, fore, clew, fore, aft, V(m.lateen * 0.09, 0, 0), sailMat, false);
+        quadSail(g, fore, clew, fore, aft, V(m.lateen * 0.09, 0, 0), sm(), false);
       }
       return { base, pTop, cTop, tip, r, z: m.z, yards };
     });
@@ -4187,13 +4207,13 @@ window.__pgBoot = () => {
       const tack = i === 0 ? bsTip.clone() : bsBase.clone().addScaledVector(bsDir, S.bowsprit.len * 0.45);
       const head = V(0, fm.base + (fm.tip - fm.base) * hk, fm.z + 0.3);
       const clew = V(0, F.deckY(fm.z + 1.5) + 1.6, fm.z + 1.5 + i * 1.5);
-      quadSail(g, tack, clew, tack, head, V((i ? -1 : 1) * 0.8 + 0.6, 0, 0), sailMat, false);
+      quadSail(g, tack, clew, tack, head, V((i ? -1 : 1) * 0.8 + 0.6, 0, 0), sm(), false);
       addLine(tack, head);
     });
     if (S.bowsprit.spritsail) {
       const yp = bsBase.clone().addScaledVector(bsDir, S.bowsprit.len * 0.62), ww = B * 0.95, hh = 5.2;
       spar(g, V(-ww / 2 - 0.4, yp.y - 0.4, yp.z), V(ww / 2 + 0.4, yp.y - 0.4, yp.z), 0.13, mastMat);
-      quadSail(g, V(-ww / 2, yp.y - 0.4 - hh, yp.z + 0.3), V(ww / 2, yp.y - 0.4 - hh, yp.z + 0.3), V(-ww * 0.45, yp.y - 0.4, yp.z), V(ww * 0.45, yp.y - 0.4, yp.z), V(0, 0, 1.1), sailMat, true);
+      quadSail(g, V(-ww / 2, yp.y - 0.4 - hh, yp.z + 0.3), V(ww / 2, yp.y - 0.4 - hh, yp.z + 0.3), V(-ww * 0.45, yp.y - 0.4, yp.z), V(ww * 0.45, yp.y - 0.4, yp.z), V(0, 0, 1.1), sm(), true);
     }
     if (S.bowsprit.topmast) spar(g, bsTip.clone().add(V(0, -0.3, 0)), bsTip.clone().add(V(0, 3.6, 0.2)), 0.12, mastMat);
     // standing rigging
