@@ -1739,8 +1739,12 @@ window.__pgBoot = () => {
         mk(new THREE.BoxGeometry(2.5, 8.6, 0.08), cloth, 1.4, 6.8, 0.55, arm); for (let j = 0; j < 5; j++) mk(new THREE.BoxGeometry(2.7, 0.12, 0.14), DARK_WOOD, 1.4, 2.8 + j * 2, 0.62, arm); }
       HMX.sails = hub;
       // sacks of flour and a cart by the door
-      for (let k = 0; k < 4; k++) mk(new THREE.SphereGeometry(0.6, 8, 6), lam(0xe0d6bc), -2.4 + (k % 2) * 1.1, 0.95 + Math.floor(k / 2) * 0.8, 5.2 + (k % 2) * 0.4, g).scale.set(1, 1.2, 0.8);
-      { const cart = new THREE.Group(); cart.position.set(3.6, 0.6, 6.5); cart.rotation.y = 0.4; g.add(cart); mk(new THREE.BoxGeometry(2.4, 0.9, 3.6), WOOD, 0, 1.1, 0, cart); for (const sx of [-1.35, 1.35]) mk(new THREE.CylinderGeometry(0.75, 0.75, 0.2, 10), DARK_WOOD, sx, 0.75, 0, cart, 0, 0, Math.PI / 2); mk(new THREE.BoxGeometry(0.15, 0.15, 3), DARK_WOOD, 0, 0.9, 3, cart); }
+      // (each set on the ground where it stands, not at the tower's height: the hill falls away by the door)
+      g.updateMatrixWorld(true); const wAt = (lx, lz) => { const w = new THREE.Vector3(lx, 0, lz).applyMatrix4(g.matrixWorld); return w; };
+      { const sk = new THREE.Group(); G.add(sk); const sackM = lam(0xe0d6bc);
+        for (let k = 0; k < 4; k++) { const w = wAt(-2.4 + (k % 2) * 1.1, 5.2 + (k % 2) * 0.4), top = k > 1; const gy = heightAt(w.x, w.z); mk(new THREE.SphereGeometry(0.6, 8, 6), sackM, w.x, gy + 0.62 + (top ? 0.95 : 0), w.z, sk, 0, g.rotation.y, 0).scale.set(1, 1.2, 0.8); } }
+      { const cart = new THREE.Group(), w = wAt(3.6, 6.5), cy = g.rotation.y + 0.4; let gy = 1e9; for (const [ax, az] of [[-1.35, 0], [1.35, 0], [0, 3]]) { const q = new THREE.Vector3(ax, 0, az).applyAxisAngle(new THREE.Vector3(0, 1, 0), cy); gy = Math.min(gy, heightAt(w.x + q.x, w.z + q.z)); }
+        cart.position.set(w.x, gy, w.z); cart.rotation.y = cy; G.add(cart); mk(new THREE.BoxGeometry(2.4, 0.9, 3.6), WOOD, 0, 1.1, 0, cart); for (const sx of [-1.35, 1.35]) mk(new THREE.CylinderGeometry(0.75, 0.75, 0.2, 10), DARK_WOOD, sx, 0.75, 0, cart, 0, 0, Math.PI / 2); mk(new THREE.BoxGeometry(0.15, 0.15, 3), DARK_WOOD, 0, 0.9, 3, cart); }
       colliders.push({ x: p.x, z: p.z, r: 4.6 }); SPOTS.push({ x: p.x, z: p.z, r: 16 }); }
     // -- the watchtower on the summit: a ruined round keep with a signal fire, and Gull Island's flag
     { const p = HOME.top, g = new THREE.Group(); g.userData.found = 'plinth'; g.position.set(p.x, heightAt(p.x, p.z) - 0.8, p.z); G.add(g);
