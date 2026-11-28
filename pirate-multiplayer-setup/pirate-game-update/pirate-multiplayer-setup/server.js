@@ -111,6 +111,10 @@ console.log(`Serpent Horn belongs to the ${HORN.owner} account`);
 const hornOwns = q => !!(HORN.owner && q && (q.acct || '').toLowerCase() === HORN.owner.toLowerCase());
 const giftsPending = new Map();   // gift id -> { admin, name, amount, timer }
 const hornMsg = q => serverEmit('horn', { owner: HORN.owner, mine: hornOwns(q) });
+// ---------- the Cursed Blade: only the accounts named in CURSED_PLAYERS (comma-separated, in Render's Environment tab) may claim it ----------
+const CURSED = (process.env.CURSED_PLAYERS || HORN.owner || 'bob3').split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+console.log(`The Cursed Blade can be claimed by: ${CURSED.join(', ')}`);
+const cursedMsg = q => serverEmit('cursed', { ok: !!(q && CURSED.includes((q.acct || '').toLowerCase())) });
 function hornClaim(me) { send(me.ws, hornMsg(me)); }   // the game asks who holds the horn
 // a horn serpent's bite on another player's ship, with the serpent right beside that ship. A sinking bite only comes from
 // the true horn's owner (the Elder Serpent); anyone else's common sea serpent bites for at most 22
@@ -194,6 +198,7 @@ wss.on('connection', ws => {
       for (const k of ['bsnap', 'rsnap', 'ksnap', 'ssnap', 'bwsnap', 'raid']) send(ws, serverEmit(k === 'raid' ? 'raidsnap' : k, snap[k]));
       send(ws, serverEmit('env', env.snapshot()));
       send(ws, hornMsg(players.get(id)));
+      send(ws, cursedMsg(players.get(id)));
       send(ws, serverEmit('bounties', { list: bountyList() }));
       send(ws, serverEmit('fctl', { isles: fwSnap() }));
       send(ws, serverEmit('lvsnap', abyss.snapshot()));

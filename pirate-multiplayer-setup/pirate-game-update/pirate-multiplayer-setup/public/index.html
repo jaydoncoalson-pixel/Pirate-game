@@ -2140,6 +2140,65 @@ window.__pgBoot = () => {
     if (!p.vw) p.vw = makeWatcher();
     poseWatcher(p.vw, v[0], v[1], v[2], v[3] + (p.vwT = (p.vwKey === v[0] + ',' + v[1] ? (p.vwT || 0) + dt : 0)), v[4] ? v[4] : 0, dt); p.vwKey = v[0] + ',' + v[1];
   }
+  // ---------- The Cursed Blade, and the Revenant ----------
+  // Only certain captains can claim it (online the server decides who: CURSED_PLAYERS in Render's Environment tab; offline,
+  // the owner's account). It lies on a black altar out in the uncharted waters, due north past the edge of the chart.
+  // Whoever takes it is given the Revenant: a dark ship bigger than a galleon, smaller than the Titan, faster than
+  // any ship afloat, wrapped in a thick black aura.
+  const CURSE = { known: false, ok: false, local: ['bob3'] };
+  const cursedOk = () => hornOnline() ? CURSE.ok : CURSE.local.includes(accCur().name.trim().toLowerCase());
+  const CURSED_ALTAR = { x: 600, z: -(EDGE + 4500) };
+  function claimCursed(fromAdmin) {
+    if (!cursedOk()) { toast("The blade's whispers turn to screams. It will not be held by ye, captain."); return false; }
+    if (!STATE.swords.includes('cursed')) STATE.swords.push('cursed');
+    STATE.cursed = true; STATE.sword = 'cursed'; save(); refreshBlade(); setWeapon('cutlass'); onSwordChanged();
+    STATE.ownedShips = Array.isArray(STATE.ownedShips) ? STATE.ownedShips : []; if (!STATE.ownedShips.includes('revenant')) STATE.ownedShips.push('revenant');
+    STATE.shipKey = 'revenant'; save();
+    if (ship) swapPlayerShip(); else spawnShip('revenant');
+    SFX.roar(); SFX.wail && SFX.wail(); flashT = 0.3;
+    toast('Ye take up the Cursed Blade... and the sea gives up the Revenant. Yer ship is gone; she sails in its place.');
+    return true;
+  }
+  // the altar: a crown of black rock rising from the sea, the blade hanging point-down over it in a cloud of black mist
+  let CALT = null;
+  const makeAltar = () => {
+    const g = new THREE.Group(); g.position.set(CURSED_ALTAR.x, 0, CURSED_ALTAR.z); scene.add(g);
+    const rk = new THREE.MeshLambertMaterial({ color: 0x0e0d10 }), rk2 = new THREE.MeshLambertMaterial({ color: 0x1c1a20 });
+    for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283, h = 18 + (i % 3) * 9; const m = new THREE.Mesh(new THREE.ConeGeometry(5 + (i % 2) * 2, h, 5), i % 2 ? rk : rk2); m.position.set(Math.cos(a) * 16, h / 2 - 4, Math.sin(a) * 16); m.rotation.set(Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.25); g.add(m); }
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(12, 15, 10, 9), rk); plat.position.y = 0; g.add(plat);
+    const bl = buildBlade(SWORDS.cursed.look); bl.scale.setScalar(6); bl.rotation.x = Math.PI / 2; bl.position.y = 22; g.add(bl);
+    const L = new THREE.PointLight(0x8a2aff, 2.5, 120, 2); L.position.y = 22; g.add(L);
+    const mist = []; for (let i = 0; i < 26; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })); s.userData = { a: Math.random() * 6.28, r: 6 + Math.random() * 18, y: 6 + Math.random() * 30, sz: 14 + Math.random() * 16, sp: (Math.random() - 0.5) * 0.6 }; g.add(s); mist.push(s); }
+    return { g, bl, L, mist, toldT: -99 };
+  };
+  function updateCursed(dt, t) {
+    // the altar turns and breathes; the blade vanishes once ye've claimed it
+    const A = CALT || (CALT = makeAltar()), near = Math.hypot(camera.position.x - CURSED_ALTAR.x, camera.position.z - CURSED_ALTAR.z) < 3000;
+    A.g.visible = near; if (near) { A.bl.visible = !STATE.cursed; A.bl.rotation.z += dt * 0.6; A.bl.position.y = 22 + Math.sin(t * 1.3) * 1.2; A.L.intensity = STATE.cursed ? 0.6 : 2.2 + Math.sin(t * 2.7) * 0.6;
+      for (const s of A.mist) { const u = s.userData; u.a += u.sp * dt; s.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(t * 0.7 + u.a) * 2, Math.sin(u.a) * u.r); s.scale.setScalar(u.sz); } }
+    if (!STATE.cursed && near) {
+      const px = sailing && ship ? ship.x : P.pos.x, pz = sailing && ship ? ship.z : P.pos.z, d = Math.hypot(px - CURSED_ALTAR.x, pz - CURSED_ALTAR.z);
+      if (d < (sailing && ship ? ship.T.L * 0.6 + 40 : 22)) { if (cursedOk()) claimCursed(); else if (clock.elapsedTime - A.toldT > 20) { A.toldT = clock.elapsedTime; toast("Whispers rise from the black altar... and turn to screams. The Cursed Blade will not be held by ye."); SFX.wail && SFX.wail(); } }
+      else if (d < 600 && clock.elapsedTime - A.toldT > 30) { A.toldT = clock.elapsedTime; toast(cursedOk() ? 'Something on the black rocks ahead is calling yer name...' : 'A cold voice in the wind: not for ye.'); }
+    }
+    // a thin black smoke curls off the blade while it's in yer hand
+    if (STATE.sword === 'cursed' && player && PLAYER.weapon === 'cutlass' && Math.random() < dt * 14) { const w = new THREE.Vector3(); (player.props && player.props.blade || player.root).getWorldPosition(w); puff(w.x + (Math.random() - 0.5) * 0.6, w.y + Math.random() * 0.8, w.z + (Math.random() - 0.5) * 0.6, { color: 0x050307, size: 0.35 + Math.random() * 0.3, life: 0.9, grow: 1.2, vy: 0.8, op: 0.7 }); }
+    // the Revenant's aura: a thick black cloud clinging round her hull, and black smoke streaming off her
+    for (let i = REV_AURAS.length - 1; i >= 0; i--) { const R = REV_AURAS[i]; if (!R.m.group.parent) { REV_AURAS.splice(i, 1); continue; }
+      for (const s of R.sprites) { const u = s.userData; u.ph += dt * u.sp; s.position.set(u.x + Math.sin(u.ph) * 1.5, u.y + Math.sin(u.ph * 0.7) * 1.2, u.z + Math.cos(u.ph * 0.8) * 2); s.material.opacity = u.op * (0.8 + 0.2 * Math.sin(u.ph * 1.3)); }
+      if (Math.abs(R.m.group.position.x - camera.position.x) < 2500 && Math.abs(R.m.group.position.z - camera.position.z) < 2500 && Math.random() < dt * 18) {
+        const T = R.m.T, K = R.m.K || 1, lx = (Math.random() - 0.5) * T.B * 1.2, lz = (Math.random() - 0.5) * T.L; const w = new THREE.Vector3(lx, T.D + Math.random() * 6, lz).applyMatrix4(R.m.group.matrixWorld);
+        puff(w.x, w.y, w.z, { color: 0x030204, size: (5 + Math.random() * 6) * K, life: 2.4, grow: 1.6, vy: 1.5, op: 0.6 }); } }
+  }
+  const REV_AURAS = [];
+  function addRevenantAura(m) {
+    const T = m.T, sprites = [];
+    for (let i = 0; i < 46; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
+      const side = Math.random() < 0.5 ? -1 : 1; s.userData = { x: side * T.B * (0.35 + Math.random() * 0.45), y: -0.5 + Math.random() * (T.D + 10), z: (Math.random() - 0.5) * T.L * 1.05, ph: Math.random() * 6, sp: 0.3 + Math.random() * 0.5, op: 0.4 + Math.random() * 0.3 };
+      s.scale.setScalar(7 + Math.random() * 9); m.group.add(s); sprites.push(s); }
+    const glow = new THREE.PointLight(0x6a1ad8, 1.2, T.L * 1.2, 2); glow.position.set(0, T.D + 4, 0); m.group.add(glow);
+    REV_AURAS.push({ m, sprites });
+  }
   function updateHome(dt, t) {
     if (HMX.sails) HMX.sails.rotation.z -= dt * 0.55;
     for (const F of HMX.flames) { const k = 0.8 + 0.25 * Math.sin(t * 9 + F.ph) + 0.15 * Math.sin(t * 23 + F.ph * 2); F.f.scale.set(F.s * (0.85 + 0.15 * Math.sin(t * 7 + F.ph)), F.s * k * 1.2, 1); F.f.material.opacity = 0.75 + 0.25 * Math.sin(t * 13 + F.ph); }
@@ -3544,7 +3603,11 @@ window.__pgBoot = () => {
     helm: { z: -12.5, castle: 1 }, lanterns: false, beak: false, hatchZ: 11.5,
     stairs: { castle: 1, xs: [4.1, -4.1], w: 0.8, zLow: -5.6, zHigh: -9.5, n: 24 }, quarters: { castle: 1 }, deckItems: false,   // (her deck is dressed by titanDecor, at her own scale)
     speed: 11, turn: 0.34, titan: true };
-  const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 2.86 };   // (the Titan: 160 m long, 44 m in the beam)
+  // the Revenant: the Cursed Blade's ship. A galleon's lines blackened and built bigger (104 m, between a galleon and the
+  // Titan), black sails and a bruise-purple trim, and faster than anything else on the water
+  SHIP_TYPES.revenant = Object.assign({}, SHIP_TYPES.galleon, { name: 'The Revenant', hull: 0x111114, bottom: 0x050506, wale: 0x3a1048, portLid: 0x08080a, sail: 0x0d0c10,
+    flags: SHIP_TYPES.galleon.flags.map(f => Object.assign({}, f, { kind: 'jolly' })), speed: 36, turn: 0.62, revenant: true });   // (115 before upgrades: the fastest anything else gets is a fully upgraded sloop on the Tidecaller's current, about 105)
+  const SHIP_SCALE = { sloop: 1.6, brig: 1.8, galleon: 2.0, titan: 2.86, revenant: 2.6 };   // (the Titan: 160 m long, 44 m in the beam)
   function hullFns(S) {
     const half = u => u >= 0 ? Math.pow(Math.max(0, 1 - Math.pow(u, 2.2)), 0.55) : 1 - (1 - S.transom) * Math.pow(-u, 3);
     const sheer = u => S.D + (u < 0 ? S.sternRise * Math.pow(Math.max(0, (-u - 0.3) / 0.7), 1.6) : S.bowRise * Math.pow(Math.max(0, (u - 0.35) / 0.65), 1.8));
@@ -4441,7 +4504,7 @@ window.__pgBoot = () => {
     mergeStatic(g, g.children.filter(c => !preW.has(c) && c.isMesh));   // the cracks, spikes, chains and suckers: a few draw calls instead of hundreds
     m.wraith = true;
   }
-  const SHIP_HP = { sloop: 70, brig: 130, galleon: 240, titan: 3000 };   // the Titan: over twelve galleons' worth of hull
+  const SHIP_HP = { sloop: 70, brig: 130, galleon: 240, titan: 3000, revenant: 1200 };   // the Titan: over twelve galleons' worth of hull
   // ---- Ship upgrades: bought from Harbormaster Hal, kept for each kind of ship ye own ----
   const UPGRADES = {
     hull:    { name: 'Reinforced hull', max: 4, what: L => `+${L * 20}% hull`, mats: L => ({ wood: 2 + 2 * L }), icon: '#8a5a33' },
@@ -4450,7 +4513,7 @@ window.__pgBoot = () => {
     crew:    { name: 'Gun crew drills', max: 3, what: L => `${L * 12}% faster reloading`, mats: () => ({}), icon: '#c9a646' },
     plating: { name: 'Iron plating', max: 3, what: L => `${L * 10}% less hull damage taken`, mats: L => ({ iron: 3 + 2 * L, steel: 1 + L }), icon: '#8a8f96' },
   };
-  const UPG_GOLD = [800, 2000, 4500, 9000], UPG_CLASS = { sloop: 1, brig: 2.5, galleon: 5, titan: 25 };
+  const UPG_GOLD = [800, 2000, 4500, 9000], UPG_CLASS = { sloop: 1, brig: 2.5, galleon: 5, titan: 25, revenant: 12 };
   const upgOf = key => { STATE.upg = STATE.upg || {}; return STATE.upg[key] = STATE.upg[key] || {}; };
   const upgL = (key, k) => (STATE.upg && STATE.upg[key] && STATE.upg[key][k]) || 0;
   const upgCost = (key, k, L) => ({ gold: Math.round(UPG_GOLD[L] * (UPG_CLASS[key] || 1) * (k === 'crew' ? 0.8 : 1) / 50) * 50, mats: UPGRADES[k].mats(L) });   // L = the level being bought (0-based)
@@ -4460,6 +4523,7 @@ window.__pgBoot = () => {
   const gunMul = () => (1 + 0.15 * upgL(ownKey(), 'cannons')) * (isTitan() ? 2.5 : 1) * gearGuns(), reloadMul = () => 1 - 0.12 * upgL(ownKey(), 'crew'), armorMul = () => (1 - 0.1 * upgL(ownKey(), 'plating')) * (isTitan() ? 0.4 : 1);
   const shipMaxHp = (m, key) => Math.round(SHIP_HP[m.key] * hullMul(key) * (STATE.mods && STATE.mods[key] && STATE.mods[key].keel ? 1.3 : 1));
   // build the player's ship: their chosen one, or the sea's wreck while they carry the Sword of the Sea
+  { const baseMake = makeShip; makeShip = function (key, st) { const m = baseMake(key, st); if (key === 'revenant') addRevenantAura(m); return m; }; }
   function buildPlayerShip(key) {
     const fig = (STATE.shipStyle || {}).fig, wr = isWreck(), gh = !wr && isGhostShip(), m = makeShip(key, wr ? Object.assign({}, WRECK_STYLE, { fig: fig && fig !== 'none' ? fig : 'skull' }) : gh ? Object.assign({}, GHOST_STYLE, { fig }) : undefined);   // (the sea and the dead keep yer figurehead)   // the sea claims whichever ship ye sail: a sunken, weed-hung wreck of that very ship
     if (wr) { decorateWreck(m); m.T.speed = SHIP_TYPES.galleon.speed * 3.2 * 2; m.T.turn *= 1.3; }   // (the sea drives every wreck at the same fierce pace)
@@ -4952,7 +5016,7 @@ window.__pgBoot = () => {
     g.fillStyle = '#5a4020'; g.font = '16px Georgia'; g.fillText('N', 228, 30);
   }));
   function buildInterior(key) {
-    const big = key === 'galleon' || key === 'titan';
+    const big = key === 'galleon' || key === 'titan' || key === 'revenant';
     const C = big ? { W: 8, Lr: 26, H: 3.6, guns: 6, masts: [11, -1], ladderZ: 16, cabinZ: -13 } : { W: 5.5, Lr: 15, H: 3.3, guns: 4, masts: [6], ladderZ: 9, cabinZ: -8 };
     const sc = new THREE.Scene(); sc.background = new THREE.Color(0x140d08); sc.fog = new THREE.Fog(0x140d08, 20, 70);
     const root = new THREE.Group(); sc.add(root);
@@ -5603,7 +5667,7 @@ window.__pgBoot = () => {
 
   function spawnCrew() {
     ship.crew = [];
-    const plan = CREW_PLANS[ship.key]; if (!plan) return;
+    const plan = CREW_PLANS[ship.key] || (ship.key === 'revenant' ? CREW_PLANS.galleon : null); if (!plan) return;
     const used = [];
     plan.forEach(p => {
       const q = Object.assign({}, p);
@@ -6513,6 +6577,7 @@ window.__pgBoot = () => {
       STATE.sword = 'seasword'; save(); refreshBlade(); setWeapon('cutlass'); onSwordChanged();
       toast('The Sword of the Sea is yers. The sea itself obeys ye: Z Tsunami, G Maelstrom, T Tempest, H Sea Wall. R calls the kraken. V: become the ELDER KRAKEN.'); SFX.mermaid();
     }, STATE.sword === 'seasword');
+    if (cursedOk()) btn(c, STATE.swords.includes('cursed') ? 'Equip the Cursed Blade' : 'Give me the Cursed Blade (and the Revenant)', () => { if (STATE.swords.includes('cursed')) { STATE.sword = 'cursed'; save(); refreshBlade(); setWeapon('cutlass'); onSwordChanged(); } else claimCursed(true); }, STATE.sword === 'cursed');
     c = sec('Health');
     btn(c, 'Heal me', () => { PLAYER.hp = PLAYER.max; });
     btn(c, 'Repair ship', () => { if (ship) ship.hp = ship.maxHp; else toast('Ye have no ship yet.'); });
@@ -6928,6 +6993,7 @@ window.__pgBoot = () => {
     golden:   { name: "Captain's Golden Sabre", desc: 'Gold-plated with a pearl hilt. Every pirate on the seas will know yer name.', dmg: 48, cool: 0.45, reach: 3.1, arc: 0.15, cost: { pearl: 6, steel: 2 }, gold: 500, look: { style: 'golden', blade: 0xe8c44a, guard: 0xf2ead8, len: 1.1, curve: 0.25, width: 0.11, basket: true } },
     flame:    { name: 'Flame Blade', desc: 'Fire gems set in raider steel. The blade burns with volcanic heat.', dmg: 58, cool: 0.45, reach: 3.2, arc: 0.1, cost: { gem: 2, steel: 4, iron: 2 }, gold: 400, look: { style: 'flame', blade: 0xff5a1f, guard: 0x2a2a2a, len: 1.1, curve: 0.3, width: 0.12, glow: true } },
     tidecaller: { name: 'Tidecaller', desc: "The mermaid's blade, forged in the deep: the strongest blade a captain can earn. Passives: every hit throws an undertow that strikes foes around yer target and mends ye, yer ship sails 20% faster and mends 3x faster, swim 60% faster and heal while swimming, +30% damage at night. R: Tidal Wave smashes ships, serpents and the Kraken ahead of ye. G: Whirlpool drags ships in and grinds them. T: Riptide carries ye forward on a rush of water, cutting down everything in the way.", dmg: 100, cool: 0.36, reach: 3.9, arc: -0.1, cost: {}, gold: 0, legendary: true, look: { style: 'tidecaller', blade: 0x5fe0e8, guard: 0xe8d9a8, len: 1.25, curve: 0.2, width: 0.12, glow: true, glowColor: 0x7ff0ff, basket: true } },
+    cursed: { name: 'The Cursed Blade', desc: "A blade of black steel that drinks the light, whispering in a voice only its bearer hears. Passives: every hit drains life to heal ye (12% of the damage), +25% damage against ships' crews and Blackwater soldiers. Claiming it raises the Revenant, a dark ship faster than any afloat.", dmg: 105, cool: 0.37, reach: 3.8, arc: 0, cost: {}, gold: 0, legendary: true, claim: 'Only a chosen few can claim it, from a black altar in the uncharted waters, due north past the edge of the chart.', look: { blade: 0x141418, guard: 0x2a0e36, len: 1.32, curve: 0.16, width: 0.14, glow: true, glowColor: 0x7a1aff } },
     ghost: { name: "Hollowell's Ghost Blade", desc: "A drowned captain's blade, come back from the deep. Passives: every hit drains life to heal ye, +40% damage at night, and 1 blow in 4 passes straight through ye. R: Wail of the Dead: a shriek from beyond the grave that tears at every foe around ye (30s).", dmg: 62, cool: 0.4, reach: 3.4, arc: 0.05, cost: {}, gold: 0, legendary: true, claim: "Only one who lays a restless captain to rest may wield it. Ask Mother Morrow, the gravedigger in Gull Town.", look: { style: 'ghost', blade: 0x9fffd0, guard: 0xd9d2bf, len: 1.25, curve: 0.1, width: 0.11, glow: true, glowColor: 0x9fffd0 } },
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (for as long as ye like, ye become a colossal scarred grey kraken, as vast as the Elder Serpent, scarred by a thousand fights, that walks the land, swims and dives: its own attacks Z Crushing Grab, R Tentacle Storm, G Ink Cloud, T Maelstrom Spin, B Dive and Breach; 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
@@ -6957,6 +7023,7 @@ window.__pgBoot = () => {
   }
   function swordOnHit(tg, dm, crit, pos) {
     const id = STATE.sword;
+    if (id === 'cursed') { PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + dm * 0.12); for (let k = 0; k < 6; k++) puff(pos.x, pos.y + 1, pos.z, { color: 0x0a0610, size: 0.3, life: 0.6, grow: 0.6, vx: (P.pos.x - pos.x) * 2, vz: (P.pos.z - pos.z) * 2, vy: 1, op: 0.8 }); }   // soul drain: black wisps pulled back to ye
     if (id === 'tidecaller' && !SWP.undertow) {   // Undertow: a surge of water bursts from the blow and strikes those close by, and the sea mends ye
       SWP.undertow = true; PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 6);
       for (const b of bandits) { if (b === tg || b.state === 'dead' || b.state === 'gone' || Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z) > 5) continue; const n = Math.round(dm * 0.45); hitBandit(b, n); dmgNum(b.pos, `${n}`, 'heavy'); }
@@ -6988,7 +7055,7 @@ window.__pgBoot = () => {
     PLAYER.move = { mul: 2.1 + power * 1.3, reach: 1.25 + power * 0.25, arc: -1, heavy: true, slam: true, kb: 10 + power * 6 }; CMB.comboT = 0;
     SFX.swing(); setTimeout(() => SFX.swing(), 90); if (window.__mpSlash) window.__mpSlash(0.3);
   }
-  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a };
+  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a, cursed: 0x6a1ad8 };
   function updateSwordExtras(dt) {
     SWP.dashCd = Math.max(0, (SWP.dashCd || 0) - dt);
     if (SWP.cmdT > 0) { SWP.cmdT -= dt; if (SWP.cmdT <= 0) SWP.cmdN = 0; }
@@ -8325,7 +8392,7 @@ window.__pgBoot = () => {
   // drift over time. Fill yer hold, sail it somewhere that wants it, sell for a profit. A loaded hold draws raiders from
   // further off, and if she sinks, the cargo goes down with her.
   const GOODS = { rum: { name: 'Rum', base: 24, col: 0x8a4a1a }, sugar: { name: 'Sugar', base: 14, col: 0xf2ead8 }, coffee: { name: 'Coffee', base: 32, col: 0x4a2a1a }, spice: { name: 'Spices', base: 46, col: 0xc8501a }, powder: { name: 'Gunpowder', base: 38, col: 0x2a2a2a }, silk: { name: 'Silk', base: 70, col: 0x9b2a8a } };
-  const HOLD = { sloop: 20, brig: 45, galleon: 90, titan: 240 };
+  const HOLD = { sloop: 20, brig: 45, galleon: 90, titan: 240, revenant: 150 };
   const POSTS = [
     { isl: 'Gull Island', make: ['rum'], want: ['silk', 'spice'] },
     { isl: 'Port Coral', make: ['silk', 'sugar'], want: ['rum', 'powder'] },
@@ -8560,7 +8627,7 @@ window.__pgBoot = () => {
   // Hired from Hal: a navy-blue brig or galleon that sails in formation off yer quarter, engages any Blackwater ship that
   // comes near, and takes her own hits. Sunk escorts limp back to port and rejoin ye three minutes later.
   const ESCORT_KINDS = { brig: { name: 'Escort brig', gold: 8000, hp: 360 }, galleon: { name: 'Escort galleon', gold: 20000, hp: 720 } };
-  const escortCap = () => ({ sloop: 1, brig: 1, galleon: 2, titan: 3 }[ownKey()] || 1);
+  const escortCap = () => ({ sloop: 1, brig: 1, galleon: 2, titan: 3, revenant: 2 }[ownKey()] || 1);
   const ESC = { list: [] };
   function makeEscort(kind, slot) {
     const m = makeShip(kind, { sail: 0xf2ead8, hull: 0x1f3a5f, trim: 0xd9b13a, flag: 'blue' });
@@ -15168,6 +15235,7 @@ window.__pgBoot = () => {
       window.__mpRaiderKill = r => { if (!online()) return false; const i = raiders.indexOf(r); if (i < 0) return false; MP.room.emit('rdmg', { i, dmg: 40, el: 1 }).catch(() => {}); return true; };
       window.__mpHornClaim = re => { MP.room.emit('hclaim', { re: re ? 1 : 0 }).catch(() => {}); };
       MP.room.on('horn', m => { if (m.peer !== 'server') return; hornNews(m.data); });
+      MP.room.on('cursed', m => { if (m.peer !== 'server') return; CURSE.known = true; CURSE.ok = !!(m.data && m.data.ok); });
       if (STATE.hornOnline) setTimeout(() => window.__mpHornClaim(true), 1500);   // after a server restart, the first owner claims it back
       window.__mpPeerName = peer => MP.peers.get(peer)?.name;
       // other captains as targets for a horn serpent: where they are, and whether they're aboard their ship
@@ -16035,6 +16103,7 @@ window.__pgBoot = () => {
     try { updateFauna(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateHome(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateVoid(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
+    try { updateCursed(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     try { updateBake(dt); } catch (e) { if (tickErrs++ < 8) console.error(e); }
     if (CMB.shake > 0) { const k = CMB.shake * CMB.shake * 0.5 * SETTINGS.shake / 100; camera.position.x += (Math.random() - 0.5) * k; camera.position.y += (Math.random() - 0.5) * k; camera.position.z += (Math.random() - 0.5) * k; CMB.shake = Math.max(0, CMB.shake - 0.033 * 3); }
     renderer.render(DUN.on ? DUN.scene : inInterior ? interior.scene : (STOM.on || STOM.done) && STOM.scene ? STOM.scene : scene, camera);
