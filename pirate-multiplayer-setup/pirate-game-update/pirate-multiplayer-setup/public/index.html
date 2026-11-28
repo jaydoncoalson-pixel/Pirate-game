@@ -1332,8 +1332,8 @@ window.__pgBoot = () => {
     const orangeM = lam(0xf08a24);
     for (let i = 0; i < 12; i++) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), orangeM); o.position.set(-1.5 + (i % 6) * 0.25, 1.15, -0.3 + Math.floor(i / 6) * 0.25); sg.add(o); }
     [[1.2, 0], [1.6, 0.3]].forEach(([x, z]) => { const c = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), lam(0xa57b4a)); c.position.set(x, 1.25, z); sg.add(c); });
-    colliders.push({ x: st.x, z: st.y, r: 2.3 });
-    QUINT_POS = frameLocal(F, 6, 3.9);
+    colliders.push({ box: true, x: st.x, z: st.y, hw: 2.1, hd: 0.9, rot: sg.rotation.y });
+    QUINT_POS = frameLocal(F, 6, 7.75);   // behind his counter, facing the street
     buildDock({ base: PORT_DOCK_BASE, dir: PORT.toHome, perp: PORT_FRAME.perp, len: PORT_DOCK_LEN, hw: DOCK_HW, head: 18, headLen: 12 }, I.group);
   }
   // ---------- Towns and villages ----------
@@ -1439,7 +1439,7 @@ window.__pgBoot = () => {
       if (goods[1] === 'fish') m.rotation.z = Math.PI / 2; m.position.set(-1.3 + (i % 5) * 0.65, 1.15, -0.3 + Math.floor(i / 5) * 0.55); g.add(m); }
     const bk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.5, 8), VB.thatch); bk.position.set(1.9, 0.25, 0.9); g.add(bk);
     place(F, g, u, v, facing);
-    const p = vAt(F, u, v); colliders.push({ x: p.x, z: p.y, r: 1.9 });
+    const p = vAt(F, u, v); colliders.push({ box: true, x: p.x, z: p.y, hw: 1.8, hd: 0.8, rot: yaw3(F, facing) });   // (shaped to the counter, so ye can walk right up to it)
   }
   function well(F, u, v) {
     const g = new THREE.Group();
@@ -1513,7 +1513,7 @@ window.__pgBoot = () => {
   function addTownFolk(F, big) {
     const name = () => VILLAGER_NAMES[(VILLAGE_NPCS.length) % VILLAGER_NAMES.length];
     const stalls = big ? [[30, 1], [36, 1], [30, -1], [36, -1]] : [[6, 1], [-6, -1]];
-    stalls.forEach(([u, sd], k) => { const at = frameLocal(F, u, sd * (big ? 9.6 : 9)); VILLAGE_NPCS.push({ name: name() + ' the trader', at, face: F.perp.clone().multiplyScalar(-sd), look: villagerLook(), lines: SELLER_LINES[(VILLAGE_NPCS.length + k) % SELLER_LINES.length], far: 420, action: 'write' }); });
+    stalls.forEach(([u, sd], k) => { const at = frameLocal(F, u, sd * (big ? 7.75 : 7.3)); VILLAGE_NPCS.push({ name: name() + ' the trader', at, face: F.perp.clone().multiplyScalar(-sd), look: villagerLook(), lines: SELLER_LINES[(VILLAGE_NPCS.length + k) % SELLER_LINES.length], far: 420, action: 'write' }); });
     VILLAGE_NPCS.push({ name: name() + ' the sweeper', wander: true, speed: 1.0, far: 420, area: () => frameLocal(F, (rand() - 0.5) * 30, (rand() - 0.5) * 8), look: villagerLook(), lines: WORK_LINES.sweep, action: 'swab', props: ['mop'] });
     for (let k = 0; k < (big ? 3 : 1); k++) VILLAGE_NPCS.push({ name: name() + ' the porter', patrol: big ? [frameLocal(F, 78, (k % 2 ? 1 : -1) * 27), frameLocal(F, 60 + k * 6, 0), frameLocal(F, 92, (k - 1) * 2)] : [frameLocal(F, 36, -27), frameLocal(F, 10, 0)], speed: 1.5, far: 420, carry: true, look: villagerLook(), lines: WORK_LINES.carry, props: ['crate'] });
     VILLAGE_NPCS.push({ name: name() + ' the watchman', patrol: [frameLocal(F, -40, 3), frameLocal(F, big ? 70 : 40, 3), frameLocal(F, big ? 70 : 40, -3), frameLocal(F, -40, -3)], speed: 1.4, far: 420, look: { coat: 0x3a4a6a, shirt: 0xe8dfc9, pants: 0x2d2a33, hat: 'tricorn', hatColor: 0x1c1c1c, skin: pickV(V_SKINS), hair: pickV(V_HAIRS) }, lines: WORK_LINES.watch });
@@ -3387,7 +3387,11 @@ window.__pgBoot = () => {
       for (const c of interior.crew) { const d = Math.hypot(c.lp.x - IP.x, c.lp.z - IP.z); if (d < bd) { bd = d; best = c; } }
       return best;
     }
-    for (const n of npcs) { if (n.def.night && !isNight()) continue; const d = Math.hypot(n.pos.x - P.pos.x, n.pos.z - P.pos.z); if (d < bd) { bd = d; best = n; } }
+    // whoever's in reach, favouring the one ye're facing and folk who keep a post (a trader behind a counter) over passers-by
+    { const fx = Math.sin(P.facing), fz = Math.cos(P.facing); let bs = 1e9;
+      for (const n of npcs) { if (n.def.night && !isNight()) continue; const dx = n.pos.x - P.pos.x, dz = n.pos.z - P.pos.z, d = Math.hypot(dx, dz); if (d >= bd) continue;
+        const sc = d - 1.2 * (dx * fx + dz * fz) / (d || 1) - (n.def.at && !n.def.wander ? 0.6 : 0); if (sc < bs) { bs = sc; best = n; } }
+      if (best) bd = Math.hypot(best.pos.x - P.pos.x, best.pos.z - P.pos.z); }
     if (ship && ship.crew) for (const c of ship.crew) {
       if (c.silent) continue;
       const d = Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z);
