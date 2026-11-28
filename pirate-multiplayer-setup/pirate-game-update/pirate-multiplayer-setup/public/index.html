@@ -1295,11 +1295,24 @@ window.__pgBoot = () => {
     GEM_SPOT = { x: q.x, z: q.y };
     SPOTS.push({ x: q.x, z: q.y, r: 8 });
   }
+  // lumpy, flat-faceted sea-stone shapes (a few seeds, reused at any size): icospheres pushed in and out by noise
+  function seaStoneGeos() {
+    if (seaStoneGeos.c) return seaStoneGeos.c;
+    seaStoneGeos.c = [0, 1, 2, 3, 4, 5].map(sd => { const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = 0.78 + 0.5 * vnoise(x * 1.6 + sd * 7.3, z * 1.6 + y * 1.3 + sd * 3.1) - 0.08 * Math.max(0, -y); p.setXYZ(i, x * n, y * n * (y < 0 ? 0.8 : 1), z * n); }
+      g.computeVertexNormals(); return g; });
+    return seaStoneGeos.c;
+  }
   // --- Mermaid Cove: a stone mermaid on the rock in the lagoon ---
   {
     const I = ISLANDS[8], y = heightAt(I.c.x, I.c.y), st = lam(0x9a958c), dk = lam(0x7a766e), g = new THREE.Group();
     g.position.set(I.c.x, y - 0.4, I.c.y); g.rotation.y = Math.atan2(I.toHome.x, I.toHome.y); I.group.add(g);
-    const base = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), dk); base.scale.set(1.3, 0.7, 1.1); base.position.y = 0.8; g.add(base);
+    { const SG = seaStoneGeos(), weedM = lam(0x3e4c34), tones = [lam(0xa39684), lam(0x8c8070), lam(0xb8ab98)];   // her rock: a weathered outcrop with weed at the waterline, shells and pearls left as offerings
+      const L = (x, y, z, sx, sy, sz, m) => { const o = new THREE.Mesh(SG[(Math.random() * SG.length) | 0], m); o.position.set(x, y, z); o.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6); o.scale.set(sx, sy, sz); g.add(o); return o; };
+      L(0, 1.0, 0, 3.6, 1.7, 3.0, tones[0]); L(-1.6, 1.6, -0.8, 2.2, 1.6, 2.0, tones[1]); L(1.8, 0.9, 1.0, 2.0, 1.2, 1.8, tones[2]); L(0.6, 2.0, -1.4, 1.8, 1.3, 1.6, tones[0]);
+      for (let k = 0; k < 9; k++) { const b = k / 9 * 6.28; L(Math.cos(b) * 3.6, 0.3, Math.sin(b) * 3.2, 1.3 + Math.random(), 0.6, 1.2 + Math.random(), k % 3 ? weedM : tones[1]); }
+      for (let k = 0; k < 5; k++) { const b = 0.4 + k * 0.5, pe = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshPhongMaterial({ color: 0xfff8ee, specular: 0xffffff, shininess: 120 })); pe.position.set(Math.cos(b) * 2.7, 1.55 + Math.random() * 0.3, Math.sin(b) * 2.2 + 0.6); g.add(pe); }
+      for (let k = 0; k < 4; k++) { const sh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), lam([0xf4c8c0, 0xf8e0c8][k % 2])); sh.scale.y = 0.4; sh.position.set(-2.4 + k * 1.4, 1.2 + (k % 2) * 0.5, 2.0 - k * 0.3); g.add(sh); } }
     // tail curling over the rock
     for (let i = 0; i < 8; i++) {
       const t = i / 7, seg = new THREE.Mesh(new THREE.SphereGeometry(0.95 - t * 0.55, 10, 8), st);
@@ -1932,20 +1945,57 @@ window.__pgBoot = () => {
     // ===== Mermaid Cove: a sea arch, a waterfall into a pool, giant shells, tide pools, blossom trees, white shell paths =====
     { const X = ISLX[8], I = X.I, G = I.group, rock = lam(0x9a958c), rockD = lam(0x7a766e);
       strip(I, G, X.roads, 0xf4ece0, 0xf0d6d0, 0.12);
-      { const p = X.arch, g = grp(G, p.x, p.z, Math.atan2(Math.cos(p.a), Math.sin(p.a)) + Math.PI / 2, -2);   // the arch stands across the tideline
-        for (const sx of [-14, 14]) for (let k = 0; k < 5; k++) mk(new THREE.DodecahedronGeometry(6.5 - k * 0.6, 0), k % 2 ? rock : rockD, sx + (Math.random() - 0.5) * 2, 3 + k * 5.5, (Math.random() - 0.5) * 2, g, Math.random(), Math.random(), Math.random()).scale.set(1, 1.15, 0.8);
-        const arc = mk(new THREE.TorusGeometry(14, 4.6, 7, 16, Math.PI), rock, 0, 25, 0, g); arc.scale.set(1, 0.55, 0.75);
-        for (let k = 0; k < 6; k++) mk(new THREE.DodecahedronGeometry(2.6, 0), rockD, -12 + k * 4.8, 31 + Math.sin(k) * 1.2, (Math.random() - 0.5) * 2, g, Math.random(), Math.random(), 0);
-        for (let k = 0; k < 8; k++) mk(new THREE.SphereGeometry(1.1, 6, 4), lam(0x4a8a4a), -10 + k * 3, 33.5, (Math.random() - 0.5) * 3, g).scale.y = 0.5;   // tufts of green on top
-        const wp = new THREE.Vector3(); g.getWorldPosition(wp); for (const sx of [-14, 14]) colliders.push({ x: wp.x + Math.cos(g.rotation.y) * sx, z: wp.z - Math.sin(g.rotation.y) * sx, r: 6.5 }); SPOTS.push({ x: p.x, z: p.z, r: 26 }); }
+      // sculpted sea-stone: lumpy, flat-faceted boulders in a few tones, with weed at the waterline and moss on top
+      const SG = seaStoneGeos(), stoneT = [lam(0xb8ab98), lam(0xa39684), lam(0x8c8070), lam(0x776c60)], weed = lam(0x3e4c34), moss = lam(0x5c9046), moss2 = lam(0x78a84e);
+      const lump = (par, x, y, z, sx, sy, sz, m, k) => { const o = mk(SG[(k ?? (Math.random() * SG.length)) | 0], m || stoneT[(Math.random() * stoneT.length) | 0], x, y, z, par, Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28); o.scale.set(sx, sy, sz); return o; };
+      { const p = X.arch, ca = Math.cos(p.a), sa = Math.sin(p.a), g = grp(G, p.x, p.z, Math.atan2(ca, sa) + Math.PI / 2, -2.5);   // the arch stands across the tideline
+        // two weathered pillars, leaning in a little, built up in overlapping layers, with weed and barnacled rock at their feet
+        for (const sx of [-1, 1]) { for (let k = 0; k < 9; k++) { const w = 8.6 - k * 0.42; for (const dz of [-1.6, 1.6]) lump(g, sx * (17 - k * 0.5) + (Math.random() - 0.5) * 1.5, 2.2 + k * 3.2, dz + (Math.random() - 0.5) * 1.2, w * 0.85, 4.6 + Math.random(), w * 0.62); }
+          for (let k = 0; k < 9; k++) { const b = k / 9 * 6.28; lump(g, sx * 17 + Math.cos(b) * 7.5, 0.6 + Math.random() * 0.8, Math.sin(b) * 6, 3 + Math.random() * 2, 2 + Math.random(), 3 + Math.random() * 2, k % 3 ? weed : stoneT[3]); } }
+        // the span: thick where it springs from the pillars, worn thin at the crown
+        for (let i = 0; i <= 20; i++) { const t = i / 20, th = Math.PI * t, x = -13.5 * Math.cos(th), y = 29 + 8.5 * Math.sin(th), s = 7.6 - 2.4 * Math.sin(th);
+          for (const dz of [-1.5, 1.5]) lump(g, x, y, dz + (Math.random() - 0.5) * 1.0, s * 1.0, s * 0.8, s * 0.62);
+          if (i % 2 === 0) lump(g, x, y + s * 0.55, 0, s * 0.85, 1.1, s * 0.6, i % 4 ? moss : moss2); }   // a cap of turf along the top
+        for (let k = 0; k < 7; k++) { const t = 0.15 + k * 0.12, th = Math.PI * t; mk(new THREE.ConeGeometry(0.5, 2.2, 5), lam(0x4a7a3a), -13.5 * Math.cos(th) + (Math.random() - 0.5) * 2, 29 + 8.5 * Math.sin(th) + 4, (Math.random() - 0.5) * 2, g); }   // grass tufts
+        for (let k = 0; k < 10; k++) { const t = 0.2 + Math.random() * 0.6, th = Math.PI * t, L = 3 + Math.random() * 5; const v = mk(new THREE.BoxGeometry(0.18, L, 0.18), lam(0x3a6a34), -13.5 * Math.cos(th), 29 + 8.5 * Math.sin(th) - 4 - L / 2, (Math.random() - 0.5) * 3, g); v.rotation.z = (Math.random() - 0.5) * 0.2; }   // creepers hanging from the span
+        const wp = new THREE.Vector3(); g.getWorldPosition(wp); for (const sx of [-17, 17]) colliders.push({ x: wp.x + Math.cos(g.rotation.y) * sx, z: wp.z - Math.sin(g.rotation.y) * sx, r: 7 }); SPOTS.push({ x: p.x, z: p.z, r: 26 });
+        // sea stacks standing off the arch, out in the surf
+        let made = 0;
+        for (const [d, side] of [[48, -30], [70, 18], [40, 34], [95, -8], [60, -52]]) { if (made >= 4) break; const sxw = p.x + ca * d - sa * side, szw = p.z + sa * d + ca * side, bed = heightAt(sxw, szw); if (bed > -1.2 || bed < -14) continue; made++;
+          const sg = new THREE.Group(); sg.position.set(sxw, bed, szw); G.add(sg); const top = 9 + Math.random() * 9 - bed, n = Math.ceil(top / 3.4), w0 = 4 + Math.random() * 2;
+          for (let k = 0; k < n; k++) lump(sg, (Math.random() - 0.5) * 1.2, 1.5 + k * 3.4, (Math.random() - 0.5) * 1.2, w0 - k * 0.15, 2.8, w0 * 0.85 - k * 0.12);
+          lump(sg, 0, -bed + 0.4, 0, w0 + 1.5, 1.2, w0 + 1.2, weed); lump(sg, 0, top + 1.3, 0, w0 - n * 0.15, 0.9, w0 * 0.8 - n * 0.12, moss);
+          colliders.push({ x: sxw, z: szw, r: w0 }); }
+        // boulders strewn along the tideline either side of the arch
+        for (let k = 0; k < 10; k++) { const side = (k % 2 ? 1 : -1) * (24 + Math.random() * 30), x = p.x - sa * side + ca * (Math.random() - 0.4) * 14, z = p.z + ca * side + sa * (Math.random() - 0.4) * 14, h = heightAt(x, z); if (h < -2 || h > 2.5) continue;
+          const s = 1.2 + Math.random() * 2.2; const o = lump(G, x, h + s * 0.25, z, s * 1.2, s * 0.8, s, h < 0.6 ? weed : null); o.userData.settle = 'sink'; }
+      }
       if (X.fall) { const p = X.fall, va = Math.atan2(X.vil.x - p.x, X.vil.z - p.z), g = grp(G, p.x, p.z, va, -1);
-        for (let k = 0; k < 9; k++) mk(new THREE.DodecahedronGeometry(7 + Math.random() * 3, 0), k % 2 ? rock : rockD, (k % 3 - 1) * 9, 5 + Math.floor(k / 3) * 9, -6 + Math.random() * 2, g, Math.random(), Math.random(), Math.random());   // the cliff
-        const tex = canvasTex(64, 256, (c2, w, h) => { c2.fillStyle = 'rgba(160,220,245,0.75)'; c2.fillRect(0, 0, w, h); for (let i = 0; i < 60; i++) { const x = Math.random() * w, y = Math.random() * h; c2.strokeStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.6})`; c2.lineWidth = 1 + Math.random() * 3; c2.beginPath(); c2.moveTo(x, y); c2.lineTo(x, y + 20 + Math.random() * 50); c2.stroke(); } });
+        // a horseshoe of cliffs round a deep pool, tallest at the back where the falls come over the lip
+        const ring = [];
+        for (let i = 0; i <= 14; i++) { const th = -1.95 + 3.9 * i / 14, back = 1 - Math.abs(th) / 2.3, H = 7 + 15 * back, x = Math.sin(th) * 17, z = 7 - Math.cos(th) * 17;
+          for (let k = 0, y = 1.5; y < H; k++, y += 3.6) lump(g, x + (Math.random() - 0.5) * 1.5, y, z + (Math.random() - 0.5) * 1.5, 5.4 - k * 0.2, 3.3, 4.6 - k * 0.15);
+          lump(g, x, H + 1.2, z, 4.8, 1.1, 4.2, i % 2 ? moss : moss2); ring.push({ x, z, H });
+          if (Math.abs(th) > 0.35) for (let v = 0; v < 2; v++) { const L = 2 + Math.random() * (H * 0.45); mk(new THREE.BoxGeometry(0.16, L, 0.16), lam(0x3a6a34), x * 0.88 + (Math.random() - 0.5) * 3, H - L / 2, 7 + (z - 7) * 0.84, g); } }   // creepers down the inner face
+        // the falls: a broad sheet from the lip at the back, and a thinner one off a ledge to the side
+        const tex = canvasTex(64, 256, (c2, w, h) => { c2.fillStyle = 'rgba(170,225,245,0.72)'; c2.fillRect(0, 0, w, h); for (let i = 0; i < 70; i++) { const x = Math.random() * w, y = Math.random() * h; c2.strokeStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.6})`; c2.lineWidth = 1 + Math.random() * 3; c2.beginPath(); c2.moveTo(x, y); c2.lineTo(x + (Math.random() - 0.5) * 3, y + 10 + Math.random() * 30); c2.stroke(); } });
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 2); HMX.falls.push(tex);
-        mk(new THREE.PlaneGeometry(6, 27), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }), 0, 14, 1.5, g);
-        mk(new THREE.CircleGeometry(12, 24), rockD, 0, 0.05, 7, g, -Math.PI / 2); mk(new THREE.CircleGeometry(10, 24), new THREE.MeshPhongMaterial({ color: 0x3fb0c8, specular: 0xffffff, shininess: 90, transparent: true, opacity: 0.9 }), 0, 0.3, 7, g, -Math.PI / 2);
-        const wp = new THREE.Vector3(); g.updateMatrixWorld(true); g.localToWorld(wp.set(0, 1, 4)); steam(wp.x, wp.y, wp.z, { col: 0xffffff, size: 5, vy: 2, spread: 4, life: 1.6, rate: 0.06, op: 0.5, near: 1200 });
-        const c0 = new THREE.Vector3(); g.getWorldPosition(c0); colliders.push({ x: c0.x - Math.sin(va) * 6, z: c0.z - Math.cos(va) * 6, r: 13 }); SPOTS.push({ x: p.x, z: p.z, r: 32 }); }
+        const fallM = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.88, depthWrite: false, side: THREE.DoubleSide });
+        const backH = 7 + 15; mk(new THREE.PlaneGeometry(7, backH), fallM, 0, backH / 2 + 0.3, 7 - 17 + 4.2, g);
+        { const th = 1.05, H = 7 + 15 * (1 - th / 2.3); const s = mk(new THREE.PlaneGeometry(2.2, H), fallM, Math.sin(th) * 12.8, H / 2 + 0.3, 7 - Math.cos(th) * 12.8, g); s.rotation.y = -th; }
+        // the pool: deep blue in the middle, a rim of pale stone and foam where the falls hit
+        mk(new THREE.CircleGeometry(15, 32), lam(0x6a6458), 0, 0.06, 7, g, -Math.PI / 2);
+        mk(new THREE.CircleGeometry(13.5, 32), new THREE.MeshPhongMaterial({ color: 0x2f9ab8, specular: 0xffffff, shininess: 90, transparent: true, opacity: 0.92 }), 0, 0.3, 7, g, -Math.PI / 2);
+        mk(new THREE.CircleGeometry(6, 24), new THREE.MeshPhongMaterial({ color: 0x1a6a90, specular: 0xffffff, shininess: 90, transparent: true, opacity: 0.6 }), 0, 0.33, 6, g, -Math.PI / 2);
+        const foamR = mk(new THREE.RingGeometry(1.5, 5.5, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }), 0, 0.38, -4.8, g, -Math.PI / 2);
+        for (let k = 0; k < 5; k++) lump(g, -3 + k * 1.6 + (Math.random() - 0.5), 0.4, 13 + (Math.random() - 0.5) * 1.5 - k * 0.4, 1.1, 0.5, 1, stoneT[0]);   // stepping stones across the pool's mouth
+        for (let k = 0; k < 22; k++) { const b = (Math.random() - 0.5) * 2.6, r = 15.5 + Math.random() * 4, x = Math.sin(b) * r, z = 7 + Math.cos(b) * r;   // ferns and flowers round the pool's open front
+          if (Math.abs(x) < 4 && z > 17) continue;   // (leave the way in clear)
+          const f = mk(new THREE.ConeGeometry(0.9, 2.2, 5), lam(k % 3 ? 0x4a8a3a : 0x5aa04a), x, 1.1, z, g); f.rotation.set((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 0.4);
+          if (k % 3 === 0) mk(new THREE.SphereGeometry(0.45, 6, 5), lam([0xf47ab0, 0xffd04a, 0xffffff][(k / 3) % 3 | 0]), x + 0.6, 2.1, z, g); }
+        const wp = new THREE.Vector3(); g.updateMatrixWorld(true); g.localToWorld(wp.set(0, 1, -4.5)); steam(wp.x, wp.y, wp.z, { col: 0xffffff, size: 5, vy: 2.5, spread: 5, life: 1.6, rate: 0.05, op: 0.5, near: 1200 });
+        for (const q of ring) { g.localToWorld(wp.set(q.x, 0, q.z)); colliders.push({ x: wp.x, z: wp.z, r: 4.6 }); }
+        SPOTS.push({ x: p.x, z: p.z, r: 32 }); HMX.foamRings = (HMX.foamRings || []).concat([foamR]); }
       // giant seashells, scallops and conches, half sunk in the sand
       for (const p of scatter(I, 9, (x, z, h) => h > 1 && h < 6 && free(I, x, z, 10), 6000)) { const g = grp(G, p.x, p.z, Math.random() * 6.28, -0.4); const pinkS = lam([0xf4c8c0, 0xf8e0c8, 0xe8b0b8][(Math.random() * 3) | 0]);
         if (Math.random() < 0.5) { const sh = mk(new THREE.SphereGeometry(3, 14, 6, 0, Math.PI, 0, Math.PI / 2), pinkS, 0, 0, 0, g, -0.5); sh.scale.set(1, 0.5, 1); sh.material.side = THREE.DoubleSide; for (let k = 0; k < 7; k++) mk(new THREE.BoxGeometry(0.2, 0.3, 3), pinkS, Math.cos(k / 6 * Math.PI) * 1.6, 1.2 * Math.sin(k / 6 * Math.PI), 0, g, -0.5, 0, Math.PI / 2 - k / 6 * Math.PI).position.z = 0.3; }
@@ -1957,6 +2007,36 @@ window.__pgBoot = () => {
       // blossom trees
       { const tr = [], cr = [], cr2 = []; for (const p of scatter(I, 140, (x, z, h) => h > 5 && free(I, x, z, 8) && X.roadD(x, z) > 5 && X.meadow(x, z) > 0.3 && X.forest(x, z) < 0.3, 9000)) { const ht = 3 + Math.random() * 2, c = 2 + Math.random() * 1.4; tr.push(placed(p.x, p.h - 0.3, p.z, 0.9, ht + c * 0.5, 0.9, 0, 0, 0)); for (let k = 0; k < 3; k++) (k % 2 ? cr2 : cr).push(placed(p.x + (Math.random() - 0.5) * c, p.h + ht + c * (0.4 + Math.random() * 0.5), p.z + (Math.random() - 0.5) * c, c, c * 0.8, c, 0, Math.random() * 6, 0)); colliders.push({ x: p.x, z: p.z, r: 0.7 }); }
         inst(G, OAK_TRUNK_GEO0, lam(0x6a4a3a), tr); inst(G, new THREE.IcosahedronGeometry(1, 1), lam(0xf4a8c8), cr); inst(G, new THREE.IcosahedronGeometry(1, 1), lam(0xffe0ec), cr2); }
+      // coral heads breaking the surface of the lagoon shallows: branching coral, brain coral and sea fans in reef colours
+      { const br = [], brC = [], brain = [], brainC = [], fan = [], fanC = [], pal = [0xf47a8a, 0xff9a5a, 0xc87ad8, 0xffd05a, 0x6ad0c8, 0xf4a8c8].map(c => new THREE.Color(c));
+        for (const p of scatter(I, 70, (x, z, h) => h > -1.6 && h < -0.35 && Math.hypot(x - I.c.x, z - I.c.y) < I.r * 1.25 && free(I, x, z, 6), 30000)) {
+          const c = pal[(Math.random() * pal.length) | 0], n = 3 + ((Math.random() * 4) | 0);
+          for (let k = 0; k < n; k++) { const ox = (Math.random() - 0.5) * 2.2, oz = (Math.random() - 0.5) * 2.2, L = 1.6 + Math.random() * 1.6; br.push(placed(p.x + ox, p.h + L * 0.45, p.z + oz, 0.22, L, 0.22, (Math.random() - 0.5) * 0.7, 0, (Math.random() - 0.5) * 0.7)); brC.push(c); }
+          if (Math.random() < 0.6) { const s = 0.9 + Math.random() * 0.8; brain.push(placed(p.x + 1.5, p.h + 0.4, p.z - 1, s, s * 0.75, s, 0, 0, 0)); brainC.push(pal[(Math.random() * pal.length) | 0]); }
+          if (Math.random() < 0.5) { fan.push(placed(p.x - 1.4, p.h + 1.2, p.z + 1.2, 1.6, 1.8, 1, 0, Math.random() * 6.28, 0)); fanC.push(pal[(Math.random() * pal.length) | 0]); } }
+        inst(G, new THREE.CylinderGeometry(0.6, 1, 1, 5), lam(0xffffff), br, brC); inst(G, new THREE.IcosahedronGeometry(1, 1), lam(0xffffff), brain, brainC);
+        inst(G, new THREE.CircleGeometry(1, 7, 0, Math.PI), new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }), fan, fanC); }
+      // giant clams along the lagoon beach, open to the sun, each with a pearl that catches the light
+      for (const p of scatter(I, 8, (x, z, h) => h > 0.3 && h < 1.6 && Math.hypot(x - I.c.x, z - I.c.y) < I.r * 0.75 && free(I, x, z, 6), 9000)) {
+        const g = grp(G, p.x, p.z, Math.random() * 6.28, 0.1), shellM = lam([0xd8c8e8, 0xc8e0e8, 0xf0d8c8][(Math.random() * 3) | 0]), inner = lam(0x8ac8d8);
+        const lo = mk(new THREE.SphereGeometry(1.6, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), shellM, 0, 0.1, 0, g, Math.PI); lo.scale.y = 0.45; lo.material.side = THREE.DoubleSide;
+        const up = mk(new THREE.SphereGeometry(1.6, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), shellM, 0, 0.15, -0.9, g, -1.0); up.scale.y = 0.45; up.material.side = THREE.DoubleSide;
+        for (let k = 0; k < 6; k++) mk(new THREE.BoxGeometry(0.15, 0.12, 3), shellM, -1.3 + k * 0.52, 0.25 + Math.sin(k / 5 * Math.PI) * 0.5, -1.1, g, -1.0);
+        mk(new THREE.CircleGeometry(1.3, 14), inner, 0, 0.32, 0, g, -Math.PI / 2);
+        mk(new THREE.SphereGeometry(0.42, 12, 10), new THREE.MeshPhongMaterial({ color: 0xfff8ee, specular: 0xffffff, shininess: 120, emissive: 0x2a2620 }), 0, 0.68, 0.1, g);
+        colliders.push({ x: p.x, z: p.z, r: 1.8 }); }
+      // dolphins leaping in the lagoon: each comes up in an arc every few seconds and dives back in with a splash
+      HMX.dolphins = HMX.dolphins || [];
+      { const body = lam(0x6a8090), belly = lam(0xd8dce0);
+        for (const p of scatter(I, 4, (x, z, h) => h < -3.5 && Math.hypot(x - I.c.x, z - I.c.y) < I.r * 0.9, 6000)) {
+          const d = new THREE.Group(); scene.add(d); d.visible = false;
+          const b = mk(new THREE.SphereGeometry(1, 12, 8), body, 0, 0, 0, d); b.scale.set(0.55, 0.5, 1.9);
+          const be = mk(new THREE.SphereGeometry(1, 10, 6), belly, 0, -0.15, 0.1, d); be.scale.set(0.45, 0.35, 1.6);
+          mk(new THREE.ConeGeometry(0.22, 0.9, 6), body, 0, 0, 2.1, d, Math.PI / 2);   // the beak
+          const fin = mk(new THREE.ConeGeometry(0.35, 0.9, 4), body, 0, 0.6, -0.2, d, -0.4); fin.scale.z = 0.3;
+          for (const sd of [-1, 1]) { const fl = mk(new THREE.ConeGeometry(0.2, 0.8, 4), body, sd * 0.55, -0.25, 0.6, d, 0.3, 0, sd * 1.3); fl.scale.z = 0.3; }
+          const tail = mk(new THREE.BoxGeometry(1.6, 0.08, 0.5), body, 0, 0, -1.95, d);
+          HMX.dolphins.push({ g: d, x: p.x, z: p.z, h: Math.random() * 6.28, t: -Math.random() * 6, gap: 4 + Math.random() * 4, tail }); } }
       tuftsOn(I, X, 300, 0x5aa84a); }
 
     // ===== Driftwood Isle: boardwalks over the marsh, a whale's skeleton, a stilted watch hut, brackish pools, reeds, driftwood and fish weirs =====
@@ -2205,11 +2285,21 @@ window.__pgBoot = () => {
       s.userData = { age: 99, life: 1 + Math.random() * 5 }; scene.add(s); sprites.push(s); }   // (in the world, not on the ship: see updateCursed)
     REV_AURAS.push({ m, sprites });
   }
+  window.__islx = () => ISLX; window.__dol = () => HMX.dolphins;
   function updateHome(dt, t) {
     if (HMX.sails) HMX.sails.rotation.z -= dt * 0.55;
     for (const F of HMX.flames) { const k = 0.8 + 0.25 * Math.sin(t * 9 + F.ph) + 0.15 * Math.sin(t * 23 + F.ph * 2); F.f.scale.set(F.s * (0.85 + 0.15 * Math.sin(t * 7 + F.ph)), F.s * k * 1.2, 1); F.f.material.opacity = 0.75 + 0.25 * Math.sin(t * 13 + F.ph); }
     for (const m of HMX.lavaM) m.emissiveIntensity = 0.7 + 0.3 * Math.sin(t * 1.7) * Math.sin(t * 0.7 + 1);
     for (const tx of HMX.falls) tx.offset.y -= dt * 1.6;
+    if (HMX.foamRings) for (const f of HMX.foamRings) { const k = 1 + 0.12 * Math.sin(t * 3.1); f.scale.set(k, k, 1); f.material.opacity = 0.45 + 0.15 * Math.sin(t * 4.3); }
+    if (HMX.dolphins) for (const D of HMX.dolphins) {   // a dolphin's leap: up out of the water in an arc and back in nose first
+      if (Math.abs(D.x - camera.position.x) > 1500 || Math.abs(D.z - camera.position.z) > 1500) { D.g.visible = false; continue; }
+      D.t += dt; const dur = 1.5;
+      if (D.t < 0) { D.g.visible = false; continue; }
+      if (D.t > dur) { D.t = -D.gap * (0.6 + Math.random() * 0.8); D.h += (Math.random() - 0.5) * 2; D.g.visible = false; puff(D.x + Math.sin(D.h) * 7, 0.5, D.z + Math.cos(D.h) * 7, { color: 0xffffff, size: 2.2, life: 0.8, grow: 1.6, vy: 2.5, op: 0.8 }); continue; }
+      const u = D.t / dur, s = (u - 0.5) * 14, y = Math.sin(u * Math.PI) * 4.2 - 0.6, fx = Math.sin(D.h), fz = Math.cos(D.h);
+      if (!D.g.visible) puff(D.x - fx * 7, 0.5, D.z - fz * 7, { color: 0xffffff, size: 2, life: 0.7, grow: 1.5, vy: 2.2, op: 0.75 });
+      D.g.visible = true; D.g.position.set(D.x + fx * s, y, D.z + fz * s); D.g.rotation.set(-Math.cos(u * Math.PI) * 0.9, D.h, 0, 'YXZ'); D.tail.rotation.x = Math.sin(t * 14) * 0.25; }
     for (const E of HMX.steam) { let x = E.x, y = E.y, z = E.z; if (E.obj) { const w = E._w || (E._w = new THREE.Vector3()); E.obj.localToWorld(w.set(E.ox || 0, E.oy || 0, E.oz || 0)); x = w.x; y = w.y; z = w.z; }
       if (Math.abs(x - camera.position.x) > (E.near || 1500) || Math.abs(z - camera.position.z) > (E.near || 1500)) continue;
       E.t -= dt; if (E.t > 0) continue; E.t = E.rate * (0.6 + Math.random() * 0.8);
