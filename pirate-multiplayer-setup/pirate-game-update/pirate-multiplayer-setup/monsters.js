@@ -158,9 +158,13 @@ function createMonsters({ sendTo, broadcast, raiders, sinkRaider, adminOk, hornO
     } else if (topic === 'kquest' || (topic === 'kadmin' && adminOk(d))) {
       // a quest (or an admin) calls the Kraken up beside this player's ship
       if (topic === 'kadmin' && d.cmd === 'defeat') { if (K.st === 'engaged') { K.hp = 0; K.st = 'dying'; K.t = 0; broadcast('kdead', { by: from }); } return; }
-      if (topic === 'kquest' && (K.st === 'engaged' || K.st === 'hunt' || K.st === 'drown' || K.st === 'dying' || K.st === 'dead')) return;   // a beaten Kraken stays down until it respawns
-      if (!q.p.sh || !q.p.sh.a || !krDeep(q.p.sh.x, q.p.sh.z)) return;
-      const s = deepNear(q.p.sh.x, q.p.sh.z, 240, 260); if (!s) return;
+      // a beaten Kraken rests a little (45 s) before a quest can call it up again; a busy one finishes its fight first
+      if (topic === 'kquest' && (K.st === 'engaged' || K.st === 'hunt' || K.st === 'drown' || K.st === 'dying' || (K.st === 'dead' && K.rs > 555))) return;
+      // where the ship is: the position it sent with the call (its presence can lag a moment behind), if it's close to what we last heard
+      const sh = q.p.sh && q.p.sh.a ? q.p.sh : null, cx = +d.x, cz = +d.z, sent = Number.isFinite(cx) && Number.isFinite(cz);
+      const at = sent && (!sh || Math.hypot(cx - sh.x, cz - sh.z) < 400) ? { x: cx, z: cz } : sh;
+      if (!at || !krDeep(at.x, at.z)) return;
+      const s = deepNear(at.x, at.z, 240, 260); if (!s) return;
       Object.assign(K, { x: s.x, z: s.z, st: 'hunt', tg: { k: 'ship', id: from }, hp: K.max, ally: null, cd: 0, t: 0 });
     }
   }

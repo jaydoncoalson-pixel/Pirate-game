@@ -6356,7 +6356,7 @@ window.__pgBoot = () => {
   window.__story = { STORY, get STB() { return STB; }, qs: () => JSON.stringify(STATE.quests), prog: () => JSON.stringify(STATE.qprog),
     talk: name => { const q = questTalk(name); if (q && q.end) q.end(); return q ? q.lines : null; }, ev: (k, i) => questEvent(k, i),
     spot: () => { const q = nearQSpot(); if (q) q.act(); return !!q; }, npc: name => { const n = npcs.find(m => m.def.name === name); return n ? [Math.round(n.pos.x), Math.round(n.pos.z), n.def.storyAt] : null; },
-    tp: (x, z) => { P.pos.set(x, heightAt(x, z) + 0.5, z); P.vy = 0; snapCam = true; }, hit: n => stbBallHit(STB.x, STB.y + 20, STB.z, n), tick: () => questTick(), ship: k => spawnShip(k) };
+    tp: (x, z) => { P.pos.set(x, heightAt(x, z) + 0.5, z); P.vy = 0; snapCam = true; }, hit: n => stbBallHit(STB.x, STB.y + 20, STB.z, n), tick: () => questTick(), ship: k => spawnShip(k), get KR() { return KR; }, krHurt: n => krHurt(n), KD: KRAKEN_DEEP, setQ: (id, v) => { STATE.quests[id] = v; STATE.qprog[id] = 0; STATE.track = id; save(); refreshQuestHud(); } };
   function storyNpcs() {
     const found = STATE.quests.survivors === 'done';
     for (const [name, key, dock] of [['First Mate Hargreave', 'hargreave', [4, DOCK_LEN + 1]], ['Bosun Briggs', 'briggs', [4.5, DOCK_LEN - 5]], ['Gunner Rook', 'rook', [-4, DOCK_LEN - 3]]]) {
@@ -6425,15 +6425,20 @@ window.__pgBoot = () => {
         const a = st.at(), d = Math.hypot(ship.x - a.x, ship.z - a.z);
         if (d > st.r) continue;
         if (st.type === 'sail') { advanceQuest(id); continue; }
-        if (!STATE.qprog[id] && !ship.submerged && KR.st !== 'grip' && KR.st !== 'attack' && KR.st !== 'drown' && KR.st !== 'dying' && KR.st !== 'dead' && KR.ally <= 0) {
-          // the Kraken rises to meet ye (online it's the one everyone shares, so the server sends it)
-          STATE.qprog[id] = 1; save();
-          if (window.__mpKraken && window.__mpKraken()) window.__mpKrSend('kquest', {});
-          else { const ang = Math.random() * 6.28; KR.x = ship.x + Math.sin(ang) * 250; KR.z = ship.z + Math.cos(ang) * 250;
-          KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null; }
-          SFX.roar(); toast('The water goes still... something vast is rising from the deep!'); refreshQuestHud();
-        }
-        else if (!STATE.qprog[id] && (KR.st === 'dying' || KR.st === 'dead') && clock.elapsedTime - (KR.quietT ?? -99) > 30) { KR.quietT = clock.elapsedTime; toast('The deep is quiet. The Kraken is still licking its wounds somewhere below... come back later.'); }
+        if (STATE.qprog[id]) continue;
+        const rise = () => { STATE.qprog[id] = 1; save(); SFX.roar(); toast('The water goes still... something vast is rising from the deep!'); refreshQuestHud(); };
+        const now = clock.elapsedTime, restedDead = KR.st === 'dead' && (KR.rs ?? 0) < 555;   // (a beaten Kraken can be called again after a short rest, not straight away)
+        if (window.__mpKraken && window.__mpKraken()) {
+          // online the Kraken is the one everyone shares: ask the server, and only say it's rising once it's actually coming for this ship
+          if ((KR.st === 'hunt' || KR.st === 'grip' || KR.st === 'attack') && KR.tgt && KR.tgt.ent === ship) { rise(); continue; }
+          const busy = (KR.st === 'hunt' || KR.st === 'grip' || KR.st === 'attack' || KR.st === 'drown') && !(KR.tgt && KR.tgt.ent === ship);
+          if (busy) { if (now - (KR.busyT ?? -99) > 25) { KR.busyT = now; toast('The Kraken is busy with another ship. Wait here: when it\'s done, it will come for ye.'); } }
+          else if (KR.st === 'dying' || (KR.st === 'dead' && !restedDead)) { if (now - (KR.quietT ?? -99) > 30) { KR.quietT = now; toast('The deep is quiet. The Kraken is still licking its wounds... wait a little, it will be back.'); } }
+          if (!ship.submerged && KR.ally <= 0 && now - (KR.askT ?? -99) > 3) { KR.askT = now; window.__mpKrSend('kquest', { x: Math.round(ship.x), z: Math.round(ship.z) }); }   // (asked again every few seconds till it answers)
+        } else if (!ship.submerged && KR.ally <= 0 && (KR.st === 'roam' || KR.st === 'hunt' || KR.st === 'leaving' || restedDead)) {
+          const ang = Math.random() * 6.28; KR.x = ship.x + Math.sin(ang) * 250; KR.z = ship.z + Math.cos(ang) * 250;
+          KR.st = 'hunt'; KR.tgt = { kind: 'ship', ent: ship }; KR.cd = 0; KR.hp = KR.max; KR.toldHunt = false; KR.wp = null; rise();
+        } else if ((KR.st === 'dying' || KR.st === 'dead') && now - (KR.quietT ?? -99) > 30) { KR.quietT = now; toast('The deep is quiet. The Kraken is still licking its wounds... wait a little, it will be back.'); }
       }
     }
   }
