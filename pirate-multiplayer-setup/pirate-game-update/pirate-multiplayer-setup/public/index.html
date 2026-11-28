@@ -4736,7 +4736,7 @@ window.__pgBoot = () => {
     }
   }
   function updateShip(dt, t) {
-    if (!ship) return;
+    if (!ship || ship.tutWreck) return;   // (the opening's wreck is moved by the tutorial)
     const T = ship.T;
     // seized by another captain's Elder Serpent: held across its jaws, shaken, dragged under, then she sinks
     if (ship.eGrab && !ship.sinking) {
@@ -4831,7 +4831,8 @@ window.__pgBoot = () => {
       const nh = ship.heading + steer * T.turn * dt * Math.min(1, 0.3 + Math.abs(ship.speed) / T.speed);
       if (!shipBlocked(ship.x, ship.z, nh)) ship.heading = nh;
       ship.steer += (steer - ship.steer) * Math.min(1, dt * 2);
-    } else { ship.speed *= 1 - dt * 0.8; ship.steer *= 1 - dt * 2; if (Math.abs(ship.speed) < 1) ship.sailTarget = 0.12; }
+    } else if (TUT.cruise) { ship.sailTarget = 1; ship.speed += (T.speed * 0.5 * Math.max(0.2, ship.sailSet) - ship.speed) * Math.min(1, dt * 0.5); ship.steer *= 1 - dt * 2; }   // the opening: the crew keep her under way
+    else { ship.speed *= 1 - dt * 0.8; ship.steer *= 1 - dt * 2; if (Math.abs(ship.speed) < 1) ship.sailTarget = 0.12; }
     { // the crew set or furl the sails
       const ds = ship.sailTarget - ship.sailSet;
       ship.sailSet += Math.max(-dt * 0.22, Math.min(dt * 0.22, ds));
@@ -8271,7 +8272,7 @@ window.__pgBoot = () => {
     if (c.stagT > 0 && Math.random() < dt * 6) puff(c.pos.x + (Math.random() - 0.5) * 0.6, c.pos.y + 2.4, c.pos.z + (Math.random() - 0.5) * 0.6, { color: 0xfff27a, size: 0.25, life: 0.5, grow: 0.3, vy: 0.4, op: 0.9 });
   }
   // ---- the crew defend the ship: everyone not up a mast draws a cutlass and goes for the nearest boarder ----
-  const isDefender = c => !c.climb && !c.silent && !c.fixedY;
+  const isDefender = c => !TUT.on && !c.climb && !c.silent && !c.fixedY;
   function armCrew(on) {
     if (!ship || !ship.crew) return;
     for (const c of ship.crew) { if (!isDefender(c)) continue;
@@ -9487,6 +9488,7 @@ window.__pgBoot = () => {
     if (STATE.sword === 'seasword' && SEAF.on) n *= 0.08;   // the Elder Kraken
     if (STATE.sword === 'seasword') n *= SEAF.on ? SEAF.TAKEN : TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
     n *= gearDR();   // legendary armour
+    if (TUT.on) { n *= 0.5; n = Math.min(n, Math.max(0, PLAYER.hp - 20)); }   // the opening: hurt, never killed
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
     if (PLAYER.hp <= 0) playerDefeated();
   }
@@ -9661,6 +9663,7 @@ window.__pgBoot = () => {
     if (tg.escort) { escortHurt(tg, n); return; }
     if (tg === ship && window.__god) return;
     if (tg === ship && !pierce) n *= armorMul();   // iron plating
+    if (tg === ship && TUT.on) n = Math.min(n, Math.max(0, tg.hp - tg.maxHp * 0.35));   // the opening: only the Beast sinks her
     if (tg.remote) return;   // another player's ship: their own game applies the damage
     if (tg !== ship && window.__mpRaiderDmg && window.__mpRaiderDmg(tg, n)) return;   // online: the server owns raider hull points
     tg.hp -= n; tg.lastHit = 0;
@@ -9732,7 +9735,8 @@ window.__pgBoot = () => {
   }
   [[2500, -1700, 'brig'], [-2300, -700, 'brig'], [3200, 1400, 'brig'], [-3400, 3400, 'brig'], [1800, 3600, 'brig'], [-3600, -3200, 'galleon'], [3800, -3800, 'galleon'], [300, -2400, 'galleon']].map(([x, z, k]) => [x * WS, z * WS, k])
     .concat(Array.from({ length: 16 }, (_, k) => [0, 0, k % 3 === 2 ? 'galleon' : 'brig', true]))   // the Blackwater raid fleet: only at sea during a raid (same 16 as the server's)
-    .forEach(([x, z, kind, raid]) => {
+    .forEach(([x, z, kind, raid]) => makeRaider(x, z, kind, raid));
+  function makeRaider(x, z, kind, raid) {
     const gal = kind === 'galleon';
     const m = makeShip(kind, { sail: 0x2a2a2a, hull: 0x2a2421, trim: 0x8e1f1f, flag: 'jolly' });
     m.furl.forEach(f => { f.pv.scale.set(1, 1, 1); });
@@ -9747,8 +9751,8 @@ window.__pgBoot = () => {
     const tag = document.createElement('div'); tag.className = 'tag etag'; tag.innerHTML = (gal ? 'Blackwater galleon' : 'Blackwater raider') + '<div class="ehp"><div></div></div>'; tagLayer.appendChild(tag);
     r.tag = tag; r.bar = tag.querySelector('.ehp div');
     if (raid) { r.raid = true; r.state = 'gone'; r.respawnT = Infinity; tag.style.display = 'none'; } else spawnRaider(r);
-    enableShadows(m.group); raiders.push(r);
-  });
+    enableShadows(m.group); raiders.push(r); return r;
+  }
   try { buildPosts(); refreshBountyTags(); } catch (e) { console.error(e); }
   try { FORTS.forEach(buildFort); } catch (e) { console.error(e); }
   try { buildAbyss(); } catch (e) { console.error(e); }
@@ -9764,8 +9768,9 @@ window.__pgBoot = () => {
     if (Math.hypot(r.x - camera.position.x, r.z - camera.position.z) < 1500) for (const f of r.flags) f.wave(t);
   }
   function updateRaiders(dt, t) {
-    const target = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : (krSwimming() || seaRunning() || RIDE.on) && !DUN.on ? P.pos : null;   // in the water, or running on it, ye're the target
+    const target0 = ship && !ship.sinking && !ship.submerged && (sailing || onShip || inInterior) ? ship : (krSwimming() || seaRunning() || RIDE.on) && !DUN.on ? P.pos : null;   // in the water, or running on it, ye're the target
     for (const r of raiders) {
+      const target = TUT.on && !r.tut ? null : target0;   // the opening: only its own raiders come for ye
       // Online, the server sails the raiders; this only follows its snapshots.
       const net = !!(window.__mpRaiderSync && window.__mpRaiderSync(r, dt));
       if (r.state === 'gone') { if (!net) { r.respawnT -= dt; if (r.respawnT <= 0) spawnRaider(r); } continue; }
@@ -12691,7 +12696,7 @@ window.__pgBoot = () => {
     mSnd.textContent = `Sound: ${SFX.muted ? 'off' : 'on'}`;
     mCtlBox.style.display = 'none'; menuEl.style.display = 'flex';
   }
-  function hideMenu() { menuOpen = false; menuFirst = false; menuEl.style.display = 'none'; SFX.init(); }
+  function hideMenu() { menuOpen = false; menuFirst = false; menuEl.style.display = 'none'; SFX.init(); if (TUT.pending) { TUT.pending = false; try { tutStart(); } catch (e) { console.error(e); tutFinish(true); } } }
   document.getElementById('menuBtn').onclick = () => { if (menuOpen) { if (!menuFirst) hideMenu(); } else if (!talk) showMenu(); };
   mPlay.onclick = hideMenu;
   document.getElementById('mSave').onclick = () => { save(); mSub.textContent = 'Game saved'; };
@@ -15888,6 +15893,342 @@ window.__pgBoot = () => {
     return { instances: nI, groups: nG };
   }
   let settledWorld = false;
+  // ===================== The opening: a cinematic start and the tutorial =====================
+  // A new captain's first voyage: the galleon under sail (the camera chases her, then sweeps along her side), the captain
+  // at the desk in the great cabin when something rams the hull, a Blackwater raider grappling alongside and boarders
+  // over the rail (the combat lesson), the wheel and the guns (sink her), sailing her as two more raiders come on, and
+  // then the Blackwater Beast rising out of the sea to break the ship in two. Black. And waking on Gull Island's beach.
+  // Everything happens far out in the open sea (the server's raiders never come out this far) with the tutorial's own
+  // raiders, flagged local so the online game leaves them alone; the galleon is lent, never saved as the captain's.
+  var TUT = { on: false, pending: false, stage: '', t: 0, cruise: false, cine: null, raiders: [], beast: null, done: {}, lie: 0, sit: 0 };
+  const TUT_SEA = { x: EDGE + 2600, z: EDGE + 2600, h: -2.4 };
+  const tutUI = (() => {
+    const st = document.createElement('style');
+    st.textContent = `
+      .tutBar { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 40; transition: height .7s ease; pointer-events: none; }
+      #tutCap { position: fixed; left: 50%; bottom: 13vh; transform: translateX(-50%); max-width: min(900px, 86vw); text-align: center; z-index: 42; pointer-events: none;
+        font: 600 clamp(15px, 2.1vw, 22px)/1.35 Georgia, serif; color: #f4ecd8; text-shadow: 0 2px 6px #000, 0 0 2px #000; opacity: 0; transition: opacity .35s; }
+      #tutCap b { color: #f2c46a; font-weight: 700; }
+      #tutCard { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 42; pointer-events: none;
+        font-family: Georgia, serif; color: #f4ecd8; text-shadow: 0 3px 12px #000; opacity: 0; transition: opacity 1.2s; text-align: center; }
+      #tutFade { position: fixed; inset: 0; background: #000; z-index: 41; pointer-events: none; opacity: 0; }
+      #tutSkip { position: fixed; right: 18px; bottom: calc(11vh + 10px); z-index: 43; font: 13px Georgia, serif; color: #cfc6b0; opacity: 0; transition: opacity .5s; pointer-events: none; }
+      #tutObj { position: fixed; top: 64px; right: 12px; z-index: 39; min-width: 280px; max-width: 92vw; display: none;
+        background: rgba(20, 14, 8, .82); border: 1px solid #8a6a3a; border-radius: 8px; padding: 10px 14px 8px; color: #f4ecd8; font: 14px/1.45 Georgia, serif; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+      #tutObj h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .2em; color: #f2c46a; }
+      #tutObj .it { white-space: nowrap; } #tutObj .it.ok { color: #9fe39a; } #tutObj .it.ok::before { content: '\\2714  '; } #tutObj .it:not(.ok)::before { content: '\\2610  '; }
+      #tutObj button { margin-top: 6px; background: none; border: 1px solid #6a5434; color: #bfae8a; border-radius: 4px; font: 11px Georgia, serif; padding: 2px 8px; cursor: pointer; }
+      body.tutCine #hud, body.tutCine #hudR, body.tutCine #mini, body.tutCine #btns, body.tutCine #weapons, body.tutCine #toast, body.tutCine #toasts, body.tutCine #tags, body.tutCine #quest, body.tutCine #prompt, body.tutCine #tutObj { visibility: hidden !important; }
+      body.tutOn #quest { visibility: hidden !important; }`;
+    document.head.appendChild(st);
+    const mk = (tag, id, cls) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; document.body.appendChild(e); return e; };
+    const top = mk('div', null, 'tutBar'), bot = mk('div', null, 'tutBar'); top.style.top = '0'; bot.style.bottom = '0';
+    const cap = mk('div', 'tutCap'), card = mk('div', 'tutCard'), fade = mk('div', 'tutFade'), skip = mk('div', 'tutSkip'), obj = mk('div', 'tutObj');
+    skip.textContent = 'Enter: skip';
+    return { top, bot, cap, card, fade, skip, obj };
+  })();
+  let tutCapT = 0;
+  function tutSay(html, dur = 3.5) { tutUI.cap.innerHTML = html; tutUI.cap.style.opacity = 1; tutCapT = dur; }
+  function tutCard(title, sub, dur = 3.5) { tutUI.card.innerHTML = `<div style="font-size:clamp(30px,6vw,68px);letter-spacing:.16em">${title}</div><div style="font-size:clamp(13px,2vw,21px);letter-spacing:.32em;margin-top:8px;color:#e8c98a">${sub || ''}</div>`; tutUI.card.style.opacity = 1; clearTimeout(tutCard.h); tutCard.h = setTimeout(() => tutUI.card.style.opacity = 0, dur * 1000); }
+  function tutBars(on) { tutUI.top.style.height = tutUI.bot.style.height = on ? '11vh' : '0'; tutUI.skip.style.opacity = on ? 0.8 : 0; document.body.classList.toggle('tutCine', on); }
+  function tutObj(title, items) {   // the lesson card: what to do, ticked off as it's done
+    if (!title) { tutUI.obj.style.display = 'none'; return; }
+    tutUI.obj.style.display = 'block';
+    tutUI.obj.innerHTML = `<h4>${title}</h4>` + items.map(([k, txt]) => `<div class="it${TUT.done[k] ? ' ok' : ''}" data-k="${k}">${txt}</div>`).join('') + '<button id="tutSkipBtn">Skip tutorial</button>';
+    tutUI.obj.querySelector('#tutSkipBtn').onclick = () => tutFinish(true);
+    TUT.items = items;
+  }
+  function tutTick(k) { if (TUT.done[k]) return; TUT.done[k] = true; const e = tutUI.obj.querySelector(`[data-k="${k}"]`); if (e) e.classList.add('ok'); SFX.coin && SFX.coin(); }
+  // a cutscene: a camera function and a list of timed events; Enter skips to its end (essential events still happen)
+  function tutCine(dur, cam, events, end) { TUT.cine = { t: 0, dur, cam, ev: events.slice().sort((a, b) => a[0] - b[0]), end }; tutBars(true); for (const k in keys) keys[k] = false; }
+  function tutCineStep(dt) {
+    const C = TUT.cine; if (!C) return false;
+    C.t += dt;
+    while (C.ev.length && C.ev[0][0] <= C.t) { const e = C.ev.shift(); try { e[1](); } catch (er) { console.error(er); } }
+    if (C.t >= C.dur) { tutCineEnd(); return false; }
+    return true;
+  }
+  function tutCineEnd(skipped) {
+    const C = TUT.cine; if (!C) return; TUT.cine = null;
+    for (const e of C.ev) if (!skipped || e[2]) try { e[1](); } catch (er) { console.error(er); }   // skipping: only the events the story needs
+    tutBars(false); tutUI.cap.style.opacity = 0; tutUI.card.style.opacity = 0; snapCam = true;
+    if (C.end) C.end();
+  }
+  addEventListener('keydown', e => {   // nothing but Enter (skip) gets through while a cutscene plays
+    if (!TUT.on || !TUT.cine) return;
+    if (e.key === 'Enter' && !e.repeat && TUT.cine.t > 0.4) tutCineEnd(true);
+    if (e.key !== 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); }
+  }, true);
+  for (const ev of ['mousedown', 'pointerdown', 'contextmenu', 'wheel']) addEventListener(ev, e => { if (TUT.on && TUT.cine && !e.target.closest('#menu')) { e.stopImmediatePropagation(); } }, true);
+  function tutFadeTo(v, sec) { tutUI.fade.style.transition = `opacity ${sec}s`; tutUI.fade.style.opacity = v; }
+  // ship-frame helpers, in metres: x to starboard, z toward the bow
+  const tutV = new THREE.Vector3(), tutL = new THREE.Vector3();
+  function tsw(lx, ly, lz, out) { const c = Math.cos(ship.heading), s = Math.sin(ship.heading); return (out || new THREE.Vector3()).set(ship.x + lx * c + lz * s, ly + (ship.tutWreck ? 0 : ship.group.position.y), ship.z - lx * s + lz * c); }
+  function tutCam(p, l) { camera.position.copy(p); camera.lookAt(l); }
+  const tEase = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+
+  function tutMakeRaider(lat, along) {
+    const r = makeRaider(0, 0, 'brig', true); r.raid = false;
+    Object.assign(r, { tut: true, local: true, respawnT: Infinity, maxHp: 150, hp: 150, state: 'attack', huntsShip: true, boarder: false, speed: ship.speed, heading: ship.heading, sinkT: 0, pitch: 0, roll: 0, captured: false, boarded: false });
+    const p = tsw(lat, 0, along); r.x = p.x; r.z = p.z; r.group.rotation.set(0, r.heading, 0); r.group.position.set(r.x, 0, r.z); scene.add(r.group); r.tag.style.display = '';
+    TUT.raiders.push(r); return r;
+  }
+  function tutPin(r, lat, along, dt, k = 2) {   // hold a raider in place off our side (lashed alongside, or keeping station)
+    const p = tsw(lat, 0, along, tutV), q = 1 - Math.exp(-dt * k);
+    r.x += (p.x - r.x) * q; r.z += (p.z - r.z) * q; r.heading = ship.heading; r.speed = ship.speed;
+    r.group.position.x = r.x; r.group.position.z = r.z; r.group.rotation.y = r.heading;
+  }
+  const tutLat = r => (ship.T.B + r.T.B) / 2 + 3;   // hull to hull, lashed together
+  const tutDeckSpot = () => { const d = ship.walk.door; return { x: 0, z: d.z + 0.9 }; };
+  function tutBackAboard() { const s = tutDeckSpot(); attachToShip(s.x, shipFloor(s.x, s.z) ?? ship.walk.F.deckY(s.z), s.z, 0); snapCam = true; hudHint.innerHTML = deckHint; }
+
+  // ---- start: the lent galleon, out on the open sea ----
+  function tutStart() {
+    TUT.on = true; TUT.t = 0; TUT.done = {}; TUT.raiders = []; TUT.prevKey = STATE.shipKey || null;
+    document.body.classList.add('tutOn');
+    spawnShip('galleon'); STATE.shipKey = TUT.prevKey; save();   // she's lent for the opening, never saved as the captain's own
+    Object.assign(ship, { x: TUT_SEA.x, z: TUT_SEA.z, heading: TUT_SEA.h, speed: ship.T.speed * 0.5, sailSet: 1, sailTarget: 1 });
+    ship.group.position.set(ship.x, 0, ship.z); ship.group.rotation.set(0, ship.heading, 0);
+    for (const f of ship.furl) { if (f.kind === 'sq') { f.pv.scale.y = 1; f.pv.scale.z = 1; } else f.pv.scale.z = 1; }
+    TUT.cruise = true; BOARD.cool = 1e9;
+    const s = tutDeckSpot(); attachToShip(s.x, shipFloor(s.x, s.z) ?? ship.walk.F.deckY(s.z), s.z, 0);
+    player.root.visible = false;   // (below, in the great cabin)
+    TUT.stage = 'intro'; tutUI.fade.style.transition = 'none'; tutUI.fade.style.opacity = 1; requestAnimationFrame(() => tutFadeTo(0, 1.6));
+    const L = ship.T.L;
+    tutCine(11.5, u => {   // chase her from astern, catch up, and sweep round her side to the bow
+      const t = TUT.cine.t, a = tEase((t - 3.2) / 7) * 2.05, d = L * (1.55 - 0.65 * tEase((t - 2) / 6)), y = 26 - 14 * tEase((t - 3) / 6);
+      const p = tsw(Math.sin(a) * d, y, -Math.cos(a) * d + Math.min(t, 3) * 2, tutV), l = tsw(0, 9, L * 0.18 * (1 - tEase((t - 4) / 5)), tutL);
+      tutCam(p, l);
+    }, [
+      [1.6, () => tutCard('PIRATE GAME', 'THE OCEAN', 4.2)],
+      [7.6, () => tutSay('Somewhere far beyond the charts, off the edge of the known sea...', 3.4)],
+      [10.6, () => tutFadeTo(1, 0.8), true],
+    ], () => tutCabin());
+  }
+  // ---- the great cabin: at the desk, then the hull shakes ----
+  function tutCabin() {
+    TUT.stage = 'cabin'; player.root.visible = true; goInside('quarters');
+    IP.set(0, 0, -4.7); P.facing = 0; TUT.sit = 1; TUT.seat = true;
+    tutFadeTo(0, 1.0);
+    const at = (x, y, z, o) => interior.root.localToWorld((o || new THREE.Vector3()).set(x, y, z));
+    tutCine(7.4, () => {
+      const t = TUT.cine.t;
+      if (t < 3.4) tutCam(at(1.9 - t * 0.12, 1.75, -1.6 - t * 0.1, tutV), at(0, 1.25, -4.6, tutL));   // across the desk at the captain, poring over a chart
+      else { const u = tEase((t - 3.4) / 3.5); tutCam(at(1.5 - u * 2.6, 1.8 + u * 0.3, -1.9 + u * 0.4, tutV), at(-0.3 * u, 1.4 + u * 0.3, -4.6 + u * 0.5, tutL)); }
+    }, [
+      [0.4, () => tutSay('The great cabin. Yer charts, yer lamp, and the long night\'s watch...', 2.8)],
+      [3.0, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 1.2); SFX.creak(); }],
+      [3.2, () => tutSay('<b>*CRASH*</b>', 1.2)],
+      [4.0, () => { TUT.seat = false; }, true],
+      [4.4, () => tutSay('<b>First Mate Hargreave</b> (from the deck): CAPTAIN! Blackwater colours off the starboard side! She\'s rammed us!', 3.4)],
+    ], () => {
+      TUT.seat = false; TUT.sit = 0; IP.set(1.0, 0, -4.95); P.facing = 0; yaw = P.facing + Math.PI; pitch = 0.3;
+      tutObj('GET ON DECK', [['door', 'Walk to the cabin doors (WASD) and press <b>E</b>']]);
+    });
+  }
+  // ---- out on deck: the raider grapples alongside, and her boarders come over ----
+  function tutGrapple() {
+    TUT.stage = 'grapple'; tutTick('door'); tutObj(null);
+    const r = tutMakeRaider(170, 20); TUT.r1 = r;
+    const L = ship.T.L, lat0 = 170, latEnd = tutLat(r);
+    TUT.pinLat = lat0; TUT.pinAlong = 20;
+    tutCine(7.2, () => {
+      const t = TUT.cine.t;
+      TUT.pinLat = t < 3.6 ? lat0 + (latEnd - lat0) * tEase(t / 3.6) : latEnd; TUT.pinAlong = 20 * (1 - tEase(t / 3.6));
+      if (t < 3.8) tutCam(tsw(-L * 0.3, 50 - t * 4, -L * 1.15, tutV), tsw(TUT.pinLat * 0.5, 2, L * 0.1, tutL));   // high over our stern, the raider closing on the starboard side
+      else { const c = Math.cos(ship.heading), s2 = Math.sin(ship.heading), o = (lx, ly, lz, v) => v.set(P.pos.x + lx * c + lz * s2, P.pos.y + ly, P.pos.z - lx * s2 + lz * c); tutCam(o(-5, 4.5, -7, tutV), o(7, 1.2, 5, tutL)); }   // at the captain's shoulder: boarders over the starboard rail
+    }, [
+      [0.3, () => tutSay('<b>Hargreave:</b> There she is, a Blackwater raider, coming in fast!', 3)],
+      [3.5, () => { SFX.crash({ x: ship.x, z: ship.z }); CMB.shake = Math.max(CMB.shake, 0.9); ship.krJolt = 0.8; }],
+      [3.7, () => { startSiege(r); BOARD.cool = 1e9; }, true],
+      [4.0, () => tutSay('<b>Hargreave:</b> Grapples! They\'re boarding us! Draw yer blade, Captain, they\'re coming for YOU!', 3.2)],
+    ], () => {
+      TUT.pinLat = latEnd; TUT.pinAlong = 0; TUT.stage = 'combat';
+      if (!SIEGE.on) { startSiege(r); BOARD.cool = 1e9; }
+      tutObj('COMBAT ESSENTIALS', [['slash', '<b>F</b>: slash (tap again for a combo)'], ['block', 'Hold <b>X</b> or right-click: block'], ['parry', 'Block just as a blow lands: <b>parry</b>'], ['boarders', 'Cut down the boarders']]);
+    });
+  }
+  // ---- the wheel and the guns ----
+  function tutToWheel() {
+    TUT.stage = 'wheel'; BOARD.cool = 1e9; TUT.cruise = false;
+    tutSay('<b>Hargreave:</b> They\'re beaten! We\'ve cut the lines. Now take the wheel, Captain, and give her a broadside!', 4);
+    tutObj('TO THE WHEEL', [['wheel', 'Climb to the quarterdeck and press <b>E</b> at the wheel']]);
+  }
+  function tutCannons() {
+    TUT.stage = 'cannon'; tutTick('wheel');
+    tutObj('FIRE THE CANNONS', [['look', 'Drag the mouse to look toward the raider (starboard)'], ['fire', '<b>Space</b>: fire the guns on the side ye\'re looking'], ['sink1', 'Sink the Blackwater raider']]);
+  }
+  function tutSailing() {
+    TUT.stage = 'sail'; TUT.t = 0;
+    tutSay('<b>Hargreave:</b> She\'s going down! But look, more sails on the horizon! Get us under way, Captain!', 4);
+    tutObj('SAILING', [['sail', '<b>W</b>: set full sail'], ['steer', '<b>A</b> / <b>D</b>: steer her about'], ['slow', '<b>S</b>: shorten sail and slow'], ['sink2', 'Sink the two raiders (0/2)']]);
+  }
+  function tutSpawnPair() {
+    TUT.pair = [-0.45, 0.45].map(a => { const d = 950; const r = tutMakeRaider(Math.sin(a) * d, Math.cos(a) * d); r.heading = ship.heading + Math.PI + a * 0.3; r.hp = r.maxHp = 110; r.speed = 18; r.group.rotation.y = r.heading; return r; });
+    tutSay('<b>Hargreave:</b> Two of \'em, one on each bow! Bring her round and let \'em have it!', 3.6);
+  }
+  // ---- the Blackwater Beast ----
+  function tutBeast() {
+    TUT.stage = 'beast'; tutObj(null); tutUI.cap.style.opacity = 0;
+    if (!sailing) { if (inInterior) goUp(); if (!onShip) tutBackAboard(); takeWheel(); }
+    for (const r of TUT.raiders) if (r.state !== 'sinking' && r.state !== 'gone') damageShip(r, r.hp + 9999);
+    const c = makeBWCrab(); c.B.scale.setScalar(4.05); scene.add(c.B); c.eyeLight.distance = 260; c.eyeLight.intensity = 3; TUT.beast = c;
+    const side = -1, D0 = 230, D1 = ship.T.B * 0.5 + 62;   // it comes up off the port beam
+    const bp = tsw(side * D0, -90, 10); c.B.position.copy(bp); TUT.bD = D0; TUT.bY = -90; TUT.bRaise = 0; TUT.slam = 0;
+    ship.speed = Math.min(ship.speed, 6);
+    const L = ship.T.L;
+    const boil = () => { const p = tsw(side * TUT.bD, 0, 10); for (let i = 0; i < 6; i++) { const a = Math.random() * 6.28, rr = Math.random() * 70; puff(p.x + Math.cos(a) * rr, 1, p.z + Math.sin(a) * rr, { color: i % 3 ? 0xffffff : 0x3a2a24, size: 14 + Math.random() * 16, life: 1.6, grow: 2, vy: 6 + Math.random() * 8, op: 0.75 }); } };
+    tutCine(17.5, () => {
+      const t = TUT.cine.t, B = c.B, bpos = tsw(side * TUT.bD, TUT.bY, 10, tutV);
+      // the Beast: rises, comes on, rears and slams both claws down on her
+      if (t > 0.5 && t < 8.5) boil();
+      TUT.bY = t < 3 ? -90 : t < 8 ? -90 + 74 * tEase((t - 3) / 5) : -16;
+      TUT.bD = t < 8 ? D0 : t < 10 ? D0 + (D1 - D0) * tEase((t - 8) / 2) : D1;
+      B.position.set(bpos.x, TUT.bY + waveHeight(bpos.x, bpos.z, clock.elapsedTime) * 0.4, bpos.z);
+      B.rotation.y = Math.atan2(ship.x - bpos.x, ship.z - bpos.z) + Math.sin(t * 0.7) * 0.05;
+      const raise = t < 8.4 ? 0.3 : t < 10.2 ? 0.3 + 0.55 * tEase((t - 8.4) / 1.4) : 0.05, k = t > 10.2 && t < 10.5 ? 25 : 4;
+      for (const cl of c.claws) { cl.arm.rotation.x += (-raise - cl.arm.rotation.x) * Math.min(1, TUT.dt * k); const open = t < 10.2 && t > 8.6 ? 1 : 0; cl.fing.rotation.x += ((-0.05 - open * 0.6) - cl.fing.rotation.x) * Math.min(1, TUT.dt * 8); }
+      c.mouth.forEach((m, i) => { m.rotation.x = Math.sin(t * 9 + i * 1.5) * 0.35; });
+      c.legs.forEach(({ g, sd, i }) => { const ph = t * 4 + (i % 2 ? Math.PI : 0); g.rotation.z = sd * Math.max(0, Math.sin(ph)) * 0.2; });
+      // the wreck: she heels over, breaks her back and goes down
+      if (TUT.slam) { const w = t - TUT.slam; ship.group.position.y = -Math.min(14, w * w * 0.9) + waveHeight(ship.x, ship.z, clock.elapsedTime) * 0.5; ship.group.rotation.set(Math.min(0.35, w * 0.12), ship.heading, side * Math.min(1.1, 0.25 + w * 0.3)); if (Math.random() < 0.6) puff(ship.x + (Math.random() - 0.5) * L * 0.5, 2 + Math.random() * 10, ship.z + (Math.random() - 0.5) * L * 0.5, { color: Math.random() < 0.5 ? 0x6a4a2a : 0xffffff, size: 6 + Math.random() * 10, life: 1.5, grow: 1.6, vy: 6 + Math.random() * 10, vx: (Math.random() - 0.5) * 20, vz: (Math.random() - 0.5) * 20, op: 0.85 }); }
+      // the camera
+      if (t < 3) tutCam(tsw(ship.T.B * 0.9, 34, -L * 0.62, tutV), tsw(side * D0, 0, 10, tutL));   // high over the quarterdeck, out past the port rail at the boiling sea
+      else if (t < 8) { const u = (t - 3) / 5; tutCam(tsw(45 - u * 10, 7 + u * 4, L * 0.85 + u * 10, tutV), tsw(side * D0, 18 + u * 30, 10, tutL)); }   // low off our bow, looking back past her at it rising
+      else if (t < 10.4) tutCam(tsw(side * (TUT.bD + 75), 42, -L * 0.6, tutV), tsw(0, 10, 0, tutL));   // over its shoulder, down at the ship
+      else { const u = Math.min(1, (t - 10.4) / 5); tutCam(tsw(ship.T.B * 1.5 + u * 90, 30 + u * 40, -L * 0.9 - u * 60, tutV), tsw(side * D1 * 0.5, 4, 0, tutL)); }
+    }, [
+      [0.2, () => { SFX.creak(); tutSay('<b>Hargreave:</b> Captain... the water. Look at the water...', 2.8); }],
+      [1.0, () => { SEACTL.shake = Math.max(SEACTL.shake, 0.5); }],
+      [2.8, () => SFX.beastRoar({ x: c.B.position.x, z: c.B.position.z, range: 3000 }, 1.6, 1.6, DUN_PITCH)],
+      [4.2, () => tutCard('THE BLACKWATER BEAST', 'THE TERROR OF THE BLACKWATER FLEET', 3.6)],
+      [6.4, () => { SFX.beastRoar({ x: c.B.position.x, z: c.B.position.z, range: 3000 }, 1.8, 1.4, DUN_PITCH); SEACTL.shake = Math.max(SEACTL.shake, 0.9); }],
+      [8.2, () => tutSay('<b>Hargreave:</b> ALL HANDS... BRACE!', 2)],
+      [10.25, () => { TUT.slam = TUT.cine.t; ship.tutWreck = true; SFX.crash({ x: ship.x, z: ship.z }); setTimeout(() => SFX.crash({ x: ship.x, z: ship.z }), 160); SEACTL.shake = Math.max(SEACTL.shake, 2); flashT = 0.25;
+        const p = tsw(0, 0, 0); seaImpact(p.x, 4, p.z); for (let i = 0; i < 50; i++) { const a = Math.random() * 6.28, rr = Math.random() * 40; puff(p.x + Math.cos(a) * rr, 3 + Math.random() * 20, p.z + Math.sin(a) * rr, { color: i % 3 ? 0xffffff : 0x6a4a2a, size: 12 + Math.random() * 20, life: 2.2, grow: 1.8, vx: Math.cos(a) * 30, vz: Math.sin(a) * 30, vy: 20 + Math.random() * 30, op: 0.9 }); } }],
+      [11.5, () => tutSay('<b>*the deck splits beneath yer feet*</b>', 2.4)],
+      [13.4, () => tutFadeTo(1, 1.4), true],
+      [15.2, () => { tutUI.card.style.transition = 'opacity 1s'; tutCard('', '...', 2); }],
+    ], () => tutWake());
+  }
+  // ---- Gull Island: a beach, and nothing else ----
+  function tutBeach() {   // a dry spot of sand on Gull Island, round from the dock
+    const I = ISLANDS[0], base = Math.atan2(DOCK_DIR.y, DOCK_DIR.x);
+    for (const da of [0.7, -0.7, 1.1, -1.1, 0.4, -0.4, 1.6, -1.6]) {
+      const a = base + da, dx = Math.cos(a), dz = Math.sin(a);
+      const pts = [];
+      for (let d = I.r * 0.4; d < I.r * 1.4; d += 2) { const x = I.c.x + dx * d, z = I.c.y + dz * d, h = heightAt(x, z);
+        if (h < 0.9) { const q = pts[Math.max(0, pts.length - 4)];   // a few paces up from the surf
+          if (q && !onDock(q.x, q.z)) return { x: q.x, z: q.z, face: Math.atan2(dx, dz) }; break; }
+        if (h < 3.5) pts.push({ x, z }); else pts.length = 0; }
+    }
+    return { x: startP.x, z: startP.y, face: 0 };
+  }
+  function tutWake() {
+    tutCleanup();
+    const b = tutBeach(); P.pos.set(b.x, heightAt(b.x, b.z), b.z); P.vy = 0; P.grounded = true; P.facing = b.face + Math.PI; yaw = b.face + Math.PI * 0.5; pitch = 0.25; snapCam = true;
+    TUT.stage = 'wake'; TUT.lie = 1; TUT.beachAt = b; dist = 9;
+    tutFadeTo(0, 2.5);
+    tutCine(7, () => {
+      const t = TUT.cine.t, u = tEase(t / 7), f = b.face, px = P.pos.x, pz = P.pos.z;
+      tutCam(tutV.set(px + Math.sin(f) * (3 + u * 5) + Math.cos(f) * 2, P.pos.y + 1.2 + u * 2.5, pz + Math.cos(f) * (3 + u * 5) - Math.sin(f) * 2), tutL.set(px, P.pos.y + 0.4 + u * 0.8, pz));
+      TUT.lie = t < 3.2 ? 1 : 1 - tEase((t - 3.2) / 1.8);
+    }, [
+      [0.8, () => tutSay('...', 1.6)],
+      [2.6, () => tutSay('Sand. Gulls. The roar of surf. Ye\'re alive.', 2.6)],
+      [5.2, () => tutCard('GULL ISLAND', '', 2.6)],
+      [6.9, () => { TUT.lie = 0; }, true],
+    ], () => tutFinish(false));
+  }
+  // ---- tidying up: the wreck, the Beast and the raiders go; the galleon was never the captain's ----
+  function tutCleanup() {
+    if (TUT.cine) { const C = TUT.cine; TUT.cine = null; tutBars(false); }
+    if (SIEGE.on) endSiege(false);
+    if (inInterior) goUp();
+    if (sailing || onShip) detach();
+    player.root.visible = true; TUT.seat = false; TUT.sit = 0;
+    for (const r of TUT.raiders) { scene.remove(r.group); r.tag.remove(); const i = raiders.indexOf(r); if (i >= 0) raiders.splice(i, 1); }
+    TUT.raiders = []; TUT.pair = null; TUT.r1 = null;
+    if (TUT.beast) { scene.remove(TUT.beast.B); TUT.beast = null; }
+    if (ship) { if (ship.crew) ship.crew.forEach(c => c.tag.remove()); scene.remove(ship.group); ship = null; }
+    if (TUT.prevKey && SHIP_TYPES[TUT.prevKey]) spawnShip(TUT.prevKey);
+    STATE.shipKey = TUT.prevKey; TUT.cruise = false; BOARD.cool = 0;
+    hudHint.innerHTML = walkHint; camera.near = 1.0; camera.updateProjectionMatrix();
+  }
+  function tutFinish(skipped) {
+    if (!TUT.on) return;
+    if (skipped) { tutCleanup(); P.pos.set(startP.x, DOCK_TOP, startP.y); P.vy = 0; P.grounded = true; snapCam = true; tutFadeTo(0, 0.6); }
+    TUT.on = false; TUT.stage = 'done'; TUT.lie = 0; player.root.rotation.order = 'XYZ'; tutObj(null); tutBars(false);
+    document.body.classList.remove('tutOn');
+    STATE.seen = true; save();
+    setTimeout(() => toast(skipped ? 'Talk to the townsfolk for work, and sail through floating cargo for gold!' : 'Shipwrecked on Gull Island. Find Harbormaster Hal at the dock: he can get ye a new ship. The townsfolk will have work for ye.'), 600);
+  }
+
+  // ---- every frame ----
+  let tutPrevSlash = 0;
+  function updateTut(dt, t) {
+    if (!TUT.on) return;
+    TUT.dt = dt; TUT.t += dt;
+    if (tutCapT > 0) { tutCapT -= dt; if (tutCapT <= 0) tutUI.cap.style.opacity = 0; }
+    const cine = !!TUT.cine;
+    if (cine) for (const k in keys) keys[k] = false;
+    if (ship && !ship.tutWreck && ship.hp < ship.maxHp * 0.35) ship.hp = ship.maxHp * 0.35;
+    // the captain at the desk: seated, then rising
+    if (TUT.stage === 'cabin' && inInterior) {
+      TUT.sit += ((TUT.seat ? 1 : 0) - TUT.sit) * Math.min(1, dt * 3.5);
+      if (TUT.sit > 0.02) {
+        const s = TUT.sit; if (TUT.seat) IP.set(0, 0, -4.7); P.facing = 0; P.speed = 0;
+        player.root.position.set(0, 0, -4.7 + 0.12 * s); player.root.rotation.set(0, 0, 0);
+        player.body.position.y -= 0.27 * s;
+        player.legs.forEach(l => { l.rotation.x += (-1.5 - l.rotation.x) * s; });
+        player.knees.forEach(k => { k.rotation.x += (1.5 - k.rotation.x) * s; });
+        player.arms.forEach(a => { a.rotation.x += (-0.85 - a.rotation.x) * s; });
+        player.forearms.forEach(f => { f.rotation.x += (-0.75 - f.rotation.x) * s; });
+        player.head.rotation.x += 0.35 * s;   // head bent over the chart
+        if (!TUT.seat && s < 0.5) IP.set(1.0, 0, -4.95);
+      }
+    }
+    if (TUT.stage === 'cabin' && !cine && !inInterior && onShip) tutGrapple();
+    // the raider lashed alongside, then standing off for the gunnery lesson
+    const r1 = TUT.r1;
+    if (r1 && r1.state !== 'sinking' && r1.state !== 'gone') {
+      if (TUT.stage === 'grapple' || TUT.stage === 'combat') tutPin(r1, TUT.pinLat, TUT.pinAlong, dt, TUT.stage === 'grapple' ? 8 : 4);
+      else if (TUT.stage === 'wheel' || TUT.stage === 'cannon') tutPin(r1, Math.max(tutLat(r1) + 10, 85), 0, dt, 0.6);
+    }
+    // overboard? the crew haul ye back
+    if (['combat', 'wheel', 'cannon', 'sail'].includes(TUT.stage) && !onShip && !sailing && !inInterior && !cine) { TUT.wet = (TUT.wet || 0) + dt; if (TUT.wet > 2.5) { TUT.wet = 0; tutBackAboard(); toast('Hargreave throws ye a line and the crew haul ye back aboard!'); } } else TUT.wet = 0;
+    if (TUT.stage === 'combat') {
+      const sl = PLAYER.slashT > 0 ? 1 : 0; if (sl && !tutPrevSlash) TUT.slashes = (TUT.slashes || 0) + 1; tutPrevSlash = sl; if (TUT.slashes >= 2) tutTick('slash');
+      if (CMB.blocking) { TUT.blockT = (TUT.blockT || 0) + dt; if (TUT.blockT > 0.4) tutTick('block'); }
+      if (CMB.parryT > 0) tutTick('parry');
+      if (CMB.blockHit > 0) tutTick('block');
+      if (!SIEGE.on) { tutTick('boarders'); tutToWheel(); }
+    }
+    if (TUT.stage === 'wheel' && sailing) tutCannons();
+    if (TUT.stage === 'cannon') {
+      if (r1) { const fx = -Math.sin(yaw), fz = -Math.cos(yaw), dx = r1.x - ship.x, dz = r1.z - ship.z, d = Math.hypot(dx, dz); if ((fx * dx + fz * dz) / d > 0.75) tutTick('look'); }
+      if (ship.reload && (ship.reload[1] > 0 || ship.reload[-1] > 0)) tutTick('fire');
+      if (!r1 || r1.state === 'sinking' || r1.state === 'gone') { tutTick('sink1'); tutSailing(); }
+    }
+    if (TUT.stage === 'sail') {
+      if (ship.sailSet > 0.8 && keys['w']) tutTick('sail');
+      if (keys['a'] || keys['d'] || keys['arrowleft'] || keys['arrowright']) { TUT.steerT = (TUT.steerT || 0) + dt; if (TUT.steerT > 1) tutTick('steer'); }
+      if (keys['s'] && TUT.done.sail) tutTick('slow');
+      if (!TUT.pair && (TUT.done.sail && TUT.done.steer || TUT.t > 20)) tutSpawnPair();
+      if (TUT.pair) { const n = TUT.pair.filter(r => r.state === 'sinking' || r.state === 'gone').length; const e = tutUI.obj.querySelector('[data-k="sink2"]'); if (e) e.innerHTML = `Sink the two raiders (${n}/2)`;
+        if (n === 2) { tutTick('sink2'); TUT.stage = 'lull'; TUT.t = 0; tutSay('<b>Hargreave:</b> Ha! That\'s the last of \'em! Not a Blackwater sail left on the...', 3.2); } }
+    }
+    if (TUT.stage === 'lull' && TUT.t > 3.4) tutBeast();
+    // waking on the beach: flat on yer back, then up
+    if (TUT.lie > 0.001 && !inInterior) {
+      player.root.rotation.order = 'YXZ'; player.root.rotation.set(-Math.PI / 2 * TUT.lie, P.facing, 0); player.root.position.y = P.pos.y + 0.18 * TUT.lie;
+      player.knees.forEach(k => { k.rotation.x += 0.4 * TUT.lie; });
+    }
+    if (TUT.cine) { tutCineStep(dt); if (TUT.cine) TUT.cine.cam(); }
+  }
+  window.__tut = { TUT, tutStart, tutFinish, tutBeast, tutCineEnd, tutGrapple,
+    goUp: () => { if (inInterior) goUp(); }, wheel: () => { if (inInterior) goUp(); if (!sailing) takeWheel(); }, sink: r => damageShip(r, 99999),
+    kill: () => SIEGE.list.forEach(c => { c.hp = 0; c.st = 'dead'; }), state: () => ({ stage: TUT.stage, cine: TUT.cine ? +TUT.cine.t.toFixed(1) : 0, inInterior, onShip, sailing, siege: SIEGE.on, boarders: SIEGE.list.length, hp: PLAYER.hp, ship: ship ? Math.round(ship.hp) + '/' + ship.maxHp : null, done: TUT.done, pos: [Math.round(P.pos.x), Math.round(P.pos.z)] }) };
   function tick() {
     if (!settledWorld) { settledWorld = true; try { window.__settled = settleWorld(); } catch (e) { console.error(e); } }
     const t0 = performance.now(), ran0 = lastFrameAt;
@@ -16131,6 +16472,7 @@ window.__pgBoot = () => {
     updateSerpents(dt, t);
     updateSeaBeast(dt, t);
     updateEnvironment(dt);
+    try { updateTut(dt, t); } catch (e) { if (tickErrs++ < 8) console.error(e); }   // the opening: its cutscenes take the camera
     try { applyAbyss(dt); } catch (e) { console.error(e); }
     // Underwater atmosphere: short blue-green visibility, subdued daylight,
     // and no above-water sky/cloud dome when the camera is below the surface.
@@ -16188,7 +16530,7 @@ window.__pgBoot = () => {
     // Keep startup resilient on browsers with limited WebGL support.
   }
   refreshQuestHud();
-  if (!STATE.seen) { STATE.seen = true; save(); setTimeout(() => toast('Talk to the townsfolk for work, and sail through floating cargo for gold!'), 1500); }
+  if (!STATE.seen) TUT.pending = true;   // a new captain: the opening plays when they press Play
   tick();
 };
 if (window.__pgCanStart) { const b = window.__pgBoot; window.__pgBoot = null; b(); }
