@@ -3221,6 +3221,14 @@ window.__pgBoot = () => {
     if (X9 && X9.hut) add('brin', toward(X9.hut, X9.vil, 9), X9.vil, { name: 'Marsh-warden Brin', look: { coat: 0x4a5a34, shirt: 0x8a8a5a, pants: 0x3a3424, hat: 'straw', hatColor: 0x8a7a4a, beard: 0x6a5a3a, hair: 0x6a5a3a, skin: 0xb8885a }, lines: ["Watch where ye step. The marsh swallows boots, and sometimes the men in 'em.", "From my hut I can see every boat comin' into Saltmarsh."] });
     if (X1 && X1.camp) add('finn', v2(X1.camp.x, X1.camp.z), { x: X1.I.c.x, z: X1.I.c.y }, { name: 'Castaway Finn', look: { shirt: 0xd8d0b8, pants: 0x6a5a48, hair: 0x8a6a3a, beard: 0x8a6a3a, skin: 0xc8844e }, lines: ["Three hundred and twelve days on this beach. I've named every crab.", "Ye wouldn't happen to have any bread? Real bread?"] });
     if (X7 && X7.shelter) add('tess', toward(X7.shelter, { x: X7.I.c.x, z: X7.I.c.y }, 5), { x: X7.I.c.x, z: X7.I.c.y }, { name: 'Warden Tess', look: { shirt: 0x6a8a4a, pants: 0x4a3a2a, hat: 'straw', hatColor: 0xc8b078, hair: 0xa84a24, longHair: true, skin: 0xd8a47a }, lines: ["Every turtle on this beach has a name, and I know 'em all.", "Tread soft. There's eggs under that sand."] });
+    // an elder in each of the far villages
+    for (const [vn, key, def] of [
+      ['Vinehollow', 'oriel', { name: 'Vintner Oriel', look: { shirt: 0x6a2a4a, pants: 0x3a2a1a, hat: 'straw', hatColor: 0xb89a5a, beard: 0x8a8a8a, hair: 0x8a8a8a, skin: 0xc8946a }, lines: ["Grapes in a jungle, they said. Madness, they said. Taste this and tell me it's madness.", "The parrots get more of my harvest than I do."] }],
+      ['Ashfall', 'cinda', { name: 'Elder Cinda', look: { coat: 0x4a3a34, shirt: 0x8a6a5a, pants: 0x2a2420, hair: 0xe8e8e0, longHair: true, skin: 0x9a6a48 }, lines: ["We live on the mountain's knee, captain. It feeds us, and one day it will eat us.", "Ash makes the best soil in the world. Mind ye don't breathe it."] }],
+      ['Shellharbor', 'coralie', { name: 'Net-mender Coralie', look: { shirt: 0x5ab8c8, dress: 0x3a8a9a, hair: 0x2a1a14, longHair: true, skin: 0x8a5a3a }, lines: ["The cove sings at night, captain. Not everyone can hear it.", "Every net in Shellharbor passes through my hands."] }],
+      ['Coral Heights', 'imelda', { name: 'Schoolmistress Imelda', look: { shirt: 0xe8e0d0, dress: 0x3a4a6a, hair: 0x5a3a24, longHair: true, skin: 0xe0b08a }, lines: ["Twelve children, one slate, and a map of the world that's forty years out of date.", "Do ye know yer letters, captain? Ye'd be surprised how many don't."] }],
+      ['Saltmarsh', 'morg', { name: 'Eel-catcher Morg', look: { shirt: 0x5a6a4a, pants: 0x3a3424, hat: 'bandana', hatColor: 0x4a5a3a, beard: 0x5a4a2a, hair: 0x5a4a2a, skin: 0xa8784e }, lines: ["Eels, captain. Smoked, stewed, pickled, pied. Saltmarsh runs on eels.", "There's one out there as long as yer ship. I've seen it."] }]]) {
+      const V = SITES.find(q => q.name === vn); if (V) add(key, v2(V.x - 7, V.z + 5), { x: V.x, z: V.z }, def); }
     { const V = HOME.vil; add('mabel', v2(V.x + 6, V.z + 6), { x: V.x, z: V.z }, { name: 'Mabel of Brackenford', look: { shirt: 0xc87a8a, dress: 0x8a4a5a, hair: 0x6a4a2a, longHair: true, skin: 0xe0b08a }, lines: ["Brackenford's quiet, captain. We like it that way.", "My Finn went to sea a year ago and never came home."] }); }
     return G;
   })();
@@ -5911,6 +5919,107 @@ window.__pgBoot = () => {
           { type: 'talk', npc: 'Warden Tess', text: 'Tell Warden Tess the nests are safe', lines: ["Every one of them? Oh, captain. Thank ye."] } ] },
     };
     for (const k in NQ) QUESTS[k] = NQ[k];
+  }
+
+  // ---- more quests: the far villages' elders, and follow-up work for folk ye've already helped ----
+  {
+    const P = (k, o) => () => { const q = typeof k === 'function' ? k() : k; return q ? { x: q.x + (o || [0, 0])[0], z: q.z + (o || [0, 0])[1] } : null; };
+    const X1 = ISLX[1], X3 = ISLX[3], X4 = ISLX[4], X7 = ISLX[7], X8 = ISLX[8], X9 = ISLX[9];
+    const campOf = i => { const S = SITES.find(q => q.kind === 'camp' && q.i === i); return S ? { x: S.x, z: S.z } : null; };
+    const fort = () => { const S = SITES.find(q => q.kind === 'fort'); return S ? { x: S.x, z: S.z } : null; };
+    const isle = i => () => ({ x: ISLANDS[i].c.x, z: ISLANDS[i].c.y });
+    const after = (who, what) => `Once ye've helped ${who} with ${what}, ${who.split(' ').pop()} will have more work.`;
+    const MQ = {
+      vintage: { title: 'The lost vintage', reward: 700, giver: 'Vintner Oriel', hint: 'Vintner Oriel, in the village of Vinehollow on Jungle Isle, has lost a harvest.',
+        start: ["Blackwater raiders rolled my best casks right out of the cellar, captain. Forty years of vintage!", "Their camp's up in the jungle. Take back what's mine, and bring me hardwood for new barrels.", "Then carry a cask to Gus at the Salty Gull. He's been begging for a taste."],
+        done: ["Gus says it's the finest drop ever poured on Gull Island. My vines thank ye, captain."],
+        stages: [
+          { type: 'kill', what: 'Blackwater raider', n: 4, text: 'Take the wine back from the Blackwater raiders camped in the Jungle Isle hills', at: () => campOf(2) },
+          { type: 'mats', mats: { wood: 4 }, text: 'Gather 4 hardwood for new barrels' },
+          { type: 'talk', npc: 'Vintner Oriel', need: { mats: { wood: 4 } }, text: 'Bring the casks and hardwood to Vintner Oriel in Vinehollow', lines: ["My casks, home again! And oak for more.", "Here: this one's for Gus. Don't drink it on the way."] },
+          { type: 'talk', npc: 'Gus', text: "Deliver Oriel's cask to Gus at the Salty Gull on Gull Island", lines: ["Jungle wine? *sip* ...Oh. Oh, that's good.", "Tell Oriel I'll take every barrel he can spare."] },
+          { type: 'talk', npc: 'Vintner Oriel', text: 'Tell Vintner Oriel what Gus thought', lines: ["Every barrel? Ha! Vinehollow's made, captain."] } ] },
+      embers: { title: 'Ash and embers', reward: 750, giver: 'Elder Cinda', hint: 'Elder Cinda, in the village of Ashfall on Smoke Peak, fears the mountain is waking.',
+        start: ["The mountain grumbles more every night, captain, and Blackwater men are digging in its side.", "Drive them off. Then fetch water from the hot spring, and ask the pyre-keeper at the temple to bless it.", "Blessed spring water poured on our well keeps the mountain calm. So the old ones say."],
+        done: ["The mountain sleeps, and Ashfall sleeps with it. Ye have our thanks, captain."],
+        stages: [
+          { type: 'kill', what: 'Blackwater raider', n: 4, text: 'Drive off the Blackwater raiders digging on the slopes of Smoke Peak', at: () => campOf(3) },
+          { type: 'spot', at: P(() => X3 && (X3.springs[1] || X3.springs[0])), r: 16, label: 'Fill a flask at the hot spring', text: 'Fill a flask at a hot spring on Smoke Peak', act: () => toast('The flask is almost too hot to hold.') },
+          { type: 'talk', npc: 'Pyre-keeper Ashra', text: 'Have Pyre-keeper Ashra bless the water at the fire temple', lines: ["Cinda sent ye? She's wise to. *murmurs over the flask*", "There. The mountain will know this water."] },
+          { type: 'talk', npc: 'Elder Cinda', text: 'Bring the blessed water to Elder Cinda in Ashfall', lines: ["*pours it into the well* Listen... the grumbling's stopped.", "Old ways, captain. They work more often than not."] } ] },
+      song: { title: 'The singing cove', reward: 650, giver: 'Net-mender Coralie', hint: 'Net-mender Coralie, in the village of Shellharbor on Mermaid Cove, hears something at night.',
+        start: ["The cove sings at night, captain. Lately it sings sad.", "My gran said the song comes from the sea arch, and it goes quiet when the sea's been robbed.", "Bring back some of what was taken, pearls, and listen at the arch when the moon is up."],
+        done: ["Hear it? It's singing happy again. Ye've a kind heart, for a pirate."],
+        stages: [
+          { type: 'mats', mats: { pearl: 3 }, text: 'Gather 3 pearls from the oysters (Mermaid Cove has the most)' },
+          { type: 'spot', at: P(() => X8 && X8.arch), r: 26, cond: isNight, condText: 'Only silence. The cove sings when the moon is up. Come back after dark.', label: 'Listen at the sea arch', text: 'Listen at the sea arch on Mermaid Cove, after dark', act: () => { SFX.wail && SFX.wail(); toast('A low, sweet humming rises from the water under the arch.'); } },
+          { type: 'talk', npc: 'Net-mender Coralie', need: { mats: { pearl: 3 } }, text: 'Bring the pearls to Net-mender Coralie in Shellharbor', lines: ["We'll give them back to the sea tonight, together.", "Here, for the listening. Most can't hear it at all."] } ] },
+      lessons: { title: 'A map for the schoolroom', reward: 550, giver: 'Schoolmistress Imelda', hint: 'Schoolmistress Imelda, in the village of Coral Heights on Port Coral, needs a new map.',
+        start: ["My children are learning from a map that shows Smoke Peak as 'here be dragons', captain.", "Sera the navigator in Port Coral draws the best charts. She'll want the waters checked first, I expect."],
+        done: ["The children have stuck a little ship on the map where yer route runs. They call it 'the captain's line'."],
+        stages: [
+          { type: 'talk', npc: 'Sera the navigator', text: 'Ask Sera the navigator in Port Coral for a new map', lines: ["A schoolroom map? Gladly. But my charts of the west are old.", "Sail past Driftwood Isle and Gull Rocks for me, and I'll draw it fresh."] },
+          { type: 'sail', at: isle(9), r: 400, text: 'Sail past Driftwood Isle' },
+          { type: 'sail', at: isle(6), r: 300, text: 'Sail past Gull Rocks' },
+          { type: 'talk', npc: 'Sera the navigator', text: 'Report the coastlines to Sera the navigator', lines: ["*scratch scratch* There. Every island, true as the compass. Take it to Imelda."] },
+          { type: 'talk', npc: 'Schoolmistress Imelda', text: 'Bring the new map to Schoolmistress Imelda in Coral Heights', lines: ["Oh, it's beautiful! And no dragons!", "Thank ye, captain. Twelve children will remember yer name."] } ] },
+      eel: { title: 'The great eel', reward: 800, giver: 'Eel-catcher Morg', hint: 'Eel-catcher Morg, in the village of Saltmarsh on Driftwood Isle, swears he has seen a monster.',
+        start: ["There's an eel in the marsh pools as long as a ship, captain. It ate my best trap.", "It only comes up at night. And if ye see a Blackwater galleon, sink it: they've been dumping bilge in the marsh and it's made the beast angry.", "Fisher Toma on Gull Island will want to hear about it. He never believes me."],
+        done: ["Toma believes me now! Ha! Forty years of laughing at old Morg, and now he's buying me drinks."],
+        stages: [
+          { type: 'kill', what: 'galleon', n: 1, text: 'Sink a Blackwater galleon fouling the marsh' },
+          { type: 'spot', at: P(() => X9 && X9.pools[0]), r: 16, cond: isNight, condText: 'The water is still. The eel only rises at night.', label: 'Watch the pool for the eel', text: 'Watch the marsh pools on Driftwood Isle after dark', act: () => { SFX.splash && SFX.splash(null, true); toast('The water heaves... a vast dark back rolls through the pool, and is gone.'); } },
+          { type: 'talk', npc: 'Fisher Toma', text: 'Tell Fisher Toma on the Gull Island dock what ye saw', lines: ["An eel as long as a ship? Morg's been telling that story for... wait, ye SAW it?", "...I owe that old man an apology."] },
+          { type: 'talk', npc: 'Eel-catcher Morg', text: 'Report back to Eel-catcher Morg in Saltmarsh', lines: ["Told ye! Didn't I tell ye? Here, captain, and a smoked eel for the road."] } ] },
+      apology: { title: "The hermit's apology", reward: 600, giver: 'Hermit Jonah', hint: 'Hermit Jonah, on Jungle Isle, has something on his mind.',
+        start: ["Captain. I said something unkind to Rosa, years ago, and she still sends me oranges.", "I want to send her something back. The gulls on Gull Rocks lay the prettiest speckled eggs: she used to paint them, when we were young.", "And bandits from Driftwood have been bothering her stall. Deal with them, would ye?"],
+        done: ["Rosa wrote back. Three pages. I haven't smiled this much in forty years."],
+        stages: [
+          { type: 'spot', at: isle(6), r: 60, label: 'Take a speckled egg from the nests', text: 'Gather a speckled egg from the nests on Gull Rocks', act: () => toast('A pale blue egg, speckled brown. The gulls are not pleased.') },
+          { type: 'kill', what: 'Bandit', n: 3, text: 'Defeat bandits from the Driftwood Isle camp', at: () => ({ x: ISLANDS[9].c.x, z: ISLANDS[9].c.y }) },
+          { type: 'talk', npc: 'Rosa', text: "Give Jonah's egg and letter to Rosa in the Gull Town square", lines: ["A speckled egg? He remembered...", "Tell him I forgave him a long time ago. Tell him to come for supper."] },
+          { type: 'talk', npc: 'Hermit Jonah', text: "Bring Rosa's answer back to Hermit Jonah on Jungle Isle", lines: ["Supper? She said supper? *wipes eyes* Damn parrots, kicking up dust."] } ] },
+      // follow-ups for the folk out at the landmarks
+      fortsecret: { title: "The fort's secret", reward: 1400, giver: 'Governor Alvarez', hint: after('Governor Alvarez', 'his soirée'),
+        start: ["A word in private, captain. Fort Blackwater has been buying cannon from someone in my own colony.", "Go in. Thin out the garrison, look at the gate after dark when the shipments come, and sink the galleon that carries them.", "Then I'll know who to hang."],
+        done: ["The traitor is in irons, and Fort Blackwater will get no more guns from Port Coral."],
+        stages: [
+          { type: 'kill', what: 'Blackwater soldier', n: 5, text: 'Defeat 5 soldiers of Fort Blackwater on Skull Isle', at: fort },
+          { type: 'spot', at: P(() => X4 && X4.gate), r: 26, cond: isNight, condText: "The shipments come after dark. Come back at night.", label: 'Watch the fort gate', text: 'Watch the gate of Fort Blackwater after dark', act: () => toast("Crates marked with the Port Coral sugar mill's brand... and a galleon waiting offshore.") },
+          { type: 'kill', what: 'galleon', n: 1, text: 'Sink the Blackwater galleon carrying the guns' },
+          { type: 'talk', npc: 'Governor Alvarez', text: 'Report to Governor Alvarez at his mansion', lines: ["The sugar mill's brand? Then I know exactly who. Leave it with me.", "Take this, captain. And say nothing of it in the taverns."] } ] },
+      signals: { title: 'Fires across the sea', reward: 1000, giver: 'Watchwarden Ida', hint: after('Watchwarden Ida', 'the beacon'),
+        start: ["One beacon's good. A chain of them is better: a fire on every island, so word of raiders runs faster than any ship.", "Build signal fires on Palm Key, Gull Rocks and Turtle Cay. Light the last one after dark, and I'll see if the chain holds."],
+        done: ["Three fires answered mine last night. Blackwater can't so much as raise a sail without the whole sea knowing."],
+        stages: [
+          { type: 'mats', mats: { wood: 6 }, text: 'Gather 6 hardwood for the signal fires' },
+          { type: 'spot', at: P(() => X1 && X1.camp), r: 22, label: 'Build a signal fire', text: "Build a signal fire by the castaway's camp on Palm Key", act: () => toast('Fire built and ready.') },
+          { type: 'spot', at: isle(6), r: 60, label: 'Build a signal fire', text: 'Build a signal fire on Gull Rocks', act: () => toast('Fire built, well clear of the nests.') },
+          { type: 'spot', at: P(() => X7 && X7.shelter), r: 16, cond: isNight, condText: 'Light the chain after dark, so Ida can see it.', label: 'Build and light the last fire', text: "Build and light the last fire by the warden's shelter on Turtle Cay, after dark", act: () => toast('WHOOSH! And far away, one after another, the other fires flare up in answer.') },
+          { type: 'talk', npc: 'Watchwarden Ida', text: 'Report to Watchwarden Ida at the summit tower', lines: ["I saw every one of them. Beautiful.", "Here, captain. The whole sea's a little safer tonight."] } ] },
+      thunder: { title: 'Thunder on the bay', reward: 1100, giver: 'Gunner Rourke', hint: after('Gunner Rourke', 'his powder'),
+        start: ["Twelve guns on that fort, and Blackwater keeps sending more ships to feed 'em.", "Sink three of their raiders and one of their galleons. Let 'em hear thunder for once."],
+        done: ["Ha! I heard the galleon go down from here. Best music there is."],
+        stages: [
+          { type: 'kill', what: 'raider', n: 3, text: 'Sink 3 Blackwater raider ships' },
+          { type: 'kill', what: 'galleon', n: 1, text: 'Sink a Blackwater galleon' },
+          { type: 'talk', npc: 'Gunner Rourke', text: 'Report to Gunner Rourke at the harbour battery', lines: ["Four ships! Captain, ye're a gun crew all by yerself."] } ] },
+      lament: { title: "The widow's song", reward: 900, giver: 'Old Wenna', hint: after('Old Wenna', 'the toy boat'),
+        start: ["My mother was a widow of the Widow's Lament, captain. Her man went down with Captain Hollowell's ship.", "She always wanted pearls laid on the water where it sank. She never had the boat to do it.", "Would ye? And tell Mother Morrow, in the graveyard. She keeps the names."],
+        done: ["Mother Morrow's carved his name on the chapel wall. After all these years. Thank ye, captain."],
+        stages: [
+          { type: 'mats', mats: { pearl: 2 }, text: 'Gather 2 pearls' },
+          { type: 'sail', at: () => LAMENT, r: 160, text: "Sail to where the Widow's Lament went down, far out in the south-east sea" },
+          { type: 'talk', npc: 'Mother Morrow', need: { mats: { pearl: 2 } }, text: 'Tell Mother Morrow in the graveyard behind the chapel, and give the pearls to the sea in her name', lines: ["Wenna's father? Tobias Venn, aye. I have his name.", "I'll carve it where the living can see it."] },
+          { type: 'talk', npc: 'Old Wenna', text: 'Tell Old Wenna it is done', lines: ["Pearls on the water, and his name on the wall. Mother can rest now. So can I."] } ] },
+      deep: { title: 'What sleeps in the deep', reward: 1800, giver: 'Pearl-diver Lio', hint: after('Pearl-diver Lio', 'the waterfall'),
+        start: ["That letter in the lockbox, captain. Blackwater sank a treasure ship in the deep water north of the cove.", "Nobody dives there. Something lives down there, something with arms.", "Drive it off, and I'll dive for the gold. We'll split it."],
+        done: ["I've dived the deep now. Gold everywhere. And I didn't get eaten! Yer share, captain."],
+        stages: [
+          { type: 'kraken', at: () => KRAKEN_DEEP, r: 150, text: 'Sail into the deep north of Mermaid Cove and drive off what lives there' },
+          { type: 'talk', npc: 'Pearl-diver Lio', text: 'Tell Pearl-diver Lio the deep is clear', lines: ["Ye fought the Kraken? For me? Right. I'm diving. Wish me luck."] } ] },
+    };
+    for (const k in MQ) QUESTS[k] = MQ[k];
   }
   // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
   STATE.qprog = STATE.qprog || {};
