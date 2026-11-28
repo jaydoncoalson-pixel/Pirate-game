@@ -2290,6 +2290,20 @@ window.__pgBoot = () => {
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wmapH[j * N + i] = heightAt(WMAP.min + (i + 0.5) * cell, WMAP.min + (j + 0.5) * cell); }
   const shallowData = new Uint8Array(WMAP.N * WMAP.N * 4);
   for (let i = 0; i < WMAP.N * WMAP.N; i++) { shallowData[i * 4] = Math.round(sstep(-6.95, -1.2, wmapH[i]) * 255); shallowData[i * 4 + 3] = 255; }
+  // distance to the shoreline, in metres (green channel, 0-200 m): the surf rolls toward the nearest beach by this, so it
+  // always comes ashore, even over sandbars, coves and bumps in the seabed (where "shallower" can point back out to sea).
+  // Seeded at the waterline itself (interpolated between a land cell and its sea neighbour), then a two-pass chamfer sweep.
+  { const N = WMAP.N, cell = WMAP.size / N, D = new Float32Array(N * N).fill(1e9), H = wmapH;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const k = j * N + i, h = H[k]; if (h >= 0) { D[k] = 0; continue; }
+      let best = 1e9; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue; const hl = H[jj * N + ii]; if (hl >= 0) best = Math.min(best, cell * (-h) / (hl - h)); }
+      D[k] = best; }
+    const a = cell, b = cell * Math.SQRT2;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const k = j * N + i; let d = D[k];
+      if (i > 0) d = Math.min(d, D[k - 1] + a); if (j > 0) { d = Math.min(d, D[k - N] + a); if (i > 0) d = Math.min(d, D[k - N - 1] + b); if (i < N - 1) d = Math.min(d, D[k - N + 1] + b); } D[k] = d; }
+    for (let j = N - 1; j >= 0; j--) for (let i = N - 1; i >= 0; i--) { const k = j * N + i; let d = D[k];
+      if (i < N - 1) d = Math.min(d, D[k + 1] + a); if (j < N - 1) { d = Math.min(d, D[k + N] + a); if (i < N - 1) d = Math.min(d, D[k + N + 1] + b); if (i > 0) d = Math.min(d, D[k + N - 1] + b); } D[k] = d; }
+    for (let k = 0; k < N * N; k++) shallowData[k * 4 + 1] = Math.round(Math.min(1, D[k] / 200) * 255); }
+  window.__sd = (x, z) => { const N = WMAP.N, i = Math.floor((x - WMAP.min) / WMAP.size * N), j = Math.floor((z - WMAP.min) / WMAP.size * N); const k = j * N + i; return [shallowData[k * 4 + 1] / 255 * 200, wmapH[k]]; };
   const shallowTex = new THREE.DataTexture(shallowData, WMAP.N, WMAP.N, THREE.RGBAFormat);
   shallowTex.magFilter = THREE.LinearFilter; shallowTex.minFilter = THREE.LinearFilter; shallowTex.needsUpdate = true;
   const WM = (() => {
@@ -2361,13 +2375,17 @@ window.__pgBoot = () => {
     },
     vertexShader: `
       #define WAVE_N ${WAVE_N}
-      uniform float time; uniform vec4 waves[WAVE_N]; uniform float wavePh[WAVE_N];
+      uniform float time; uniform vec4 waves[WAVE_N]; uniform float wavePh[WAVE_N]; uniform sampler2D shallowTex; uniform vec2 wmin; uniform float wsize;
       varying vec3 vWorld; varying vec3 vNormal; varying float vCrest; varying float vJac;
       const float PI = 3.14159265;
       void main(){
         vec3 p = (modelMatrix * vec4(position, 1.0)).xyz;
         vec3 ctr = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float edge = 1.0 - smoothstep(560.0, 780.0, max(abs(p.x - ctr.x), abs(p.z - ctr.z)));
+        // the open-sea swell dies away as it reaches the shallows: near a beach the surf takes over, so swells never
+        // roll back out from the sand or heave up over it
+        float sdV = texture2D(shallowTex, (p.xz - wmin) / wsize).g * 200.0;
+        edge *= mix(0.18, 1.0, smoothstep(6.0, 110.0, sdV));
         vec3 g = p;
         vec3 tangent = vec3(1.0, 0.0, 0.0);
         vec3 binormal = vec3(0.0, 0.0, 1.0);
@@ -2472,10 +2490,18 @@ window.__pgBoot = () => {
         float foam = clamp(cap * (0.55 + streak * 0.9) - 0.25 + seaState * streak * 0.15 * mid, 0.0, 1.0);
         foam = max(foam, smoothstep(0.62, 0.9, vCrest + streak * 0.25) * 0.5);
         foam *= smoothstep(0.25, 0.65, microH + streak * 0.3);   // foam lies in lacy patches, not flat sheets
-        // surf: bands of foam rolling in toward the beaches, breaking up as they go
-        float shore = smoothstep(0.5, 0.97, shallowAmt);
-        float surf = smoothstep(0.55, 0.95, sin(shallowAmt * 34.0 - time * 1.6 + streak * 5.0) * 0.5 + 0.5) * shore + smoothstep(0.9, 1.0, shallowAmt) * 0.6;
-        foam = max(foam, surf * smoothstep(0.2, 0.7, microH + streak * 0.4) * 0.9 * near);
+        // surf: breakers rolling in toward the nearest beach (by distance to the shore, so never backwards), slowing and
+        // bunching up as they shoal; each one a bright breaking front with foam trailing out behind it, then a lapping
+        // swash of foam right at the water's edge
+        float sd = texture2D(shallowTex, (vWorld.xz - wmin) / wsize).g * 200.0;
+        float zone = (1.0 - smoothstep(55.0, 140.0, sd)) * smoothstep(0.15, 0.6, shallowAmt + (1.0 - smoothstep(10.0, 30.0, sd)));
+        float ph = sqrt(sd + 4.0) * 5.2 + time * 1.45 + streak * 1.1 + noise(vWorld.xz * 0.012) * 6.0;
+        float b = fract(ph / 6.2832);
+        float front = smoothstep(0.0, 0.035, b) * exp(-b * 7.0) * smoothstep(1.0, 0.94, b);
+        float breakup = smoothstep(0.15, 0.75, microH + streak * 0.55);
+        float swash = (1.0 - smoothstep(1.0, 7.0 + 3.0 * sin(time * 0.9 + streak * 4.0), sd)) * (0.55 + 0.45 * sin(time * 1.1 + vWorld.x * 0.05 + streak * 3.0));
+        float surf = max(front * zone * (0.7 + 0.3 * breakup), swash * 0.85);
+        foam = max(foam, surf * mix(0.55, 1.0, breakup) * near);
         col = mix(col, vec3(0.93, 0.97, 1.0) * (0.15 + 0.85 * max(bright, 0.6 * day + 0.1)), foam * 0.85);   // foam stays white under storm clouds
         // where the kraken attacks, the sea turns black as ink, swirling slowly around the fight
         if (krDark.w > 0.001) {
