@@ -721,7 +721,21 @@ window.__pgBoot = () => {
     if (db < 4) h += (-7.6 - h) * sstep(4, -1, db);
     return h;
   }
-  function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = islandHeight(I, x, z); if (v > h) h = v; } return h; }
+  // each island's ground is drawn as a grid of flat triangles; this is the height of those triangles (the ground ye
+  // actually see), not the smooth formula they're built from, so whatever stands on it stands right on it
+  function islandGrid(I) {
+    if (I._grid) return I._grid;
+    const size = I.r * 3.6, seg = Math.min(400, Math.max(48, Math.round(size / 5))), cell = size / seg, x0 = I.c.x - size / 2, z0 = I.c.y - size / 2, W = seg + 1, H = new Float32Array(W * W);
+    for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) H[j * W + i] = islandHeight(I, x0 + i * cell, z0 + j * cell);
+    return (I._grid = { size, seg, cell, x0, z0, W, H });
+  }
+  function drawnHeight(I, x, z) {
+    const G = islandGrid(I), gx = (x - G.x0) / G.cell, gz = (z - G.z0) / G.cell;
+    if (!(gx >= 0 && gz >= 0 && gx < G.seg && gz < G.seg)) return islandHeight(I, x, z);
+    const i = gx | 0, j = gz | 0, fx = gx - i, fz = gz - j, W = G.W, H = G.H, a = H[j * W + i], d = H[j * W + i + 1], b = H[(j + 1) * W + i], c = H[(j + 1) * W + i + 1];
+    return fx + fz <= 1 ? a + (d - a) * fx + (b - a) * fz : c + (b - c) * (1 - fx) + (d - c) * (1 - fz);   // (the same diagonal the terrain mesh uses)
+  }
+  function heightAt(x, z) { let h = Math.max(mistRockH(x, z), towerH(x, z)); for (const I of ISLANDS) { const v = drawnHeight(I, x, z); if (v > h) h = v; } return h; }
 
   // the streets and lanes of each town and village, in its own frame (u along the main street, v across it)
   function siteRoads(S) {
@@ -917,7 +931,7 @@ window.__pgBoot = () => {
     const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2); geo.translate(I.c.x, 0, I.c.y);
     const pos0 = geo.attributes.position;
-    for (let i = 0; i < pos0.count; i++) pos0.setY(i, islandHeight(I, pos0.getX(i), pos0.getZ(i)));
+    { const G = islandGrid(I); for (let i = 0; i < pos0.count; i++) pos0.setY(i, G.H[i]); }   // (the very heights heightAt uses)
     const idx = geo.index.array, keep = [];
     for (let t = 0; t < idx.length; t += 3) {
       const a = idx[t], b = idx[t + 1], c = idx[t + 2];
@@ -1137,7 +1151,7 @@ window.__pgBoot = () => {
     const p = local(1, 0), y = heightAt(p.x, p.y);
     const well = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 1.4, 12), lam(0x9a948a)); well.position.set(p.x, y + 0.7, p.y); scene.add(well); colliders.push({ x: p.x, z: p.y, r: 1.9 });
     const roof = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.6, 4), lam(0x8c3b26)); roof.position.set(p.x, y + 4.2, p.y); scene.add(roof);
-    [-1.3, 1.3].forEach(o => { const q = local(1, o); const s = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 0.3), DARK_WOOD); s.position.set(q.x, y + 2.1, q.y); scene.add(s); });
+    [-1.3, 1.3].forEach(o => { const q = local(1, o); const s = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.3), DARK_WOOD); s.position.set(q.x, y + 1.6, q.y); scene.add(s); });
   }
   // lighthouse on the point next to the harbour
   {
@@ -1152,12 +1166,12 @@ window.__pgBoot = () => {
   }
 
   // ---------- Palm trees & rocks ----------
-  const trunkMat = lam(0x8b6a45), leafMat = lam(0x3f8f3a);
+  const trunkMat = lam(0x8b6a45), leafMat = lam(0x3f8f3a); trunkMat.userData.settle = 'stretch';
   leafMat.side = THREE.DoubleSide;
   const PALM_TRUNK_GEO = new THREE.CylinderGeometry(0.35, 0.6, 1, 6).translate(0, 0.5, 0);
   const PALM_LEAF_GEO = new THREE.ConeGeometry(1.1, 6.5, 3);
   const ROCK_GEO = new THREE.DodecahedronGeometry(1, 0), BUSH_GEO = new THREE.IcosahedronGeometry(1, 0);
-  const rockMat = lam(0x7f7a72), bushMat = lam(0x2f7a32), darkRockMat = lam(0x3e3733);
+  const rockMat = lam(0x7f7a72), bushMat = lam(0x2f7a32), darkRockMat = lam(0x3e3733); for (const m of [rockMat, bushMat, darkRockMat]) m.userData.settle = 'sink';
   const dummyPalm = new THREE.Group(), dummyTrunk = new THREE.Object3D(), dummyLeaves = [];
   dummyPalm.add(dummyTrunk);
   for (let i = 0; i < 7; i++) { const l = new THREE.Object3D(); l.rotation.order = 'YXZ'; dummyPalm.add(l); dummyLeaves.push(l); }
@@ -1666,7 +1680,7 @@ window.__pgBoot = () => {
     for (let n = 0; n < D(11500); n++) { const s = spot(4, top); if (!s) continue; const sz = 1.9 + rand() * 2.0, list = rand() < 0.55 ? L.fernA : L.fernB;
       for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28 + rand() * 0.4; list.push(placed(s.x, s.h + 0.05, s.z, sz * 0.35, sz * 1.4, sz * 0.8, -1.0 - rand() * 0.35, a, 0)); } }
     // flowers
-    for (let n = 0; n < D(2400); n++) { const s = spot(4, top); if (!s) continue; const c = rand(); (c < 0.4 ? L.flowerR : c < 0.7 ? L.flowerO : L.flowerP).push(placed(s.x, s.h + 0.3 + rand() * 0.6, s.z, 1, 0.8, 1, rand(), rand() * 6, 0)); }
+    for (let n = 0; n < D(2400); n++) { const s = spot(4, top); if (!s) continue; const c = rand(); (c < 0.4 ? L.flowerR : c < 0.7 ? L.flowerO : L.flowerP).push(placed(s.x, s.h + 0.12 + rand() * 0.08, s.z, 1, 0.8, 1, rand(), rand() * 6, 0)); }   // (blooms sitting in the leaf litter, not hanging in the air)
     // each layer is split into 400 m cells with true bounds, so the camera skips what it can't see, and the floor
     // layers only draw near ye (the canopy carries the view from further off)
     const CELLJ = 400, _v = new THREE.Vector3();
@@ -1676,7 +1690,7 @@ window.__pgBoot = () => {
       for (const [k, ms] of cells) { const [cx, cz] = k.split(',').map(Number), g = geo.clone(); g.boundingSphere = new THREE.Sphere(new THREE.Vector3((cx + 0.5) * CELLJ, 40, (cz + 0.5) * CELLJ), CELLJ * 0.75 + 40);
         const im = new THREE.InstancedMesh(g, mat, ms.length); ms.forEach((m, i) => im.setMatrixAt(i, m)); im.instanceMatrix.needsUpdate = true; im.frustumCulled = true; I.group.add(im);
         JG.cells.push({ im, x: (cx + 0.5) * CELLJ, z: (cz + 0.5) * CELLJ, range: { canopy: 1e9, mid: 1500, ground: 650 }[tierNow] }); } };
-    const bark = lam(0x3a3022), barkL = lam(0x54483a);
+    const bark = lam(0x3a3022), barkL = lam(0x54483a); bark.userData.settle = barkL.userData.settle = 'stretch';
     tierNow = 'canopy'; mk(JTRUNK_GEO, barkL, L.trunk); tierNow = 'mid'; mk(JBUTT_GEO, bark, L.butt); tierNow = 'canopy';
     mk(CROWN_GEO, lam(0x18491e), L.crownA); mk(CROWN_GEO, lam(0x24622a), L.crownB); mk(CROWN_GEO, lam(0x357a2e), L.crownC);
     tierNow = 'mid'; mk(JVINE_GEO, lam(0x2e4a1c), L.vine); tierNow = 'ground';
@@ -1714,7 +1728,7 @@ window.__pgBoot = () => {
     const flameSprite = (par, y, s) => { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffa040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); f.position.y = y; f.scale.setScalar(s); par.add(f); HMX.flames.push({ f, s, ph: Math.random() * 6 }); return f; };
     const flag = (par, x, y, z, col) => { const pole = mk(new THREE.CylinderGeometry(0.12, 0.15, 9, 6), DARK_WOOD, x, y + 4.5, z, par); const fl = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2, 6, 1), new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide })); fl.geometry.translate(1.8, 0, 0); fl.position.set(x, y + 7.8, z); par.add(fl); HMX.flags.push(fl); };
     // -- the windmill: a whitewashed stone tower, thatched cap, four lattice sails turning in the wind
-    if (HOME.mill) { const p = HOME.mill, g = new THREE.Group(); g.position.set(p.x, heightAt(p.x, p.z) - 0.6, p.z); g.rotation.y = Math.atan2(TOWN.x - p.x, TOWN.y - p.z); G.add(g);
+    if (HOME.mill) { const p = HOME.mill, g = new THREE.Group(); g.userData.found = 'plinth'; g.position.set(p.x, heightAt(p.x, p.z) - 0.6, p.z); g.rotation.y = Math.atan2(TOWN.x - p.x, TOWN.y - p.z); G.add(g);
       const white = lam(0xece4d4);
       mk(new THREE.CylinderGeometry(3.1, 4.3, 13, 14), white, 0, 6.5, 0, g); mk(new THREE.CylinderGeometry(4.45, 4.5, 1.2, 14), stoneD, 0, 0.6, 0, g);
       for (const y of [4.5, 9]) mk(new THREE.CylinderGeometry(4.4 - y * 0.09, 4.4 - y * 0.09, 0.3, 14), DARK_WOOD, 0, y, 0, g);
@@ -1729,7 +1743,7 @@ window.__pgBoot = () => {
       { const cart = new THREE.Group(); cart.position.set(3.6, 0.6, 6.5); cart.rotation.y = 0.4; g.add(cart); mk(new THREE.BoxGeometry(2.4, 0.9, 3.6), WOOD, 0, 1.1, 0, cart); for (const sx of [-1.35, 1.35]) mk(new THREE.CylinderGeometry(0.75, 0.75, 0.2, 10), DARK_WOOD, sx, 0.75, 0, cart, 0, 0, Math.PI / 2); mk(new THREE.BoxGeometry(0.15, 0.15, 3), DARK_WOOD, 0, 0.9, 3, cart); }
       colliders.push({ x: p.x, z: p.z, r: 4.6 }); SPOTS.push({ x: p.x, z: p.z, r: 16 }); }
     // -- the watchtower on the summit: a ruined round keep with a signal fire, and Gull Island's flag
-    { const p = HOME.top, g = new THREE.Group(); g.position.set(p.x, heightAt(p.x, p.z) - 0.8, p.z); G.add(g);
+    { const p = HOME.top, g = new THREE.Group(); g.userData.found = 'plinth'; g.position.set(p.x, heightAt(p.x, p.z) - 0.8, p.z); G.add(g);
       mk(new THREE.CylinderGeometry(4.2, 5.0, 16, 16), stone, 0, 8, 0, g); mk(new THREE.CylinderGeometry(5.2, 5.4, 1.4, 16), stoneD, 0, 0.7, 0, g);
       for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; if (k === 5) continue; mk(new THREE.BoxGeometry(1.5, 1.6 + (k % 3) * 0.35, 1.0), stone, Math.cos(a) * 4.1, 16.8, Math.sin(a) * 4.1, g, 0, -a, 0); }   // crenellations, one broken away
       mk(new THREE.BoxGeometry(1.8, 3, 0.5), lam(0x2a2018), 0, 1.5, 4.9, g); for (const y of [7, 12]) mk(new THREE.BoxGeometry(0.5, 1.6, 0.6), lam(0x1a1612), 0, y, 4.6, g);
@@ -1740,7 +1754,7 @@ window.__pgBoot = () => {
       colliders.push({ x: p.x, z: p.z, r: 5.2 }); SPOTS.push({ x: p.x, z: p.z, r: 24 }); }
     // -- the harbour battery: a curved stone parapet on the headland across from the lighthouse, four guns covering the bay
     { let q = DOCK_BASE.clone().addScaledVector(PERP, -95); for (let k = 0; k < 40 && heightAt(q.x, q.y) < 5; k++) q.addScaledVector(DOCK_DIR, -4);
-      const g = new THREE.Group(), y0 = heightAt(q.x, q.y); g.position.set(q.x, y0 - 0.3, q.y); g.rotation.y = Math.atan2(DOCK_DIR.x, DOCK_DIR.y); G.add(g);
+      const g = new THREE.Group(), y0 = heightAt(q.x, q.y); g.userData.found = 'plinth'; g.position.set(q.x, y0 - 0.3, q.y); g.rotation.y = Math.atan2(DOCK_DIR.x, DOCK_DIR.y); G.add(g);
       mk(new THREE.CylinderGeometry(15, 15.5, 0.8, 24, 1, false, -Math.PI * 0.45, Math.PI * 0.9), stoneD, 0, 0.3, 0, g);
       for (let k = 0; k <= 14; k++) { const a = -Math.PI * 0.42 + k / 14 * Math.PI * 0.84; if (k % 4 === 1) continue; mk(new THREE.BoxGeometry(2.6, 2.2, 1.4), stone, Math.sin(a) * 14.5, 1.5, Math.cos(a) * 14.5, g, 0, a, 0); }   // the parapet, with gun embrasures
       for (const k of [1, 5, 9, 13]) { const a = -Math.PI * 0.42 + k / 14 * Math.PI * 0.84, gg = new THREE.Group(); gg.position.set(Math.sin(a) * 12, 0.7, Math.cos(a) * 12); gg.rotation.y = a; g.add(gg);
@@ -1755,7 +1769,7 @@ window.__pgBoot = () => {
       for (; r > I.r * 0.4 && heightAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) < 2.2; r -= 3); const ux = Math.cos(a), uz = Math.sin(a), tx = -uz, tz = ux;
       const at = (along, inland) => [cx + ux * (r - inland) + tx * along, cz + uz * (r - inland) + tz * along];
       const face = Math.atan2(ux, uz);
-      for (const [al, inl] of [[-26, 14], [0, 18], [24, 13]]) { const [x, z] = at(al, inl), y = heightAt(x, z), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = face + (Math.random() - 0.5) * 0.4; g.scale.setScalar(1.3); G.add(g);
+      for (const [al, inl] of [[-26, 14], [0, 18], [24, 13]]) { const [x, z] = at(al, inl), y = heightAt(x, z), g = new THREE.Group(); g.userData.found = 'sink'; g.position.set(x, y, z); g.rotation.y = face + (Math.random() - 0.5) * 0.4; g.scale.setScalar(1.3); G.add(g);
         for (const sx of [-2.2, 2.2]) for (const sz of [-1.8, 1.8]) mk(new THREE.CylinderGeometry(0.2, 0.24, 3, 6), DARK_WOOD, sx, 1.1, sz, g);
         mk(new THREE.BoxGeometry(5.4, 0.3, 4.6), PLANK, 0, 2.5, 0, g); mk(new THREE.BoxGeometry(4.8, 3, 4), lam(0x9a7650), 0, 4.1, 0, g);
         const roof = mk(new THREE.CylinderGeometry(3.5, 3.5, 5.4, 3), thatch, 0, 6.3, 0, g, 0, 0, Math.PI / 2); roof.scale.set(1, 1, 0.75);
@@ -1819,7 +1833,7 @@ window.__pgBoot = () => {
       for (let k = 0, n = 0; k < 30000 && n < 2600; k++) { const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * I.r * 1.1, x = I.c.x + Math.cos(a) * rr, z = I.c.y + Math.sin(a) * rr, h = heightAt(x, z);
         if (h < 5 || h > 90 || HOME.forest(x, z) > 0.2 || HOME.roadD(x, z) < 1.5 || distToSeg(x, z, TOWN_BACK, DOCK_BASE) < 45 || SPOTS.some(q => Math.hypot(x - q.x, z - q.z) < q.r * 0.7) || I.sites.some(S => Math.hypot(x - S.x, z - S.z) < (S.r || 60) * 0.8)) continue;
         const md = HOME.meadow(x, z), byRoad = HOME.roadD(x, z) < 7; if (md < 0.4 && !byRoad) continue; n++;
-        if (Math.random() < 0.55) { const col = HM_C.flowers[(Math.random() * HM_C.flowers.length) | 0]; for (let j = 0; j < 5; j++) { const ox = (Math.random() - 0.5) * 2.4, oz = (Math.random() - 0.5) * 2.4; fl.push(placed(x + ox, heightAt(x + ox, z + oz) + 0.35, z + oz, 0.22, 0.22, 0.22, 0, 0, 0)); fc.push(col); } }
+        if (Math.random() < 0.55) { const col = HM_C.flowers[(Math.random() * HM_C.flowers.length) | 0]; for (let j = 0; j < 5; j++) { const ox = (Math.random() - 0.5) * 2.4, oz = (Math.random() - 0.5) * 2.4; fl.push(placed(x + ox, heightAt(x + ox, z + oz) + 0.16, z + oz, 0.22, 0.22, 0.22, 0, 0, 0)); fc.push(col); } }
         else for (let j = 0; j < 3; j++) { const ox = (Math.random() - 0.5) * 2, oz = (Math.random() - 0.5) * 2; tufts.push(placed(x + ox, heightAt(x + ox, z + oz) + 0.5, z + oz, 0.35, 1.1 + Math.random() * 0.6, 0.35, (Math.random() - 0.5) * 0.4, Math.random() * 6, (Math.random() - 0.5) * 0.4)); } }
       const fm = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), fl.length); fl.forEach((m, i) => { fm.setMatrixAt(i, m); fm.setColorAt(i, fc[i]); }); fm.frustumCulled = false; G.add(fm);
       const tm = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 4), lam(0x6a9a42), tufts.length); tufts.forEach((m, i) => tm.setMatrixAt(i, m)); tm.frustumCulled = false; G.add(tm); }
@@ -1829,7 +1843,7 @@ window.__pgBoot = () => {
   {
     const stone = lam(0x948c80), stoneD = lam(0x6e675d), thatch = lam(0xb8964e), iron = lam(0x2c2c2e), bone = lam(0xd9d2bf), white = lam(0xf2ece0);
     const mk = (geo, mat, x, y, z, par, rx, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0); par.add(m); return m; };
-    const grp = (par, x, z, ry, dy) => { const g = new THREE.Group(); g.position.set(x, heightAt(x, z) + (dy || 0), z); g.rotation.y = ry || 0; par.add(g); return g; };
+    const grp = (par, x, z, ry, dy) => { const g = new THREE.Group(); g.position.set(x, heightAt(x, z) + (dy || 0), z); g.rotation.y = ry || 0; g.userData.found = 'sink'; par.add(g); return g; };
     const flame = (par, y, s) => { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffa040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); f.position.y = y; f.scale.setScalar(s); par.add(f); HMX.flames.push({ f, s, ph: Math.random() * 6 }); };
     const flag = (par, x, y, z, col) => { mk(new THREE.CylinderGeometry(0.12, 0.15, 9, 6), DARK_WOOD, x, y + 4.5, z, par); const fl = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2, 6, 1), new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide })); fl.geometry.translate(1.8, 0, 0); fl.position.set(x, y + 7.8, z); par.add(fl); HMX.flags.push(fl); };
     const steam = (x, y, z, o) => HMX.steam.push(Object.assign({ x, y, z, t: 0, rate: 0.15, col: 0xe8e8e8, size: 4, vy: 4, spread: 2, life: 2.2, op: 0.5 }, o));
@@ -1856,7 +1870,7 @@ window.__pgBoot = () => {
     // ===== Port Coral: the governor's mansion, a sugar mill and its cane fields, pink coral on the beaches =====
     { const X = ISLX[5], I = X.I, G = I.group;
       strip(I, G, X.roads, 0xa88c5e, 0x957a50, 0.12);
-      { const p = X.top, g = grp(G, p.x, p.z, Math.atan2(PORT.toHome.x, PORT.toHome.y), -0.3), tile = lam(0xa84a2e), shut = lam(0x3a6a4a);
+      { const p = X.top, g = grp(G, p.x, p.z, Math.atan2(PORT.toHome.x, PORT.toHome.y), -0.3), tile = lam(0xa84a2e), shut = lam(0x3a6a4a); g.userData.found = 'plinth';
         mk(new THREE.BoxGeometry(30, 1.2, 20), stoneD, 0, 0.4, 0, g);
         mk(new THREE.BoxGeometry(24, 12, 14), white, 0, 7, 0, g); mk(new THREE.BoxGeometry(24.4, 0.5, 14.4), stone, 0, 7, 0, g);
         mk(new THREE.ConeGeometry(15.5, 6, 4), tile, 0, 16, 0, g, 0, Math.PI / 4).scale.set(1.1, 1, 0.66);
@@ -1872,7 +1886,7 @@ window.__pgBoot = () => {
         for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) mk(new THREE.BoxGeometry(2.2, 1.6, 2.2), lam(0x2f6a30), sx * (12 + k * 3.2), 0.9, 17, g);
         flag(g, 10, 1, 14, 0xc8a030);
         const wp = new THREE.Vector3(); g.getWorldPosition(wp); colliders.push({ box: true, x: wp.x, z: wp.z, hw: 13, hd: 8, rot: g.rotation.y }); SPOTS.push({ x: p.x, z: p.z, r: 50 }); }
-      if (X.mill) { const p = X.mill, g = grp(G, p.x, p.z, Math.atan2(PORT_FRAME.origin.x - p.x, PORT_FRAME.origin.y - p.z), -0.3), brick = lam(0x9a4a32);
+      if (X.mill) { const p = X.mill, g = grp(G, p.x, p.z, Math.atan2(PORT_FRAME.origin.x - p.x, PORT_FRAME.origin.y - p.z), -0.3), brick = lam(0x9a4a32); g.userData.found = 'plinth';
         mk(new THREE.CylinderGeometry(6, 7, 9, 16), stone, 0, 4.5, 0, g); mk(new THREE.ConeGeometry(7.4, 4.5, 16), thatch, 0, 11.2, 0, g);
         mk(new THREE.BoxGeometry(2.6, 22, 2.6), brick, 9, 11, -3, g); mk(new THREE.BoxGeometry(3.2, 1, 3.2), brick, 9, 22.2, -3, g);
         steam(0, 0, 0, { col: 0x5a5550, size: 5, vy: 5, spread: 1.5, life: 3.5, rate: 0.25, op: 0.55, near: 1500, obj: g, oy: 23, ox: 9, oz: -3 });
@@ -1893,7 +1907,7 @@ window.__pgBoot = () => {
         strip(I, G, R2, 0x2a1a14, 0x1a1210, 0.18);
         const lm = strip(I, G, R3, 0xff6a1a, 0xffa030, 0.32, { emissive: new THREE.Color(0xff3a00), emissiveIntensity: 0.8 }, u => 0.6 + 0.6 * Math.sin(u * 37) * Math.sin(u * 11) * 0.5 + 0.4); HMX.lavaM.push(lm.material);
         const e = f[f.length - 1]; steam(e[0], 1, e[1], { col: 0xf0f0f0, size: 14, vy: 7, spread: 10, life: 3, rate: 0.12, op: 0.55, near: 2500 }); }   // where the lava meets the sea
-      { const p = X.temple, g = grp(G, p.x, p.z, Math.atan2(X.I.c.x - p.x, X.I.c.y - p.z), -0.6), dk = lam(0x4a4440), rd = lam(0x6a3a2a);
+      { const p = X.temple, g = grp(G, p.x, p.z, Math.atan2(X.I.c.x - p.x, X.I.c.y - p.z), -0.6), dk = lam(0x4a4440), rd = lam(0x6a3a2a); g.userData.found = 'plinth'; g.userData.stone = 0x4a4440;
         mk(new THREE.BoxGeometry(26, 2, 26), dk, 0, 0.6, 0, g); mk(new THREE.BoxGeometry(18, 1, 18), stoneD, 0, 1.9, 0, g); for (let k = 0; k < 3; k++) mk(new THREE.BoxGeometry(8, 0.6, 2), dk, 0, 0.3 + k * 0.6, -13.5 - k * 1.2 + 3.6, g);
         for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283, ht = k % 3 === 1 ? 3 + Math.random() * 3 : 9 + Math.random() * 2; mk(new THREE.CylinderGeometry(0.9, 1.1, ht, 8), k % 2 ? dk : stoneD, Math.cos(a) * 10.5, 1.2 + ht / 2, Math.sin(a) * 10.5, g); if (ht > 8) mk(new THREE.BoxGeometry(2.6, 0.8, 2.6), dk, Math.cos(a) * 10.5, 1.6 + ht, Math.sin(a) * 10.5, g); }
         mk(new THREE.CylinderGeometry(1, 1, 9, 8), dk, 13, 2, 8, g, 0, 0.6, Math.PI / 2 - 0.15);   // a fallen pillar
@@ -1907,7 +1921,7 @@ window.__pgBoot = () => {
         for (let k = 0; k < 9; k++) { const a = k / 9 * 6.283 + Math.random() * 0.3; mk(new THREE.DodecahedronGeometry(1 + Math.random() * 0.8, 0), stoneD, Math.cos(a) * 10.5, 0.2, Math.sin(a) * 10.5, g); }
         steam(v.x, hi + 0.8, v.z, { col: 0xf8f8f8, size: 5, vy: 2.5, spread: 6, life: 3, rate: 0.12, op: 0.4, near: 1200 }); SPOTS.push({ x: v.x, z: v.z, r: 16 }); }
       { const L = []; for (const p of scatter(I, 45, (x, z, h) => h > X.maxH * 0.35 && h < X.maxH * 0.85 && free(I, x, z, 6) && X.lavaD(x, z) > 20 && X.roadD(x, z) > 6, 6000)) { const s = 2 + Math.random() * 3; L.push(placed(p.x, p.h - 0.5, p.z, s * 0.6, s * (2 + Math.random() * 2), s * 0.6, (Math.random() - 0.5) * 0.3, Math.random() * 6, (Math.random() - 0.5) * 0.3)); colliders.push({ x: p.x, z: p.z, r: s * 0.5 }); }
-        inst(G, new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0), new THREE.MeshPhongMaterial({ color: 0x141014, shininess: 100, specular: 0x8a7aa0 }), L); }   // obsidian spires
+        inst(G, new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0), Object.assign(new THREE.MeshPhongMaterial({ color: 0x141014, shininess: 100, specular: 0x8a7aa0 }), { userData: { settle: 'sink' } }), L); }   // obsidian spires
       deadTrees(I, scatter(I, 140, (x, z, h) => h > 6 && h < X.maxH * 0.35 && free(I, x, z, 6) && X.lavaD(x, z) > 18 && X.roadD(x, z) > 5, 8000), 0x1e1a18);   // burnt trees
     }
 
@@ -1959,7 +1973,7 @@ window.__pgBoot = () => {
         flag(g, 2.4, 8.6, -2.4, 0x6a8a5a); const wp = new THREE.Vector3(); g.getWorldPosition(wp); colliders.push({ x: wp.x, z: wp.z, r: 3.2 }); SPOTS.push({ x: p.x, z: p.z, r: 14 }); }
       for (const p of X.pools) { const g = new THREE.Group(); g.position.set(p.x, p.y, p.z); G.add(g); mk(new THREE.CircleGeometry(p.r, 18), new THREE.MeshPhongMaterial({ color: 0x4a5a3a, specular: 0x9ab0a0, shininess: 60, transparent: true, opacity: 0.92 }), 0, 0, 0, g, -Math.PI / 2); SPOTS.push({ x: p.x, z: p.z, r: p.r + 2 }); }
       { const L = []; for (const p of scatter(I, 650, (x, z, h) => h > 2 && h < 10 && free(I, x, z, 2) && X.roadD(x, z) > 2.5, 20000)) for (let j = 0; j < 4; j++) { const ox = (Math.random() - 0.5) * 2.5, oz = (Math.random() - 0.5) * 2.5; L.push(placed(p.x + ox, heightAt(p.x + ox, p.z + oz) + 1, p.z + oz, 0.1, 2 + Math.random() * 1.6, 0.1, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3)); }
-        for (const p of X.pools) for (let k = 0; k < 40; k++) { const a = Math.random() * 6.28, r = p.r - 0.5 + Math.random() * 2.5; L.push(placed(p.x + Math.cos(a) * r, p.y + 0.9, p.z + Math.sin(a) * r, 0.1, 2 + Math.random() * 1.5, 0.1, 0, 0, 0)); }
+        for (const p of X.pools) for (let k = 0; k < 40; k++) { const a = Math.random() * 6.28, r = p.r - 0.5 + Math.random() * 2.5, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r, ht = 2 + Math.random() * 1.5; L.push(placed(x, Math.min(p.y, heightAt(x, z)) + ht * 0.45, z, 0.1, ht, 0.1, 0, 0, 0)); }
         inst(G, new THREE.ConeGeometry(1, 1, 4), lam(0x8a8a4a), L); }   // reeds
       { const L = []; for (const p of scatter(I, 70, (x, z, h) => h > 0.6 && h < 3 && free(I, x, z, 4), 15000)) { const s = 0.4 + Math.random() * 0.4, l = 3 + Math.random() * 5; L.push(placed(p.x, p.h + s * 0.5, p.z, s, l, s, Math.PI / 2, Math.random() * 6.28, Math.random() * 0.2)); }
         inst(G, new THREE.CylinderGeometry(1, 0.8, 1, 6), lam(0xa8a090), L); }   // driftwood, bleached by the sun
@@ -15653,7 +15667,50 @@ window.__pgBoot = () => {
   }
   // one frame; if anything in it throws, log it and carry on with the next frame rather than freezing the game
   let tickErrs = 0;
+
+  // ---- settling the world: nothing hangs in the air on a slope ----
+  // run once, when everything's built: trees on a slope get their trunks run down into the ground on the low side; rocks,
+  // bushes and small landmarks sink to the lowest ground under them; and big buildings on a slope get a stone foundation
+  // built up under their low side
+  function settleWorld() {
+    const M = new THREE.Matrix4(), Mi = new THREE.Matrix4(), S = new THREE.Matrix4(), T1 = new THREE.Matrix4(), T2 = new THREE.Matrix4(), box = new THREE.Box3(), v = new THREE.Vector3();
+    const lowest = (x0, z0, x1, z1) => { let m = 1e9; for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) m = Math.min(m, heightAt(x0 + (x1 - x0) * i / 2, z0 + (z1 - z0) * j / 2)); return m; };
+    let nI = 0, nG = 0;
+    const roots = [scene, ...ISLANDS.map(I => I.group)];
+    for (const R of roots) for (const o of R.children) {
+      if (o.isInstancedMesh && o.material && o.material.userData && o.material.userData.settle) {
+        const mode = o.material.userData.settle; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); o.updateMatrixWorld(true); Mi.copy(o.matrixWorld).invert(); let ch = false;
+        for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, M); M.premultiply(o.matrixWorld); box.copy(o.geometry.boundingBox).applyMatrix4(M);
+          const sx = box.max.x - box.min.x, sz = box.max.z - box.min.z; if (sx > 60 || sz > 60) continue;
+          const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2, rr = Math.min(sx, sz) * 0.35, g = lowest(cx - rr, cz - rr, cx + rr, cz + rr); if (g < 0.2) continue;
+          const gap = box.min.y - (g - 0.15); if (gap <= 0.05 || gap > 25) continue;
+          if (mode === 'stretch') { const top = box.max.y, k = (top - (g - 0.25)) / (top - box.min.y); T1.makeTranslation(0, -top, 0); S.makeScale(1, k, 1); T2.makeTranslation(0, top, 0); M.premultiply(T1).premultiply(S).premultiply(T2); }
+          else M.premultiply(T1.makeTranslation(0, -gap, 0));
+          M.premultiply(Mi); o.setMatrixAt(i, M); ch = true; nI++; }
+        if (ch) o.instanceMatrix.needsUpdate = true; continue; }
+      if (!o.isGroup || !o.userData || !o.userData.found) continue;
+      // the parts that stand on the ground: whatever reaches down to the group's lowest point
+      o.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(o.matrixWorld).invert(), lb = new THREE.Box3(), parts = [];
+      o.traverse(c => { if (c.isMesh && c.geometry) { if (!c.geometry.boundingBox) c.geometry.computeBoundingBox(); const b = c.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, c.matrixWorld)); parts.push(b); lb.union(b); } });
+      if (lb.isEmpty()) continue;
+      const foot = new THREE.Box3(); for (const b of parts) if (b.min.y < lb.min.y + 0.6) foot.union(b);
+      let g = 1e9, base = -1e9; for (const [ux, uz] of [[foot.min.x, foot.min.z], [foot.max.x, foot.min.z], [foot.min.x, foot.max.z], [foot.max.x, foot.max.z], [(foot.min.x + foot.max.x) / 2, (foot.min.z + foot.max.z) / 2]]) {
+        v.set(ux, lb.min.y, uz).applyMatrix4(o.matrixWorld); g = Math.min(g, heightAt(v.x, v.z)); base = Math.max(base, v.y); }
+      if (g < 0.2) continue;
+      const gap = base - g; if (gap < 0.25 || gap > 30) continue;
+      const sc = o.scale.y || 1;
+      if (o.userData.found === 'plinth') {   // a footing of rough stone, down into the ground under the low side
+        const fw = (foot.max.x - foot.min.x) * 0.96, fd = (foot.max.z - foot.min.z) * 0.96, depth = (gap + 0.6) / sc;
+        const pl = new THREE.Mesh(new THREE.BoxGeometry(fw, depth, fd), lam(o.userData.stone || 0x857e72)); pl.position.set((foot.min.x + foot.max.x) / 2, lb.min.y - depth / 2 + 0.05, (foot.min.z + foot.max.z) / 2); o.add(pl);
+        for (let k = 0; k < 2; k++) { const ln = new THREE.Mesh(new THREE.BoxGeometry(fw + 0.06, 0.12, fd + 0.06), lam(0x6e675d)); ln.position.set(pl.position.x, lb.min.y - (k + 1) * depth / 3, pl.position.z); o.add(ln); }   // courses in the stonework
+      } else o.position.y -= gap - 0.05;
+      nG++;
+    }
+    return { instances: nI, groups: nG };
+  }
+  let settledWorld = false;
   function tick() {
+    if (!settledWorld) { settledWorld = true; try { window.__settled = settleWorld(); } catch (e) { console.error(e); } }
     const t0 = performance.now(), ran0 = lastFrameAt;
     try { tickFrame(); } catch (e) { if (tickErrs++ < 8) console.error('frame error', e); requestAnimationFrame(tick); }
     if (lastFrameAt !== ran0) { const A = AUTOFPS; A.work += performance.now() - t0; A.n++; if (!A.since) A.since = t0;
