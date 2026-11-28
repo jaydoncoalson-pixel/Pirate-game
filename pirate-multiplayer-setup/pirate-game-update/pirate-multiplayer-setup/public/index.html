@@ -6507,7 +6507,15 @@ window.__pgBoot = () => {
           end: () => { if (!STATE.pistols.includes('beastbane')) STATE.pistols.push('beastbane'); save(); setTimeout(() => toast("Ye received Beastbane, a harpoon pistol forged from the Beast's chains! Equip it in the Pistols section (I)."), 1200); } },
       ] },
   };
-  { const rest = Object.assign({}, QUESTS); for (const k in QUESTS) delete QUESTS[k]; Object.assign(QUESTS, STORYQ, rest); }   // (the story comes first in the quest list)
+  { const rest = Object.assign({}, QUESTS); for (const k in QUESTS) delete QUESTS[k]; Object.assign(QUESTS, STORYQ, rest); }
+  QUESTS.emberforge = { title: 'The Emberbrand', reward: 500, giver: 'Pyre-keeper Ashra', hint: 'Pyre-keeper Ashra, at the fire temple on Smoke Peak, knows the old way of forging a fire blade.',
+    start: ["Ye've proven yerself to the mountain, captain. There is one more thing I can give ye.", "The old pyre-keepers forged blades of obsidian and quenched them in the lava lake. Emberbrands, they called them.", "Bring me three fire gems and four Blackwater steel, and I will forge ye one."],
+    done: ["The Emberbrand suits ye. Mind ye don't set the ship alight."],
+    stages: [
+      { type: 'mats', mats: { gem: 3, steel: 4 }, text: 'Gather 3 fire gems and 4 Blackwater steel' },
+      { type: 'talk', npc: 'Pyre-keeper Ashra', need: { mats: { gem: 3, steel: 4 } }, text: 'Bring the fire gems and steel to Pyre-keeper Ashra on Smoke Peak', lines: ["Three fire gems... they hum, don't they? Like the mountain's heart.", "*the obsidian goes into the lava, glowing white... and comes out black, with fire running in its veins*", "Emberbrand. It is yours, captain."],
+        end: () => { if (!STATE.swords.includes('emberbrand')) STATE.swords.push('emberbrand'); save(); setTimeout(() => { SFX.fanfare(); try { tutCard('EMBERBRAND', 'LEGENDARY BLADE EARNED', 3.5); } catch (e) {} toast('Ye received the Emberbrand! Equip it from the Swords panel (I).'); }, 900); } },
+    ] };   // (the story comes first in the quest list)
   // where the survivors stand: on their beaches until they're found, then on the Gull Island dock
   window.__story = { STORY, get STB() { return STB; }, qs: () => JSON.stringify(STATE.quests), prog: () => JSON.stringify(STATE.qprog),
     talk: name => { const q = questTalk(name); if (q && q.end) q.end(); return q ? q.lines : null; }, ev: (k, i) => questEvent(k, i),
@@ -6521,6 +6529,16 @@ window.__pgBoot = () => {
       if (!want || (n.def.storyAt === (found ? 'dock' : 'beach'))) continue;
       n.def.storyAt = found ? 'dock' : 'beach'; n.pos.set(want.x, groundAt(want.x, want.z), want.z); n.facing = n.homeFacing = want.f;
     }
+  }
+  // legendary weapons earned by feats: the moment the feat's done, the weapon is yers
+  const LEGEND_FEATS = [
+    ['sword', 'krakenfang', () => (STATE.krKills || 0) >= 3], ['sword', 'serpenttooth', () => (STATE.serpKills || 0) >= 5],
+    ['pistol', 'stormcaller', () => (STATE.raiderKills || 0) >= 30], ['pistol', 'widowskiss', () => STATE.quests.ghostblade === 'done'], ['pistol', 'dragonbreath', () => (STATE.levKills || 0) >= 1],
+  ];
+  function legendCheck() {
+    for (const [kind, id, ok] of LEGEND_FEATS) { const list = kind === 'sword' ? STATE.swords : STATE.pistols; if (!list || list.includes(id) || !ok()) continue;
+      list.push(id); save(); SFX.fanfare(); const nm = (kind === 'sword' ? SWORDS : PISTOLS)[id].name;
+      try { tutCard(nm.toUpperCase(), 'LEGENDARY ' + (kind === 'sword' ? 'BLADE' : 'PISTOL') + ' EARNED', 3.5); } catch (e) {} toast(`Ye've earned ${nm}! Equip it from the Swords panel (I).`); }
   }
   // where yer quests stand: STATE.quests[id] = stage index or 'done'; STATE.qprog[id] = kills/cargo counted for this stage
   STATE.qprog = STATE.qprog || {};
@@ -6562,7 +6580,7 @@ window.__pgBoot = () => {
   }
   // checked a few times a second: materials gathered, markers reached at sea, the deep stirring
   function questTick() {
-    try { storyNpcs(); } catch (e) {}
+    try { storyNpcs(); legendCheck(); } catch (e) {}
     for (const id in QUESTS) {
       const st = curStage(id); if (!st) continue;
       // it got away (or ye fled): ye must sail clear of the spot and come back to call it again. A beaten Kraken
@@ -7317,6 +7335,15 @@ window.__pgBoot = () => {
     seasword: { name: 'Sword of the Sea', desc: 'An admin blade drawn from the deepest trench. Whoever carries it can run across the open sea as if it were solid ground. A great blade, half again the size of any other; every swing hurls a crescent of sea water that cuts down whatever stands in its path. It gives ye command of the sea itself. Passives: yer ship sails 60% faster, yer cannons hit twice as hard, yer hull mends 4x faster, and ye swim like a fish and heal in the water. SEA CONTROL: Z Tsunami, G Maelstrom, T Tempest (lightning strikes yer foes), H Sea Wall (swallows enemy shot). R calls the kraken; B at the wheel dives beneath the waves. TRANSFORMATION: V the Elder Kraken (for as long as ye like, ye become a colossal scarred grey kraken, as vast as the Elder Serpent, scarred by a thousand fights, that walks the land, swims and dives: its own attacks Z Crushing Grab, R Tentacle Storm, G Ink Cloud, T Maelstrom Spin, B Dive and Breach; 5x damage, every strike smashes all round ye and out to sea, throws five huge crescents, tentacles burst out of the ground under every foe near and lightning hammers ships).', dmg: 360, cool: 0.22, reach: 7.5, arc: -0.75, cost: {}, gold: 0, admin: true, look: { type: 'sea', blade: 0x1f8fc0, guard: 0xff7a8a, len: 1.45, curve: 0.22, width: 0.16, glow: true, glowColor: 0x3ad0ff } },
     admiral: { name: "The Admiral's Cutlass", desc: 'Black steel chased with gold, taken from the hand of the Blackwater Admiral himself. Heavy, wide-sweeping and brutally quick.', dmg: 70, cool: 0.42, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true, claim: 'Board the Blackwater Admiral\'s flagship and best him in a duel to take it.', look: { style: 'admiral', blade: 0x2b2d33, guard: 0xd4af37, len: 1.2, curve: 0.3, width: 0.13, basket: true } },
   };
+  // three more legendary blades, each earned by a feat (checked by legendCheck below)
+  Object.assign(SWORDS, {
+    krakenfang: { name: 'Krakenfang', desc: "A great curved blade carved from the Kraken's own beak-tooth, its grip wound with a dried tentacle. Passive: every few blows a tentacle bursts from the ground beneath yer foe and lashes everyone around it.", dmg: 76, cool: 0.44, reach: 3.6, arc: 0.0, cost: {}, gold: 0, legendary: true,
+      get claim() { return `Defeat the Kraken 3 times (${Math.min(3, STATE.krKills || 0)}/3).`; }, look: { style: 'krakenfang', blade: 0xece2cc, guard: 0x6a3a7a, len: 1.3, curve: 0.34, width: 0.17 } },
+    serpenttooth: { name: "Serpent's Tooth", desc: "A sea serpent's fang, long as a man's arm and still wet with venom. Light and quick. Passive: hits poison yer foe (venom stacks up to 3 times, 9 damage a second each).", dmg: 62, cool: 0.32, reach: 3.4, arc: 0.18, cost: {}, gold: 0, legendary: true,
+      get claim() { return `Slay 5 sea serpents in the Mistwrack Shoals (${Math.min(5, STATE.serpKills || 0)}/5).`; }, look: { style: 'serpent', blade: 0x4ad88a, guard: 0x2e6a3a, len: 1.15, curve: 0.22, width: 0.12 } },
+    emberbrand: { name: 'Emberbrand', desc: "Obsidian from the heart of Smoke Peak, quenched in its lava lake by the Pyre-keeper. Molten fire runs in its cracks. Passive: hits set foes ablaze, and every heavy finishing blow erupts in a ring of fire.", dmg: 82, cool: 0.48, reach: 3.4, arc: -0.1, cost: {}, gold: 0, legendary: true,
+      claim: 'Pyre-keeper Ashra, at the fire temple on Smoke Peak, can forge it from three fire gems.', look: { style: 'ember', blade: 0x3a2018, guard: 0xff6a1a, len: 1.2, curve: 0.12, width: 0.16 } },
+  });
   if (!SWORDS[STATE.sword]) STATE.sword = 'rusty';
   // each blade's own passive (the magic blades keep the ones in their descriptions)
   const SWORD_PASSIVE = {
@@ -7328,6 +7355,9 @@ window.__pgBoot = () => {
     saber: ['Discipline', 'Each hit in an unbroken combo adds +10% damage (up to +40%).'],
     golden: ['Plunder', 'Foes ye defeat drop extra gold, and crits shake coins loose.'],
     flame: ['Burn', 'Hits set foes alight: 12 damage a second for 3 s.'],
+    krakenfang: ['Tentacle Lash', 'Every 3rd hit a tentacle bursts from the ground under yer foe, striking all within 5 m for 60% damage.'],
+    serpenttooth: ['Venom', 'Hits poison: 9 damage a second for 4 s, stacking up to 3 times.'],
+    emberbrand: ['Molten', 'Hits burn (14 a second for 3 s); a finishing blow erupts in a ring of fire hitting all within 5 m for 50%.'],
     admiral: ['Command', 'Each kill heals 15 and adds +8% damage for 10 s (stacks to +40%).'],
   };
   const SWORD_MOVES = '<b>F</b> combo (slash, backhand, overhead) · hold <b>F</b> and release: charged slam (hits all round ye) · <b>Shift</b>+<b>F</b> while running: dash strike · <b>F</b> in mid-air: plunging strike · <b>X</b> or right-click: block (just before a blow lands: parry)';
@@ -7350,8 +7380,21 @@ window.__pgBoot = () => {
       SWP.undertow = false; }
     if (id === 'scimitar') tg.bleed = { t: 4, dps: 8 };
     if (id === 'flame') tg.burn = { t: 3, dps: 12 };
+    if (id === 'serpenttooth') { const v = tg.venom; tg.venom = { t: 4, dps: Math.min(27, (v && v.t > 0 ? v.dps : 0) + 9) }; puff(pos.x, pos.y + 1.2, pos.z, { color: 0x6aff8a, size: 0.35, life: 0.5, grow: 0.8, vy: 1, op: 0.85 }); }
+    if (id === 'emberbrand') { tg.burn = { t: 3, dps: 14 };
+      if (PLAYER.swingKind === 2 && !(SWP.ringT > 0)) { SWP.ringT = 0.35;   // the finisher: a ring of fire bursts out round the blow
+        for (let k = 0; k < 18; k++) { const a = k / 18 * 6.28; puff(pos.x + Math.cos(a) * 1.5, pos.y + 0.4, pos.z + Math.sin(a) * 1.5, { color: k % 3 ? 0xff7a1a : 0xffd04a, size: 0.8, life: 0.6, grow: 1.4, vx: Math.cos(a) * 8, vz: Math.sin(a) * 8, vy: 1.5, op: 0.95 }); }
+        legendSplash(tg, pos, 5, Math.round(dm * 0.5), t2 => { t2.burn = { t: 3, dps: 14 }; }); } }
+    if (id === 'krakenfang') { SWP.kfN = (SWP.kfN || 0) + 1;
+      if (SWP.kfN % 3 === 0) { try { groundTentacle(pos.x, pos.y, pos.z, 0.55); } catch (e) {} SFX.splash && SFX.splash(pos, false);   // a tentacle erupts beneath the foe
+        legendSplash(null, pos, 5, Math.round(dm * 0.6), t2 => { if (t2.pos) puff(t2.pos.x, t2.pos.y + 1, t2.pos.z, { color: 0x8a5aa8, size: 0.6, life: 0.5, grow: 1, vy: 3, op: 0.9 }); }); } }
     if (id === 'saber') SWP.chain++;
     if (id === 'golden' && crit) { addGold(5 + Math.floor(Math.random() * 10), 'Coins shaken loose'); for (let k = 0; k < 5; k++) puff(pos.x, pos.y + 1.2, pos.z, { color: 0xffd24a, size: 0.12, life: 0.6, grow: 0.1, vx: (Math.random() - 0.5) * 5, vy: 3 + Math.random() * 3, vz: (Math.random() - 0.5) * 5, op: 1 }); }
+  }
+  // a legendary blade's splash: everyone within r of the blow (bar the one struck, if given) takes n
+  function legendSplash(skip, pos, r, n, each) {
+    for (const b of bandits) { if (b === skip || b.state === 'dead' || b.state === 'gone' || Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z) > r) continue; hitBandit(b, n); dmgNum(b.pos, `${n}`, 'heavy'); if (each) each(b); }
+    for (const c of activeFighters()) { if (c === skip || Math.hypot(c.pos.x - pos.x, c.pos.z - pos.z) > r || Math.abs(c.pos.y - pos.y) > 3) continue; if (hitFighter(c, n, true) !== false) dmgNum(c.pos, `${n}`, 'heavy'); if (c.st === 'dead') swordOnKill(); else if (each) each(c); }
   }
   function swordOnKill() {
     if (STATE.sword === 'admiral') { SWP.cmdN = Math.min(5, SWP.cmdN + 1); SWP.cmdT = 10; PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 15); dmgNum(P.pos, `Command +${SWP.cmdN * 8}%`, 'heavy'); }
@@ -7374,7 +7417,7 @@ window.__pgBoot = () => {
     PLAYER.move = { mul: 2.1 + power * 1.3, reach: 1.25 + power * 0.25, arc: -1, heavy: true, slam: true, kb: 10 + power * 6 }; CMB.comboT = 0;
     SFX.swing(); setTimeout(() => SFX.swing(), 90); if (window.__mpSlash) window.__mpSlash(0.3);
   }
-  const SWCOL = { rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a, cursed: 0x1a181c };
+  const SWCOL = { krakenfang: 0xd8b8f0, serpenttooth: 0x7affa0, emberbrand: 0xff8a2a, rusty: 0xe8d8c8, steel: 0xf2f6ff, axe: 0xd8dde2, rapier: 0xffffff, scimitar: 0xfff0c8, saber: 0xcfe0ff, golden: 0xffd86a, flame: 0xffa050, tidecaller: 0x7fe8ff, ghost: 0xaaffd8, admiral: 0xff5a5a, cursed: 0x1a181c };
   function updateSwordExtras(dt) {
     SWP.dashCd = Math.max(0, (SWP.dashCd || 0) - dt);
     if (SWP.cmdT > 0) { SWP.cmdT -= dt; if (SWP.cmdT <= 0) SWP.cmdN = 0; }
@@ -7388,11 +7431,12 @@ window.__pgBoot = () => {
     else CMB.charge = 0;
     // wounds and flames ticking on foes
     SWP.dotT -= dt; if (SWP.dotT <= 0) { SWP.dotT = 0.5;
-      const tick = (tg, isB) => { for (const k of ['bleed', 'burn']) { const e = tg[k]; if (!e) continue; e.t -= 0.5; if (e.t <= 0) { tg[k] = null; continue; } const n = Math.round(e.dps * 0.5);
+      SWP.ringT = (SWP.ringT || 0) - 0.5;
+      const tick = (tg, isB) => { for (const k of ['bleed', 'burn', 'venom']) { const e = tg[k]; if (!e) continue; e.t -= 0.5; if (e.t <= 0) { tg[k] = null; continue; } const n = Math.round(e.dps * 0.5);
         if (isB) { if (tg.state === 'dead' || tg.state === 'gone') { tg[k] = null; continue; } hitBandit(tg, n); } else { if (tg.st !== 'fight') { tg[k] = null; continue; } hitFighter(tg, n, false); if (tg.st === 'dead') swordOnKill(); }
-        dmgNum(tg.pos, `${n}`, 'hurt'); puff(tg.pos.x, tg.pos.y + 1.2, tg.pos.z, { color: k === 'burn' ? 0xff8a2a : 0xa01818, size: 0.4, life: 0.5, grow: 0.8, vy: 1.5, op: 0.8 }); } };
-      for (const b of bandits) if (b.bleed || b.burn) tick(b, true);
-      for (const c of activeFighters()) if (c.bleed || c.burn) tick(c, false); }
+        dmgNum(tg.pos, `${n}`, 'hurt'); puff(tg.pos.x, tg.pos.y + 1.2, tg.pos.z, { color: k === 'burn' ? 0xff8a2a : k === 'venom' ? 0x5aff7a : 0xa01818, size: 0.4, life: 0.5, grow: 0.8, vy: 1.5, op: 0.8 }); } };
+      for (const b of bandits) if (b.bleed || b.burn || b.venom) tick(b, true);
+      for (const c of activeFighters()) if (c.bleed || c.burn || c.venom) tick(c, false); }
     // a glint of light running down the blade now and then
     const bl = player.props && player.props.blade; if (bl && bl.visible && STATE.sword !== 'seasword') {
       if (!SWP.glint) { SWP.glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 })); SWP.glintT = 2; }
@@ -7583,6 +7627,43 @@ window.__pgBoot = () => {
       const R = Math.random;
       bladeKit(g, { len: lk.len, curve: lk.curve, body: iron, edge: metal(0xc4c8cc, 60), w: t => 0.1 * (1 - 0.45 * t) + 0.012,
         each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0 || i === 5) { const sp = new THREE.Mesh(new THREE.CircleGeometry(0.012 + (i % 3) * 0.006, 6), rust); sp.position.set(0.012, cy + (i % 2 ? -1 : 1) * w * 0.15, cz); sp.rotation.y = Math.PI / 2; g.add(sp); } if (i === 3 || i === 7) { const nick = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.025), matte(0x1a1612)); nick.position.set(0, cy - w / 2, cz); g.add(nick); } } });
+      return g;
+    }
+    if (S === 'krakenfang') {
+      // Krakenfang: an ivory beak-tooth blade, ridged and yellowed at the spine, a grip wound in dried purple tentacle,
+      // two tentacle-tips curling back as the guard, a row of suckers down the spine and a black beak for a pommel
+      const ivory = metal(0xece2cc, 40), spine = matte(0xc8b48a), purple = matte(0x6a3a7a), sucker = matte(0xe8b8d8), beak = metal(0x141018, 120);
+      gripKit(g, { len: 0.25, r: 0.034, mat: purple, band: matte(0x4a2858), bands: 7 });
+      g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 6), beak), 0, 0, -0.3, -Math.PI / 2));
+      for (const sd of [-1, 1]) { const t1 = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 6, 10, Math.PI * 1.3), purple); t1.position.set(0, sd * 0.07, 0.02); t1.rotation.set(0, Math.PI / 2, sd > 0 ? -0.4 : Math.PI + 0.4); g.add(t1);
+        for (let k = 0; k < 3; k++) g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), sucker), 0.012, sd * (0.05 + k * 0.03), 0.06 - k * 0.012)); }
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: ivory, edge: metal(0xfffaf0, 80), w: t => lk.width * (1 - 0.55 * Math.pow(t, 1.3)) + 0.012, thick: 0.034,
+        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0) { const sk = new THREE.Mesh(new THREE.CircleGeometry(0.011 + (1 - tm) * 0.006, 8), sucker); sk.position.set(0.019, cy - w * 0.32, cz); sk.rotation.y = Math.PI / 2; g.add(sk); const sk2 = sk.clone(); sk2.position.x = -0.019; g.add(sk2); }
+          if (i % 3 === 1) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.008, 0.012), spine); r.position.set(0, cy - w * 0.48, cz); r.rotation.x = rx; g.add(r); } } });
+      return g;
+    }
+    if (S === 'serpent') {
+      // Serpent's Tooth: a long translucent green fang, darker at the edge, with a serpent's head for a guard (red eyes,
+      // fangs bared down the blade) and a grip of overlapping scales
+      const fang = new THREE.MeshPhongMaterial({ color: 0x4ad88a, specular: 0xffffff, shininess: 140, emissive: 0x0a3a1c, transparent: true, opacity: 0.86 }), edge = metal(0x2a8a54, 120, 0x05200e), scale = matte(0x2e6a3a), scaleD = matte(0x1e4a28), bone = metal(0xf0ead8, 60);
+      gripKit(g, { len: 0.22, r: 0.03, mat: scale, band: scaleD, bands: 8 });
+      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 6), scaleD), 0, 0, -0.25));
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.09), scale); head.position.set(0, 0, 0.03); g.add(head);
+      const snout = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.08, 0.06), scaleD); snout.position.set(0, 0, 0.09); g.add(snout);
+      for (const sd of [-1, 1]) { g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff2a2a })), sd * 0.036, 0.03, 0.06));
+        g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.06, 5), bone), sd * 0.018, -0.03, 0.13, Math.PI / 2)); }
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: fang, edge, w: t => lk.width * (1 - 0.7 * Math.pow(t, 1.1)) + 0.008, thick: 0.026 });
+      return g;
+    }
+    if (S === 'ember') {
+      // Emberbrand: black glassy obsidian with molten fire running in its cracks, a glowing orange edge, a cross-guard of
+      // rough basalt blocks and a fire gem burning in the pommel
+      const obs = metal(0x161010, 170), lavaE = metal(0xff6a1a, 60, 0xff3a00), basalt = matte(0x2a2420), glow = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
+      gripKit(g, { len: 0.24, r: 0.033, mat: matte(0x1a1412), band: basalt, bands: 6 });
+      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.04, 0), glow), 0, 0, -0.27));
+      for (const sd of [-1, 1]) { g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.05), basalt), 0, sd * 0.06, 0.03, 0.2 * sd, 0, 0)); g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.04), basalt), 0, sd * 0.115, 0.04, -0.3 * sd, 0, 0)); }
+      bladeKit(g, { len: lk.len, curve: lk.curve, body: obs, edge: lavaE, w: t => lk.width * (1 - 0.42 * t) + 0.014, thick: 0.032,
+        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 1 || i === 4) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.006, 0.05 + (i % 3) * 0.02), glow); c.position.set(0, cy + (i % 4 - 1.5) * w * 0.18, cz); c.rotation.set(rx + (i % 2 ? 0.5 : -0.4), 0, 0); g.add(c); } } });
       return g;
     }
     if (S === 'cursed') {
@@ -7933,7 +8014,7 @@ window.__pgBoot = () => {
   const tmpF = new THREE.Vector3();
   let flameT = 0;
   function updateFlameBlade(dt) {
-    const fl = STATE.sword === 'flame', tc = STATE.sword === 'tidecaller', sea = STATE.sword === 'seasword';
+    const fl = STATE.sword === 'flame' || STATE.sword === 'emberbrand', tc = STATE.sword === 'tidecaller' || STATE.sword === 'serpenttooth', sea = STATE.sword === 'seasword';
     if ((!fl && !tc && !sea) || !player.props.blade || !player.props.blade.visible) return;
     flameT -= dt; if (flameT > 0) return;
     flameT = PLAYER.slashT > 0 ? 0.03 : 0.22;
@@ -7972,6 +8053,12 @@ window.__pgBoot = () => {
                look: { wood: 0x2a1a10, metal: 0x2c3038, trim: 0xdfe4ea, len: 0.62, bands: 3, slim: true } },
     beastbane: { name: 'Beastbane', desc: "A harpoon pistol forged from the iron of the Blackwater Beast's chains, its muzzle set with three of the Beast's own claw-tips. Each barbed bolt drives straight through up to three foes in a line.", dmg: 85, pierce: 3, rounds: 1, reload: 1.7, fire: 0.3, range: 90, cone: 0.95, legendary: true, claim: 'Finish the story: The Beast of the Blackwater.', gold: 0, cost: {},
                look: { wood: 0x2a1410, metal: 0x26262a, trim: 0x8a1a14, len: 0.5, bands: 2, claw: true } },
+    stormcaller: { name: 'Stormcaller', desc: 'A blued-steel pistol wound with copper coils round a captive storm. Its bolt strikes yer foe and leaps on to three more nearby.', dmg: 72, chain: 3, rounds: 2, reload: 2.0, fire: 0.3, range: 85, cone: 0.94, legendary: true, gold: 0, cost: {},
+               get claim() { return `Sink 30 Blackwater ships (${Math.min(30, STATE.raiderKills || 0)}/30).`; }, look: { wood: 0x1a2030, metal: 0x2a3a5a, trim: 0xd08a4a, len: 0.44, bands: 3, coil: true } },
+    widowskiss: { name: "Widow's Kiss", desc: "Captain Hollowell's own pistol, raised from the deep with his blade. Its pale shot passes through two foes, and drinks a third of the harm it does to mend ye.", dmg: 64, pierce: 2, drain: 0.3, rounds: 1, reload: 1.5, fire: 0.3, range: 90, cone: 0.95, legendary: true, gold: 0, cost: {},
+               claim: 'Lay Captain Hollowell to rest (finish the quest The Ghost Blade).', look: { wood: 0x2a3a34, metal: 0x8ab0a0, trim: 0xc8fff0, len: 0.5, bands: 2, slim: true, ghost: true } },
+    dragonbreath: { name: "Dragon's Breath", desc: 'A flared hand-mortar packed with blasting powder and the Leviathan\'s burning oil. It breathes a cone of fire that sets everything in front of ye alight.', dmg: 13, pellets: 9, fire: 0.4, rounds: 1, reload: 2.0, range: 18, cone: 0.68, kb: true, burn: true, legendary: true, gold: 0, cost: {},
+               get claim() { return `Slay the Leviathan (${Math.min(1, STATE.levKills || 0)}/1).`; }, look: { wood: 0x3a1410, metal: 0x6a1a10, trim: 0xe8b04a, len: 0.34, flare: true, fangs: true } },
     thunder: { name: 'The Thunderer', desc: 'A brass hand-mortar with a dragon for a muzzle. Every shell bursts on impact, blasting everything within four metres.', dmg: 70, splash: 4, splashDmg: 45, rounds: 1, reload: 2.6, fire: 0.4, range: 70, cone: 0.93, gold: 650, cost: { gem: 2, steel: 4 },
                look: { wood: 0x3a1a10, metal: 0xc9962e, trim: 0xffd76a, len: 0.4, dragon: true } },
   };
@@ -8031,6 +8118,10 @@ window.__pgBoot = () => {
     }
     for (let i = 0; i < (lk.bands || 0); i++) cyl(br * 1.25, br * 1.25, 0.012, trim, 0, y0 - len * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -0.006);
     if (lk.slim) { const inl = box(0.004, len * 0.6, 0.004, trim, 0.02, yc, -0.008); box(0.004, len * 0.6, 0.004, trim, -0.02, yc, -0.008); }   // silver inlay
+    if (lk.coil) { for (let i = 0; i < 6; i++) { const t2 = new THREE.Mesh(new THREE.TorusGeometry(br * 1.5, 0.004, 5, 12), trim); t2.rotation.x = Math.PI / 2; t2.position.set(0, y0 - len * (0.15 + i * 0.12), -0.008); g.add(t2); }
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), new THREE.MeshBasicMaterial({ color: 0x9ad8ff })); orb.position.set(0, -0.02, -0.045); g.add(orb); }   // copper coils down the barrel and a captive spark by the lock
+    if (lk.fangs) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, f = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.035, 4), trim); f.position.set(Math.cos(a) * 0.05, y0 - len - 0.105, -0.008 + Math.sin(a) * 0.05); f.rotation.x = Math.PI; g.add(f); }   // teeth round the dragon's mouth
+    if (lk.ghost) g.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.72; if (o.material.emissive) o.material.emissive.setHex(0x1a5a44); } });   // pale and half there
     g.userData.muzzleY = y0 - len - (lk.flare ? 0.1 : lk.dragon ? 0.09 : lk.claw ? 0.06 : 0.01);
     return g;
   }
@@ -8040,7 +8131,7 @@ window.__pgBoot = () => {
   }
   function drawPistolIcon(cv, lk) {
     const g = cv.getContext('2d'), hex = c => '#' + c.toString(16).padStart(6, '0'), W = cv.width, H = cv.height;
-    g.clearRect(0, 0, W, H); g.save(); g.translate(W * 0.2, H * 0.42);
+    g.clearRect(0, 0, W, H); g.save(); g.translate(W * 0.2, H * 0.42); if (lk.ghost) g.globalAlpha = 0.72;
     const L = 130 * lk.len / 0.46;
     // grip
     g.fillStyle = hex(lk.wood); g.beginPath(); g.moveTo(0, -6); g.lineTo(14, -6); g.quadraticCurveTo(4, 14, -14, 26); g.lineTo(-26, 22); g.quadraticCurveTo(-10, 8, 0, -6); g.fill();
@@ -8057,6 +8148,8 @@ window.__pgBoot = () => {
     g.fillStyle = hex(lk.trim);
     for (let i = 0; i < (lk.bands || 0); i++) g.fillRect(18 + L * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -11, 3, bh + 2);
     if (lk.flare) { g.fillStyle = hex(lk.metal); g.beginPath(); g.moveTo(18 + L, -10); g.lineTo(18 + L + 22, -20); g.lineTo(18 + L + 22, 6); g.lineTo(18 + L, -3); g.fill(); }
+    if (lk.coil) { g.strokeStyle = '#d08a4a'; g.lineWidth = 2; for (let i = 0; i < 6; i++) { const x = 18 + L * (0.15 + i * 0.12); g.beginPath(); g.moveTo(x, -12); g.lineTo(x + 3, -2); g.stroke(); } g.fillStyle = '#9ad8ff'; g.beginPath(); g.arc(6, -14, 4, 0, 6.28); g.fill(); }
+    if (lk.fangs) { g.fillStyle = hex(lk.trim); for (const dy of [-18, -8, 2]) { g.beginPath(); g.moveTo(18 + L + 22, dy); g.lineTo(18 + L + 28, dy + 3); g.lineTo(18 + L + 22, dy + 5); g.fill(); } }
     if (lk.claw) { g.fillStyle = '#3a0e0a'; for (const dy of [-16, -7, 2]) { g.beginPath(); g.moveTo(18 + L, -7 + dy * 0.4); g.quadraticCurveTo(18 + L + 14, dy - 4, 18 + L + 20, dy + 2); g.lineTo(18 + L + 4, -4 + dy * 0.4); g.fill(); } }
     if (lk.dragon) { g.fillStyle = hex(lk.trim); g.beginPath(); g.moveTo(18 + L, -14); g.lineTo(18 + L + 20, -12); g.lineTo(18 + L + 12, -7); g.lineTo(18 + L + 20, -2); g.lineTo(18 + L, 0); g.fill(); g.fillStyle = '#ff3030'; g.fillRect(18 + L + 6, -12, 3, 3); }
     g.restore();
@@ -8136,15 +8229,25 @@ window.__pgBoot = () => {
       let any = false;
       for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; any = true;
         const n = Math.max(1, Math.round(G.pellets * Math.max(0.25, Math.min(1, 1.15 - d / G.range)))), dx = (t.pos.x - mz.x) / Math.max(d, 0.01), dz = (t.pos.z - mz.z) / Math.max(d, 0.01);
-        pistolHit(t, G.dmg * n, dx, dz, true, n >= G.pellets - 1 ? '!' : ''); }
+        pistolHit(t, G.dmg * n, dx, dz, true, n >= G.pellets - 1 ? '!' : ''); if (G.burn && t.o) t.o.burn = { t: 3, dps: 12 }; }
+      if (G.burn) for (let k = 0; k < 16; k++) { const a = P.facing + (Math.random() - 0.5) * 0.9, r = 2 + Math.random() * G.range * 0.85; puff(mz.x + Math.sin(a) * r, mz.y - 0.3 + Math.random(), mz.z + Math.cos(a) * r, { color: k % 3 ? 0xff7a1a : 0xffd04a, size: 0.8 + r * 0.08, life: 0.5 + Math.random() * 0.3, grow: 1.6, vy: 1.5, op: 0.9 }); }   // Dragon's Breath: a cone of fire
       for (let k = 0; k < G.pellets; k++) { const a = P.facing + (Math.random() - 0.5) * 0.7, r = G.range * (0.6 + Math.random() * 0.4); tracer(mz, _pmT.set(mz.x + Math.sin(a) * r, mz.y + (Math.random() - 0.6) * 2, mz.z + Math.cos(a) * r).clone(), 0xffd890, 0.6); }
       if (!any) for (let k = 0; k < 4; k++) puff(mz.x + fx * (8 + k * 3), mz.y - 0.5, mz.z + fz * (8 + k * 3), { color: 0xd8c8a8, size: 0.6, life: 0.4, grow: 1, op: 0.5 });
+    } else if (G.chain) {   // Stormcaller: the bolt strikes, then leaps from foe to foe
+      let cur = null, bs = 1e9, from = mz.clone(); const hitL = [];
+      for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; const dx = t.pos.x - mz.x, dz = t.pos.z - mz.z, s2 = (1 - (dx * fx + dz * fz) / Math.max(d, 0.01)) * 60 + d / G.range; if (s2 < bs) { bs = s2; cur = t; } }
+      const bolt = (a, b) => { let p0 = a.clone(); for (let k = 1; k <= 5; k++) { const p1 = a.clone().lerp(b, k / 5); if (k < 5) p1.add(new THREE.Vector3((Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6)); tracer(p0, p1, 0x9ad8ff, 1.3); p0 = p1; } };
+      if (!cur) { const r = Math.min(G.range, 40); bolt(mz, new THREE.Vector3(mz.x + fx * r, mz.y - 0.5, mz.z + fz * r)); }
+      for (let hop = 0; cur && hop <= G.chain; hop++) { const c = chest(cur); bolt(from, c); hitL.push(cur); pistolHit(cur, Math.round(G.dmg * Math.pow(0.7, hop)), fx, fz, true, hop ? '' : ''); puff(c.x, c.y, c.z, { color: 0xbfe8ff, size: 0.8, life: 0.2, grow: 1, op: 1 });
+        from = c; let nx = null, nd = 14; for (const t of all) { if (hitL.includes(t)) continue; const d = Math.hypot(t.pos.x - c.x, t.pos.z - c.z); if (d < nd) { nd = d; nx = t; } } cur = nx; }
+      CMB.shake = Math.max(CMB.shake, 0.25); SFX.crash && SFX.crash({ x: mz.x, z: mz.z });
     } else if (G.pierce) {   // Beastbane: a barbed bolt straight through everyone in a line
       const line = all.map(t => ({ t, d: inCone(t, 0.985, G.range) })).filter(o => o.d >= 0).sort((a, b) => a.d - b.d).slice(0, G.pierce);
       if (!line.length) { const aim = []; for (const t of all) { const d = inCone(t, G.cone, G.range); if (d >= 0) aim.push({ t, d }); } aim.sort((a, b) => a.d - b.d); if (aim[0]) line.push(aim[0]); }
-      line.forEach(({ t }, i) => { const head = Math.random() < 0.12; pistolHit(t, Math.round(G.dmg * (head ? 1.6 : 1) * (1 - i * 0.15)), fx, fz, true, head ? ' HEADSHOT' : ''); const c = chest(t); puff(c.x, c.y, c.z, { color: 0x8a1a14, size: 0.5, life: 0.3, grow: 0.8, op: 1 }); });
+      line.forEach(({ t }, i) => { const head = Math.random() < 0.12, n = Math.round(G.dmg * (head ? 1.6 : 1) * (1 - i * 0.15)); pistolHit(t, n, fx, fz, true, head ? ' HEADSHOT' : ''); const c = chest(t); puff(c.x, c.y, c.z, { color: G.drain ? 0x8affc8 : 0x8a1a14, size: 0.5, life: 0.3, grow: 0.8, op: 1 });
+        if (G.drain) { PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + n * G.drain); for (let k = 0; k < 4; k++) puff(c.x, c.y, c.z, { color: 0x8affc8, size: 0.3, life: 0.6, grow: 0.4, vx: (P.pos.x - c.x) * 1.5, vz: (P.pos.z - c.z) * 1.5, vy: 0.5, op: 0.8 }); } });   // Widow's Kiss drinks it
       const end = line.length ? chest(line[line.length - 1].t).addScaledVector(new THREE.Vector3(fx, 0, fz), 6) : new THREE.Vector3(mz.x + fx * 50, mz.y - 0.4, mz.z + fz * 50);
-      tracer(mz, end, 0xd8e8ff, 1.5); CMB.shake = Math.max(CMB.shake, 0.22);
+      tracer(mz, end, G.drain ? 0x8affc8 : 0xd8e8ff, 1.5); CMB.shake = Math.max(CMB.shake, 0.22);
     } else {
       let best = null, bs = 1e9;
       for (const t of all) { const d = inCone(t, G.cone, G.range); if (d < 0) continue; const dx = t.pos.x - mz.x, dz = t.pos.z - mz.z, dot = (dx * fx + dz * fz) / Math.max(d, 0.01), s = (1 - dot) * 60 + d / G.range; if (s < bs) { bs = s; best = t; } }
@@ -8175,6 +8278,9 @@ window.__pgBoot = () => {
     return `2 · ${G.name}` + (G.rounds > 1 ? ' ' + '●'.repeat(PLAYER.rounds) + '○'.repeat(Math.max(0, G.rounds - PLAYER.rounds)) : '');
   }
   setTimeout(() => { try { refreshPistol(); } catch (e) {} }, 0);
+  window.__leg = { give: () => { for (const k of ['krakenfang', 'serpenttooth', 'emberbrand']) if (!STATE.swords.includes(k)) STATE.swords.push(k); }, sword: id => { STATE.sword = id; refreshBlade(); onSwordChanged(); setWeapon('cutlass'); }, swing: () => { const b = bandits.filter(b => b.state !== 'dead' && b.state !== 'gone').sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z))[0]; if (b) { P.facing = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z); yaw = P.facing + Math.PI; } playerAttack(); }, feats: () => { STATE.krKills = 3; STATE.serpKills = 5; STATE.raiderKills = 30; STATE.levKills = 1; STATE.quests.ghostblade = 'done'; legendCheck(); return JSON.stringify([STATE.swords, STATE.pistols]); },
+    showSwords: () => { const g = new THREE.Group(); ['krakenfang', 'serpenttooth', 'emberbrand'].forEach((k, i) => { const o = new THREE.Group(), b = buildBlade(SWORDS[k].look); b.rotation.x = -Math.PI / 2; o.add(b); o.rotation.y = Math.PI / 2; o.position.set(-0.5 + i * 0.5, -0.7, 0); g.add(o); }); g.scale.setScalar(9); g.position.set(P.pos.x, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x + 4, 300, P.pos.z - 36, P.pos.x, 300, P.pos.z - 60]; },
+    showPistols: () => { const g = new THREE.Group(); ['stormcaller', 'widowskiss', 'dragonbreath'].forEach((k, i) => { const o = new THREE.Group(), m = buildPistol(PISTOLS[k].look); m.rotation.x = Math.PI / 2; o.add(m); o.rotation.y = -Math.PI / 2; o.position.set(-0.75 + i * 0.75, 0, 0); g.add(o); }); g.scale.setScalar(10); g.position.set(P.pos.x + 200, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x + 200, 300, P.pos.z - 47, P.pos.x + 200, 300, P.pos.z - 60]; } };
   window.__pis = { equip: pistolEquip, fire: firePistol, PLAYER, curPistol, PISTOLS, yaw: v => { yaw = v; },
     near: () => { const b = bandits.find(b => b.state !== 'dead' && b.state !== 'gone'); if (!b) return null; P.pos.set(b.pos.x - 10, b.pos.y, b.pos.z); yaw = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z) + Math.PI; b.state = 'idle'; return { hp: b.hp, name: b.name }; },
     bhp: () => { const b = bandits.filter(b => b.state !== 'gone').sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z)); return b.slice(0, 6).map(b => [Math.round(Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z)), Math.round(b.hp), b.state]); },
@@ -9871,7 +9977,7 @@ window.__pgBoot = () => {
   function showIsleHall() {
     let el = document.getElementById('isleHall');
     if (!el) { el = document.createElement('div'); el.id = 'isleHall'; el.className = 'ovl'; el.innerHTML = '<div class="box"><h2>Yer trophy hall</h2><div id="isleHallBody"></div><div class="foot"><button class="close">Close</button></div></div>'; document.body.appendChild(el); el.querySelector('.close').onclick = closeUI; }
-    const rows = [['The Blackwater Admiral bested', STATE.admiralBeat || 0], ['Weekly legends sunk', STATE.legendsSunk || 0], ['Blackwater forts stormed', STATE.fortsTaken || 0], ['Leviathans slain', STATE.levKills || 0], ['Legacy rank', STATE.legacy || 0], ['Trade profit', (STATE.tradeProfit || 0).toLocaleString() + ' gold'], ['Legendary armour', (STATE.armors || []).map(k => ARMORS[k].name).join(', ') || 'none yet']];
+    const rows = [['The Blackwater Admiral bested', STATE.admiralBeat || 0], ['Weekly legends sunk', STATE.legendsSunk || 0], ['Blackwater forts stormed', STATE.fortsTaken || 0], ['Leviathans slain', STATE.levKills || 0], ['Kraken defeated', STATE.krKills || 0], ['Sea serpents slain', STATE.serpKills || 0], ['Blackwater ships sunk', STATE.raiderKills || 0], ['Legacy rank', STATE.legacy || 0], ['Trade profit', (STATE.tradeProfit || 0).toLocaleString() + ' gold'], ['Legendary armour', (STATE.armors || []).map(k => ARMORS[k].name).join(', ') || 'none yet']];
     el.querySelector('#isleHallBody').innerHTML = rows.map(([a, b]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(80,50,20,.18)"><span>${a}</span><b>${b}</b></div>`).join('');
     refreshTrophies(); if (uiOpen) closeUI(); uiOpen = 'isleHall'; el.style.display = 'flex';
   }
@@ -10176,8 +10282,8 @@ window.__pgBoot = () => {
       if (tg.admiral) { tg.captured = false; admiralDefeated(tg, 'sink'); return; }   // the flagship: her own prize
       if (tg.legend) { legendDefeated(tg); return; }   // this week's legend
       if (!tg.captured && !(KR.lock === tg && KR.ally <= 0)) { bountyClaim(tg, 'sink'); noteWrath(); factionGain(nearestIsle(tg.x, tg.z, 2500), tg.galleon ? 8 : 5); }
-      if (tg.captured) { tg.captured = false; questEvent('raider', tg.galleon ? 'galleon' : 'brig'); return; }   // a prize ye took and scuttled: the plunder's already yers
-      if (!(KR.lock === tg && KR.ally <= 0)) questEvent('raider', tg.galleon ? 'galleon' : 'brig');   // sunk by ye (or yer kraken)
+      if (tg.captured) { tg.captured = false; questEvent('raider', tg.galleon ? 'galleon' : 'brig'); STATE.raiderKills = (STATE.raiderKills || 0) + 1; return; }   // a prize ye took and scuttled: the plunder's already yers
+      if (!(KR.lock === tg && KR.ally <= 0)) { questEvent('raider', tg.galleon ? 'galleon' : 'brig'); if (!tg.tut) STATE.raiderKills = (STATE.raiderKills || 0) + 1; }   // sunk by ye (or yer kraken)
       if (KR.lock === tg && KR.ally > 0) { addGold(tg.galleon ? 600 : 250, `Yer kraken sank a Blackwater ${tg.galleon ? 'galleon' : 'raider'}!`); addMat('steel', tg.galleon ? 4 : 2); }
       else if (KR.lock === tg) { if (Math.hypot(tg.x - P.pos.x, tg.z - P.pos.z) < 700) toast('The kraken drags the raider ship down to the depths!'); }
       else if (tg.galleon) { addGold(600, 'Sank a Blackwater galleon!'); addMat('steel', 4); }
@@ -12832,7 +12938,7 @@ window.__pgBoot = () => {
     }
     if (KR.st === 'grip' || KR.st === 'attack') {
       if (KR.hp <= 0) {
-        if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken shrieks and sinks back into the abyss!'); addGold(800, 'Drove off the Kraken!'); addMat('pearl', 3); questEvent('kraken'); }
+        if (krNearPlayer(T)) { SFX.roar(); toast('The Kraken shrieks and sinks back into the abyss!'); addGold(800, 'Drove off the Kraken!'); addMat('pearl', 3); STATE.krKills = (STATE.krKills || 0) + 1; save(); questEvent('kraken'); }
         krRelease(true);
       }
     }
@@ -13330,7 +13436,7 @@ window.__pgBoot = () => {
     if (s.st === 'roam') s.st = 'hunt';
     if (s.hp <= 0) {
       s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none'; SFX.roar();
-      toast('The sea serpent shrieks and sinks beneath the waves!'); addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2);
+      toast('The sea serpent shrieks and sinks beneath the waves!'); addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2); STATE.serpKills = (STATE.serpKills || 0) + 1; save();
     }
   }
   // cannonballs: anything of the serpent's above or near the water is a target
@@ -13552,7 +13658,7 @@ window.__pgBoot = () => {
     const s = SERP[i]; if (!s || !serpAlive(s)) return;
     s.st = 'dying'; s.deadT = 0; s.tag.style.display = 'none';
     if (Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 700) { SFX.roar(); toast('The sea serpent shrieks and sinks beneath the waves!'); }
-    if (mine) { addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2); }
+    if (mine) { addGold(450, 'Slew a sea serpent!'); addMat('pearl', 2); STATE.serpKills = (STATE.serpKills || 0) + 1; save(); }
   }
   // how many of the nest already hunt (or attend) yer ship: up to 3 hunt her, up to 2 come to bow to the Sword of the Sea
   const serpBusy = calm => SERP.filter(o => calm ? o.st === 'escort' || o.st === 'bow' : o.st === 'hunt' || o.st === 'circle' || o.st === 'strike').length;
@@ -15983,7 +16089,7 @@ window.__pgBoot = () => {
         if (r.state !== 'sinking' && r.state !== 'gone') { r.state = 'sinking'; r.sinkT = 0; r.hp = 0; try { SFX.crash(r); } catch (e) {} }
         if (d.by === MP.me) { try { if (!d.kr) { bountyClaim(r, 'sink'); noteWrath(); factionGain(nearestIsle(r.x, r.z, 2500), d.gal ? 8 : 5); } } catch (e) {} } else try { bountyVoid(r); } catch (e) {}
         if (d.by !== MP.me) { if (Math.hypot(r.x - P.pos.x, r.z - P.pos.z) < 700) toast(`${(MP.peers.get(d.by)?.name || 'Another captain')} sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); return; }
-        questEvent('raider', d.gal ? 'galleon' : 'brig');
+        questEvent('raider', d.gal ? 'galleon' : 'brig'); STATE.raiderKills = (STATE.raiderKills || 0) + 1;
         if (d.kr) { addGold(d.gal ? 600 : 250, `Yer kraken sank a Blackwater ${d.gal ? 'galleon' : 'raider'}!`); addMat('steel', d.gal ? 4 : 2); }
         else if (d.gal) { addGold(600, 'Sank a Blackwater galleon!'); addMat('steel', 4); }
         else { addGold(250, 'Sank a Blackwater raider!'); addMat('steel', 2); }
