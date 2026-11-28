@@ -7145,7 +7145,26 @@ window.__pgBoot = () => {
     for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4, c = P(new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.06, 5), gold), Math.cos(a) * 0.03, Math.sin(a) * 0.03, -0.25); c.rotation.set(-Math.PI / 2 + Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5); }
     const orb = P(new THREE.Mesh(new THREE.SphereGeometry(0.038, 14, 12), gem), 0, 0, -0.26);
     // the guard: a golden trident, its side prongs sweeping up along the blade, wave-curled arms tipped with pearls
-    P(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.075, 0.05), gold), 0, 0, 0.03);
+    // the heart of the guard: a round gold boss, set through with the gems, its rim beaded with gold
+    P(new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.052, 18), gold), 0, 0, 0.03).rotation.z = Math.PI / 2;
+    for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; for (const sd of [-1, 1]) P(new THREE.Mesh(new THREE.SphereGeometry(0.0055, 6, 4), goldD), sd * 0.026, Math.cos(a) * 0.046, 0.03 + Math.sin(a) * 0.046); }
+    // the collar: a fluted gold cup, flaring like a scallop shell, that the water of the blade wells up out of
+    { const cupG = new THREE.CylinderGeometry(0.078, 0.05, 0.075, 16, 1, true); cupG.rotateX(Math.PI / 2); cupG.scale(0.5, 1, 1);
+      P(new THREE.Mesh(cupG, Object.assign(gold.clone(), { side: THREE.DoubleSide })), 0, 0, 0.088);
+      const lip = P(new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.0075, 6, 28), gold), 0, 0, 0.126); lip.scale.set(0.5, 1, 1); lip.rotation.y = 0; }
+    // langets: gold plates running up both flats of the blade from the collar, ending in a curl of wave and a pearl
+    [-1, 1].forEach(sd => {
+      const sh = new THREE.Shape(); sh.moveTo(-0.034, 0); sh.quadraticCurveTo(-0.03, 0.09, 0, 0.16); sh.quadraticCurveTo(0.03, 0.09, 0.034, 0); sh.lineTo(-0.034, 0);
+      const pg = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: true, bevelThickness: 0.0015, bevelSize: 0.0015, bevelSegments: 1 });
+      pg.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0)));   // (shape across the blade's width and up its length; thickness out from its flat)
+      P(new THREE.Mesh(pg, gold), sd > 0 ? 0.0135 : -0.0175, 0, 0.11);
+      P(new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.004, 0.11), goldD), sd * 0.019, 0, 0.17);   // an engraved line up its middle
+      const wc = P(new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.0035, 5, 12, Math.PI * 1.6), goldD), sd * 0.019, 0, 0.27); wc.rotation.set(0, Math.PI / 2, 0.6);
+      P(new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), pearl), sd * 0.021, 0, 0.285);
+    });
+    // white water breaking where the blade leaves the gold
+    { const fm = new THREE.MeshBasicMaterial({ color: 0xf2feff, transparent: true, opacity: 0.85 });
+      for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283, b = P(new THREE.Mesh(new THREE.SphereGeometry(0.008 + (i % 3) * 0.004, 6, 5), fm), Math.cos(a) * 0.026, Math.sin(a) * 0.068, 0.13 + (i % 2) * 0.008); } }
     [-1, 1].forEach(sd => {
       const arm = P(new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.011, 6, 16, Math.PI * 0.8), gold), 0, sd * 0.075, 0.035); arm.rotation.set(0, Math.PI / 2, sd > 0 ? Math.PI * 0.6 : -Math.PI * 0.4 + Math.PI);
       const curl = P(new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 5, 12, Math.PI * 1.5), goldD), 0, sd * 0.16, 0.05); curl.rotation.set(0, Math.PI / 2, sd > 0 ? 0.5 : Math.PI + 0.5);
@@ -7153,7 +7172,6 @@ window.__pgBoot = () => {
       const prong = P(new THREE.Mesh(new THREE.ConeGeometry(0.013, 0.16, 6), gold), 0, sd * 0.07, 0.14); prong.rotation.x = Math.PI / 2 - sd * 0.28;
       const barb = P(new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.04, 4), gold), 0, sd * 0.088, 0.2); barb.rotation.x = Math.PI / 2 + sd * 0.9;
     });
-    const mid = P(new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.12, 6), gold), 0, 0, 0.11); mid.rotation.x = Math.PI / 2;
     [-1, 1].forEach(sd => { P(new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 10), gem), sd * 0.024, 0, 0.03); P(new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.005, 5, 14), gold), sd * 0.026, 0, 0.03).rotation.y = Math.PI / 2; });
     // the blade: living seawater held in the shape of a blade, deep ocean blue at the hilt shading through turquoise
     // to white foam at the point, one edge rolling like a wave, with a current of light flowing down its heart
