@@ -7165,12 +7165,12 @@ window.__pgBoot = () => {
     // white water breaking where the blade leaves the gold
     { const fm = new THREE.MeshBasicMaterial({ color: 0xf2feff, transparent: true, opacity: 0.85 });
       for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283, b = P(new THREE.Mesh(new THREE.SphereGeometry(0.008 + (i % 3) * 0.004, 6, 5), fm), Math.cos(a) * 0.026, Math.sin(a) * 0.068, 0.13 + (i % 2) * 0.008); } }
+    // the guard's arms: the upper one sweeps out and curls up toward the blade, and the lower one is its exact mirror
     [-1, 1].forEach(sd => {
-      const arm = P(new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.011, 6, 16, Math.PI * 0.8), gold), 0, sd * 0.075, 0.035); arm.rotation.set(0, Math.PI / 2, sd > 0 ? Math.PI * 0.6 : -Math.PI * 0.4 + Math.PI);
-      const curl = P(new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 5, 12, Math.PI * 1.5), goldD), 0, sd * 0.16, 0.05); curl.rotation.set(0, Math.PI / 2, sd > 0 ? 0.5 : Math.PI + 0.5);
-      P(new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 8), pearl), 0, sd * 0.175, 0.085);
-      const prong = P(new THREE.Mesh(new THREE.ConeGeometry(0.013, 0.16, 6), gold), 0, sd * 0.07, 0.14); prong.rotation.x = Math.PI / 2 - sd * 0.28;
-      const barb = P(new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.04, 4), gold), 0, sd * 0.088, 0.2); barb.rotation.x = Math.PI / 2 + sd * 0.9;
+      const side = new THREE.Group(); side.scale.y = sd; g.add(side);   // (built once for the upper side, then mirrored)
+      const arm = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.011, 6, 16, Math.PI * 0.8), gold); arm.position.set(0, 0.075, 0.035); arm.rotation.set(0, Math.PI / 2, Math.PI * 0.6); side.add(arm);
+      const curl = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 5, 12, Math.PI * 1.5), goldD); curl.position.set(0, 0.16, 0.05); curl.rotation.set(0, Math.PI / 2, 0.5); side.add(curl);
+      const pr = new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 8), pearl); pr.position.set(0, 0.175, 0.085); side.add(pr);
     });
     [-1, 1].forEach(sd => { P(new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 10), gem), sd * 0.024, 0, 0.03); P(new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.005, 5, 14), gold), sd * 0.026, 0, 0.03).rotation.y = Math.PI / 2; });
     // the blade: living seawater held in the shape of a blade, deep ocean blue at the hilt shading through turquoise
