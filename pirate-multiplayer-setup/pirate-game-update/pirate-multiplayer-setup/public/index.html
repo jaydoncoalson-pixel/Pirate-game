@@ -3323,7 +3323,7 @@ window.__pgBoot = () => {
   const dockWorld = (lx, lz) => DOCK_BASE.clone().addScaledVector(DOCK_DIR, lz).addScaledVector(PERP, -lx);
   // the Sword of the Sea makes its holder the Drowned Tyrant: taller, faster, far harder to kill
   const TYRANT = { size: 1.4, speed: 1.6, hp: 400, dmgTaken: 0.4 }, tyrantSpd = () => STATE.sword === 'seasword' ? (SEAF.intro > 0 ? 0 : TYRANT.speed * (SEAF.on ? (KA.dv > 0.5 ? 13 : 10) : 1)) : 1;
-  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0, SIZE: 24, DMG: 5, REACH: 15 };   // the Elder Kraken (the Sword of the Sea's transformation)
+  var SEAF = { on: false, t: 0, cd: 0, k: 0, intro: 0, introT: 0, INTRO: 2.2, DUR: 30, CD: 90, spearT: 0, boltT: 0, SIZE: 24, DMG: 8, REACH: 18, POW: 1.75, HP: 1600, TAKEN: 0.15, REGEN: 45 };   // the Elder Kraken (the Sword of the Sea's transformation)
   const MARINE_LOOK = { coat: 0x0a1418, shirt: 0x101c1e, pants: 0x080e10, hat: 'none', eyepatch: false, coatTrim: false, sash: 0x0a1012, boots: 0x060a0c, parrot: 'none', skin: 0x4c6264, beardStyle: 'none', beardOn: false, hairStyle: 'bald', earring: false, scar: false, tattoo: false, freckles: false, brows: 'angry' };   // (drowned: grey-green skin, hooded, his beard become tentacles)
   // turn a character into a ghost: pale, see-through and faintly glowing, with a cold green light about them.
   // (Ghost NPCs, and anyone holding Hollowell's Ghost Blade.)
@@ -9485,7 +9485,7 @@ window.__pgBoot = () => {
     if (STATE.sword === 'ghost' && Math.random() < 0.25) { puff(P.pos.x, P.pos.y + 1.2, P.pos.z, { color: 0x9fffd0, size: 1.6, life: 0.6, grow: 1.6, op: 0.6 }); return; }   // the blow passes through like mist
     if (STATE.sword === 'seasword' && (SEAF.intro > 0 || SEAF.on && (KA.dv > 0.5 || KA.inkT > 0))) return;   // (dived, or hidden in its ink: nothing can find it)   // nothing touches ye inside the rising column
     if (STATE.sword === 'seasword' && SEAF.on) n *= 0.08;   // the Elder Kraken
-    if (STATE.sword === 'seasword') n *= TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
+    if (STATE.sword === 'seasword') n *= SEAF.on ? SEAF.TAKEN : TYRANT.dmgTaken;   // the Tyrant shrugs off most of what strikes him
     n *= gearDR();   // legendary armour
     PLAYER.hp -= n; PLAYER.hurtT = 0; hurtEl.style.opacity = 0.6; SFX.hurt();
     if (PLAYER.hp <= 0) playerDefeated();
@@ -9825,7 +9825,7 @@ window.__pgBoot = () => {
   function updateCombat(dt, t) {
     for (const k of ['slashT', 'aimT', 'cool', 'reload']) PLAYER[k] = Math.max(0, PLAYER[k] - dt);
     try { updateSwordExtras(dt); } catch (e) { console.error(e); }
-    { const want = (STATE.sword === 'seasword' ? TYRANT.hp : 100) + ((gear() && gear().hp) || 0); if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
+    { const want = (STATE.sword === 'seasword' ? (SEAF.on ? SEAF.HP : TYRANT.hp) : 100) + ((gear() && gear().hp) || 0); if (PLAYER.max !== want) { const f = PLAYER.max ? PLAYER.hp / PLAYER.max : 1; PLAYER.max = want; if (PLAYER.hp > 0) PLAYER.hp = Math.max(1, f * want); } }
     updateCombatFeel(dt, t);
     if (PLAYER.hitPending > 0) {
       PLAYER.hitPending -= dt;
@@ -14989,33 +14989,33 @@ window.__pgBoot = () => {
   }
   const krNum = (p, n, big) => dmgNum({ x: p.x, y: (p.y || 0) + (big ? 30 : 4), z: p.z }, `${Math.round(n)}${big ? '!' : ''}`, big ? 'crit' : 'heavy');
   const krLand = (x, z) => heightAt(x, z) > 0;
-  // R Tentacle Storm: three waves of tentacles burst out of land and sea under every foe in sight
+  // R Tentacle Storm: four waves of tentacles burst out of land and sea under every foe in sight
   function krStorm() {
     if (KA.cdR > 0) { toast(`The deep is still gathering its arms... (${Math.ceil(KA.cdR)}s)`); return; }
-    KA.cdR = 18; KA.stormT = 2.4; KA.stormW = 0; SFX.roar(); setTimeout(() => SFX.roar(), 400); toast('TENTACLE STORM! The deep itself rises against yer foes!');
+    KA.cdR = 12; KA.stormT = 2.4; KA.stormW = 0; SFX.roar(); setTimeout(() => SFX.roar(), 400); toast('TENTACLE STORM! The deep itself rises against yer foes!');
   }
-  const krDmg = (T, ship, lev, man) => T.ship ? ship : T.lev ? lev : T.big ? Math.round(ship * 1.5) : man;
+  const krDmg = (T, ship, lev, man) => Math.round(SEAF.POW * (T.ship ? ship : T.lev ? lev : T.big ? ship * 1.5 : man));
   function krGrab() {
     if (KA.grab || KA.spinT > 0) return;
     if (KA.cdZ > 0) { toast(`Its arms need a moment... (${Math.ceil(KA.cdZ)}s)`); return; }
-    const T = krTargets(430)[0]; if (!T) { toast('Nothing within reach of its arms.'); return; }
-    KA.grab = { T, t: 0, tick: 0, slam: false }; KA.cdZ = 12; SFX.roar();
+    const T = krTargets(560)[0]; if (!T) { toast('Nothing within reach of its arms.'); return; }
+    KA.grab = { T, t: 0, tick: 0, slam: false }; KA.cdZ = 8; SFX.roar();
     toast(T.ship ? 'The Elder Kraken reaches out and seizes a ship!' : T.lev ? 'The Elder Kraken grapples the Leviathan!' : 'The Elder Kraken snatches up its prey!');
   }
   function krInk() {
     if (KA.cdG > 0) { toast(`It hasn't the ink yet... (${Math.ceil(KA.cdG)}s)`); return; }
-    KA.cdG = 22; KA.inkT = 8; SFX.splash({ x: P.pos.x, z: P.pos.z }, true); krInkBurst(P.pos.x, P.pos.y, P.pos.z, 70);
+    KA.cdG = 16; KA.inkT = 8; SFX.splash({ x: P.pos.x, z: P.pos.z }, true); krInkBurst(P.pos.x, P.pos.y, P.pos.z, 70);
     toast('The Elder Kraken looses a vast cloud of ink! Its foes are blinded, and nothing can find it. (8s)');
   }
   function krInkBurst(x, y, z, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, r = Math.random() * 260; puff(x + Math.cos(a) * r, y + 2 + Math.random() * 60, z + Math.sin(a) * r, { color: i % 4 ? 0x0c1014 : 0x1c2430, size: 50 + Math.random() * 60, life: 5 + Math.random() * 3, grow: 1.5, vx: Math.cos(a) * 8, vz: Math.sin(a) * 8, vy: 2, op: 0.85 }); } }
   function krSpin() {
     if (KA.grab || KA.spinT > 0) return;
     if (KA.cdT > 0) { toast(`It's still winding back up... (${Math.ceil(KA.cdT)}s)`); return; }
-    KA.cdT = 15; KA.spinT = 2.8; KA.tick = 0; SFX.roar(); toast('MAELSTROM SPIN! The Elder Kraken whirls, every arm sweeping all round it!');
+    KA.cdT = 10; KA.spinT = 2.8; KA.tick = 0; SFX.roar(); toast('MAELSTROM SPIN! The Elder Kraken whirls, every arm sweeping all round it!');
   }
   function krDive() {
     if (KA.dive) {   // back up, and out: the breach
-      KA.dive = 0; KA.dv = 0; KA.breachT = 1.6; KA.breachHit = false; KA.cdB = 4; SFX.roar(); toast('The Elder Kraken BREACHES!'); return; }
+      KA.dive = 0; KA.dv = 0; KA.breachT = 1.6; KA.breachHit = false; KA.cdB = 3; SFX.roar(); toast('The Elder Kraken BREACHES!'); return; }
     if (!krWater()) { toast('The Elder Kraken can only dive at sea.'); return; }
     if (KA.cdB > 0 || KA.breachT > 0) return;
     KA.dive = 1; SFX.splash({ x: P.pos.x, z: P.pos.z }, true); toast('The Elder Kraken sinks beneath the waves. Nothing can touch it down there. (B to breach)');
@@ -15027,12 +15027,13 @@ window.__pgBoot = () => {
     updateKShock(dt);
     if (KA.slamU > 0) { KA.slamU += dt / KA.SLAM; if (KA.slamU >= 1) KA.slamU = 0; }
     if (!SEAF.on) { if (KA.dv > 0 || KA.grab || KA.spinT > 0) krReset(); KA.spinA *= Math.max(0, 1 - dt * 4); return; }
+    if (PLAYER.hp > 0 && PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + SEAF.REGEN * dt);   // the Elder Kraken's flesh knits itself back together
     // dive and breach
     if (KA.dive && !krWater()) KA.dive = 0;   // ran aground: it has to come up
     KA.dv += ((KA.dive ? 1 : 0) - KA.dv) * Math.min(1, dt * 1.2);
     if (KA.breachT > 0) { KA.breachT -= dt;
       if (!KA.breachHit && KA.breachT < 1.15) { KA.breachHit = true; const x = P.pos.x, y = P.pos.y, z = P.pos.z;
-        for (const T of krTargets(500)) { const n = krDmg(T, 700, 1000, 3000); T.hit(n); if (T.big) krNum(T.pos(), n, true); if (T.ship && T.e) { const dx = T.e.x - x, dz = T.e.z - z, d = Math.max(1, Math.hypot(dx, dz)); T.e.x += dx / d * 45; T.e.z += dz / d * 45; } }
+        for (const T of krTargets(620)) { const n = krDmg(T, 700, 1000, 3000); T.hit(n); if (T.big) krNum(T.pos(), n, true); if (T.ship && T.e) { const dx = T.e.x - x, dz = T.e.z - z, d = Math.max(1, Math.hypot(dx, dz)); T.e.x += dx / d * 45; T.e.z += dz / d * 45; } }
         krShock(x, y, z, 520, false); setTimeout(() => krShock(x, y, z, 320, false), 250);
         seaCastFx(0x9fe8ff, 3.5); SFX.splash({ x, z }, true); SFX.roar(); SEACTL.shake = Math.max(SEACTL.shake, 1.8); flashT = 0.2;
         for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, r = Math.random() * 120; puff(x + Math.cos(a) * r, y + 5 + Math.random() * 40, z + Math.sin(a) * r, { color: i % 3 ? 0xffffff : 0xbff4ff, size: 30 + Math.random() * 40, life: 2.2, grow: 1.6, vx: Math.cos(a) * 30, vz: Math.sin(a) * 30, vy: 20 + Math.random() * 40, op: 0.9 }); } } }   // a mountain of white water
@@ -15043,13 +15044,13 @@ window.__pgBoot = () => {
       if (G.t > 0.6 && G.t < 2.4 && (G.tick -= dt) <= 0) { G.tick = 0.2; const n = krDmg(G.T, 120, 220, 700); G.T.hit(n); G.sum = (G.sum || 0) + n; SEACTL.shake = Math.max(SEACTL.shake, 0.6);
         for (let i = 0; i < 4; i++) puff(p.x + (Math.random() - 0.5) * 30, (p.y || 0) + 4 + Math.random() * 15, p.z + (Math.random() - 0.5) * 30, { color: i % 2 ? 0x6a4a2a : 0xe8fbff, size: 6 + Math.random() * 8, life: 0.9, grow: 1.5, vy: 6, op: 0.85 }); }   // splinters and spray as it's crushed
       if (!G.slam && G.t > 2.5) { G.slam = true; const n = krDmg(G.T, 700, 1000, 4000); G.T.hit(n); krNum(p, (G.sum || 0) + n, true); krShock(p.x, krLand(p.x, p.z) ? heightAt(p.x, p.z) : 0, p.z, 260, krLand(p.x, p.z)); seaImpact(p.x, 4, p.z);
-        for (const T of krTargets(2000)) if (T !== G.T && Math.hypot(T.pos().x - p.x, T.pos().z - p.z) < 160) T.hit(krDmg(T, 250, 350, 1500));   // whatever it's slammed down onto SFX.roar(); SEACTL.shake = Math.max(SEACTL.shake, 1.3);
+        for (const T of krTargets(2000)) if (T !== G.T && Math.hypot(T.pos().x - p.x, T.pos().z - p.z) < 160) T.hit(krDmg(T, 250, 350, 1500));   /* whatever it's slammed down onto */ SFX.roar(); SEACTL.shake = Math.max(SEACTL.shake, 1.3);
         for (let i = 0; i < 24; i++) { const a = Math.random() * 6.28; puff(p.x, 3, p.z, { color: 0xffffff, size: 20 + Math.random() * 20, life: 1.4, grow: 1.8, vx: Math.cos(a) * 25, vz: Math.sin(a) * 25, vy: 15 + Math.random() * 20, op: 0.85 }); } }
       if (G.t > 3.1) { if (G.T.e) G.T.e.krLift = 0; KA.grab = null; } }
     // the spin: every arm out, a wheel of flesh three hundred paces across, dragging ships in
     if (KA.spinT > 0) { KA.spinT -= dt; KA.spinA += dt * 6.5 * Math.min(1, (2.8 - KA.spinT) / 0.5, KA.spinT / 0.6 + 0.15);   // winds up, and slows to a stop
       if ((KA.tick -= dt) <= 0) { KA.tick = 0.25;
-        for (const T of krTargets(380)) { T.hit(krDmg(T, 90, 180, 500)); if (T.ship && T.e) { T.e.x += (P.pos.x - T.e.x) * 0.06; T.e.z += (P.pos.z - T.e.z) * 0.06; } if (T.b) { const dx = T.b.pos.x - P.pos.x, dz = T.b.pos.z - P.pos.z, d = Math.max(1, Math.hypot(dx, dz)); banditFlinch(T.b, true, dx / d * 3, dz / d * 3); } }
+        for (const T of krTargets(470)) { T.hit(krDmg(T, 90, 180, 500)); if (T.ship && T.e) { T.e.x += (P.pos.x - T.e.x) * 0.06; T.e.z += (P.pos.z - T.e.z) * 0.06; } if (T.b) { const dx = T.b.pos.x - P.pos.x, dz = T.b.pos.z - P.pos.z, d = Math.max(1, Math.hypot(dx, dz)); banditFlinch(T.b, true, dx / d * 3, dz / d * 3); } }
         if ((KA.ring = (KA.ring || 0) + 1) % 3 === 0) krShock(P.pos.x, P.pos.y, P.pos.z, 400, !krWater());
         SEACTL.shake = Math.max(SEACTL.shake, 0.7); }
       for (let i = 0; i < 3; i++) { const a = Math.random() * 6.28, r = 120 + Math.random() * 180; puff(P.pos.x + Math.cos(a) * r, P.pos.y + 2, P.pos.z + Math.sin(a) * r, { color: 0xf2fbff, size: 18 + Math.random() * 14, life: 1, grow: 1.6, vx: -Math.sin(a) * 30, vz: Math.cos(a) * 30, vy: 6, op: 0.75 }); } }
@@ -15060,10 +15061,10 @@ window.__pgBoot = () => {
       for (const r of raiders) if (r.reload && Math.hypot(r.x - P.pos.x, r.z - P.pos.z) < 700) for (const k2 in r.reload) r.reload[k2] = Math.max(r.reload[k2], 2);
       if (PLAYER.hp < PLAYER.max) PLAYER.hp = Math.min(PLAYER.max, PLAYER.hp + 150 * dt);
       if (Math.random() < dt * 8) krInkBurst(P.pos.x, P.pos.y, P.pos.z, 2);
-      if ((KA.poisonT -= dt) <= 0) { KA.poisonT = 0.5; for (const T of krTargets(320)) T.hit(krDmg(T, 15, 30, 60)); } }   // and the ink burns whatever's caught in it
-    // the Tentacle Storm: three waves, every foe in sight
+      if ((KA.poisonT -= dt) <= 0) { KA.poisonT = 0.5; for (const T of krTargets(400)) T.hit(krDmg(T, 15, 30, 60)); } }   // and the ink burns whatever's caught in it
+    // the Tentacle Storm: four waves, every foe in sight
     if (KA.stormT > 0) { const before = KA.stormT; KA.stormT -= dt;
-      for (const at of [2.4, 1.6, 0.8]) if (before >= at && KA.stormT < at) for (const T of krTargets(650)) { const p = T.pos(), sea = !krLand(p.x, p.z), n = krDmg(T, 180, 260, 900);
+      for (const at of [2.4, 1.8, 1.2, 0.6]) if (before >= at && KA.stormT < at) for (const T of krTargets(850)) { const p = T.pos(), sea = !krLand(p.x, p.z), n = krDmg(T, 180, 260, 900);
         groundTentacle(p.x, sea ? 0 : (p.y != null ? p.y : heightAt(p.x, p.z)), p.z, T.big ? 7 : 3); T.hit(n); if (!T.b) krNum(p, n, !!T.big); else banditFlinch(T.b, true, 0, 0); SFX.splash({ x: p.x, z: p.z }, true); SEACTL.shake = Math.max(SEACTL.shake, 0.8); } }
   }
   const krEase = q => q * q * (3 - 2 * q);
