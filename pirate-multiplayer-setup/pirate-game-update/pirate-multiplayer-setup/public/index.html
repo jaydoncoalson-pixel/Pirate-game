@@ -617,6 +617,7 @@ window.__pgBoot = () => {
     }
     I.sites.push(S);
   });
+  var VOLC = { CR: 0.07 };   // Smoke Peak's crater radius (fraction of the island's)
   function islandHeight(I, x, z, raw) {
     const dx = x - I.c.x, dz = z - I.c.y;
     if (dx * dx + dz * dz > I.r * I.r * 3.4) return -7;
@@ -632,8 +633,16 @@ window.__pgBoot = () => {
     h += I.hill * Math.pow(Math.max(0, s - 0.3), 1.4) * (0.5 + 1.0 * fbm(x * 0.006 + I.seed, z * 0.006));
     if (I.kind !== 'volcano' && I.kind !== 'cove') h += I.hill * 0.75 * Math.pow(Math.max(0, fbm(x * 0.003 + I.seed * 1.7, z * 0.003 - I.seed) - 0.35), 1.2) * sstep(0.12, 0.45, s);   // rolling hills
     if (I.kind === 'volcano') {
-      h += 300 * Math.pow(Math.max(0, s - 0.22), 1.7);
-      h -= 1300 * Math.pow(Math.max(0, s - 0.86), 1.2);
+      h += 300 * Math.pow(Math.max(0, s - 0.22), 1.7);   // the broad shoulders
+      // the breach faces away from Ashfall, the side the lava rivers run down
+      if (I.breachA === undefined) { const S = SITES.find(q => q.name === 'Ashfall'), ca = Math.cos(S ? S.a : 0), sa = Math.sin(S ? S.a : 0); I.breachA = Math.atan2(I.toHome.x * sa + I.toHome.y * ca, I.toHome.x * ca - I.toHome.y * sa) + Math.PI + 0.1; }
+      const dc = Math.hypot(dx, dz) / I.r, q = dc / 0.07;   // (0.07: the crater radius, VOLC.CR)   // (true distance from the summit: the cone stays clean whatever the coast does)
+      const cone = d2 => 190 * Math.pow(Math.max(0, 1 - d2 / 0.3), 1.6);
+      h += q < 1 ? cone(0.07) + (cone(dc) - cone(0.07)) * sstep(0.55, 1.0, q) : cone(dc);   // the steep upper cone, levelled off inside the crater
+      h += 9 * Math.exp(-Math.pow((q - 1.1) / 0.28, 2));                             // a raised lip round the crater
+      if (q < 1.2) h -= 66 * (1 - sstep(0.5, 1.12, q));                              // the crater bowl, with a flat floor for the lake
+      if (q < 2.4) { const da = Math.atan2(Math.sin(Math.atan2(dz, dx) - I.breachA), Math.cos(Math.atan2(dz, dx) - I.breachA));
+        h -= 42 * Math.exp(-Math.pow(da / (0.13 + 0.05 * q), 2)) * sstep(0.5, 0.95, q) * (1 - sstep(1.2, 2.4, q)); }   // the breach: a notch in the rim, opening down the slope
     }
     h += (vnoise(x * 0.08, z * 0.08) - 0.5) * 1.2 * sstep(0, 0.2, s);
     if (I.kind === 'cove') {
@@ -842,7 +851,7 @@ window.__pgBoot = () => {
       let maxH = peak; for (let r = 0; r < I.r; r += 10) for (let a = 0; a < 6.283; a += 0.5) maxH = Math.max(maxH, H(I.c.x + Math.cos(a) * r, I.c.y + Math.sin(a) * r)); X.maxH = maxH;
       // the temple on the crater rim, on the side facing Ashfall
       const va = Math.atan2(vil.z - I.c.y, vil.x - I.c.x); let rim = { r: 0, h: -1 }; for (let r = 0; r < I.r; r += 4) { const h = H(I.c.x + Math.cos(va) * r, I.c.y + Math.sin(va) * r); if (h > rim.h) rim = { r, h }; }
-      rim.r = Math.max(rim.r, I.r * 0.13 + 25);   // (outside the crater's lava lake)
+      rim.r = Math.max(rim.r, I.r * 0.3);   // (on the shoulder, below the steep cone)
       X.temple = { x: I.c.x + Math.cos(va) * (rim.r + 22), z: I.c.y + Math.sin(va) * (rim.r + 22) }; X.rim = rim;
       // lava rivers: from the rim, downhill all the way to the sea, on the far side from the village
       X.flows = [];
@@ -863,6 +872,7 @@ window.__pgBoot = () => {
       const ash = new THREE.Color(0x77716a), bas = new THREE.Color(0x3a3430), crust = new THREE.Color(0x1e1a18), sulf = new THREE.Color(0xc8b43a), scorch = new THREE.Color(0x4a4036);
       groundKit(X, I, { lush: 0x5d8a3e, dry: 0x8a9050, deep: 0x45683a, earth: 0x5a5046, verge: 0x6a6258, fsc: 0.005, fthr: 0.55, fseed: 31, mseed: 37, noRock: true, clear: [[I.c.x, I.c.y, rim.r + 200]],
         extra: (c, x, y, z) => { const hn = y / maxH; c.lerp(ash, sstep(0.08, 0.3, hn)).lerp(bas, sstep(0.3, 0.55, hn) * (0.7 + 0.3 * vnoise(x * 0.04, z * 0.04)));
+          { const qc = Math.hypot(x - I.c.x, z - I.c.y) / (VOLC.CR * I.r); if (qc < 1.4) { c.lerp(crust, 1 - sstep(0.95, 1.4, qc)); if (qc < 1.1) c.lerp(tc.setHex(0x7a2410), 0.55 * (1 - sstep(0.75, 1.1, qc))); } }   // the crater: black glassy rock, glowing red where it meets the lake
           const ld = X.lavaD(x, z); if (ld < 30) c.lerp(ld < 14 ? crust : scorch, ld < 14 ? 1 : (30 - ld) / 16);
           for (const v of X.vents) { const d = Math.hypot(x - v.x, z - v.z); if (d < 22) c.lerp(sulf, 0.75 * (1 - d / 22) * (0.6 + 0.4 * vnoise(x * 0.3, z * 0.3))); }
           for (const v of X.springs) { const d = Math.hypot(x - v.x, z - v.z); if (d < 20) c.lerp(tc.setHex(0xb8744a), 0.6 * (1 - d / 20)); } } }); }
@@ -1266,12 +1276,35 @@ window.__pgBoot = () => {
   // --- Smoke Peak: lava in the crater and rising smoke ---
   const smokePuffs = [];
   {
-    const I = ISLANDS[3], top = islandHeight(I, I.c.x, I.c.y);
-    const lava = new THREE.Mesh(new THREE.CircleGeometry(I.r * 0.13, 20), new THREE.MeshBasicMaterial({ color: 0xff5a1f, fog: false }));
-    lava.rotation.x = -Math.PI / 2; lava.position.set(I.c.x, top + 1.5, I.c.y); I.group.add(lava);
+    const I = ISLANDS[3], top = islandHeight(I, I.c.x, I.c.y), CRm = VOLC.CR * I.r;
+    // how high the lake stands: up to where it brims over into the breach
+    const bx = I.c.x + Math.cos(I.breachA) * CRm * 1.1, bz = I.c.y + Math.sin(I.breachA) * CRm * 1.1, notch = islandHeight(I, bx, bz);
+    const level = Math.min(notch + 1.5, top + 16); VOLC.level = level; VOLC.top = top;
+    // molten rock: a bright churning layer, with a black crust drifting over it in slabs, cracked through with fire
+    const lavaTex = canvasTex(256, 256, (c2, w, h) => { const gr = c2.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, w * 0.7); gr.addColorStop(0, '#ffe27a'); gr.addColorStop(0.5, '#ff9a2a'); gr.addColorStop(1, '#ff5a14'); c2.fillStyle = gr; c2.fillRect(0, 0, w, h);
+      for (let i = 0; i < 90; i++) { c2.fillStyle = `rgba(255,${200 + Math.random() * 55 | 0},${80 + Math.random() * 80 | 0},${0.25 + Math.random() * 0.4})`; c2.beginPath(); c2.arc(Math.random() * w, Math.random() * h, 3 + Math.random() * 14, 0, 6.28); c2.fill(); } });
+    lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping; lavaTex.repeat.set(4, 4);
+    const crustTex = canvasTex(256, 256, (c2, w, h) => { c2.clearRect(0, 0, w, h);
+      for (let i = 0; i < 26; i++) { const cx = Math.random() * w, cy = Math.random() * h, r = 14 + Math.random() * 26; c2.fillStyle = `rgba(${28 + Math.random() * 20 | 0},${18 + Math.random() * 12 | 0},14,0.95)`; c2.beginPath();
+        for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28, rr = r * (0.7 + Math.random() * 0.4); c2[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } c2.closePath(); c2.fill(); } });
+    crustTex.wrapS = crustTex.wrapT = THREE.RepeatWrapping; crustTex.repeat.set(3, 3);
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(CRm * 1.02, 40), new THREE.MeshBasicMaterial({ map: lavaTex }));
+    lake.rotation.x = -Math.PI / 2; lake.position.set(I.c.x, level, I.c.y); I.group.add(lake);
+    const crust = new THREE.Mesh(new THREE.CircleGeometry(CRm * 1.02, 40), new THREE.MeshBasicMaterial({ map: crustTex, transparent: true, depthWrite: false }));
+    crust.rotation.x = -Math.PI / 2; crust.position.set(I.c.x, level + 0.15, I.c.y); I.group.add(crust);
+    VOLC.tex = [lavaTex, crustTex]; VOLC.crust = crust;
+    { const gl = new THREE.PointLight(0xff6a20, 2.2, 420, 1.6); gl.position.set(I.c.x, level + 18, I.c.y); I.group.add(gl); VOLC.light = gl; }   // the crater glows from within
+    // the spill: a tongue of lava over the lip of the breach and down the notch, into the head of the lava river
+    { const pos = [], uv = [], idx = [], n = 26;
+      for (let i = 0; i <= n; i++) { const u = i / n, rr = CRm * (0.85 + u * 0.95), cx = I.c.x + Math.cos(I.breachA) * rr, cz = I.c.y + Math.sin(I.breachA) * rr, w = 7 + 5 * (1 - u), nx = -Math.sin(I.breachA), nz = Math.cos(I.breachA);
+        for (const sd of [-1, 1]) { const x = cx + nx * w * sd, z = cz + nz * w * sd; pos.push(x, Math.max(heightAt(x, z) + 0.45, u < 0.12 ? level - 0.2 : -99), z); uv.push(sd * 0.5 + 0.5, u * 6); }
+        if (i < n) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } }
+      const gS = new THREE.BufferGeometry(); gS.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gS.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); gS.setIndex(idx); gS.computeVertexNormals();
+      const spillTex = lavaTex.clone(); spillTex.needsUpdate = true; spillTex.repeat.set(1, 1); VOLC.tex.push(spillTex);
+      const sp = new THREE.Mesh(gS, new THREE.MeshBasicMaterial({ map: spillTex, side: THREE.DoubleSide })); I.group.add(sp); }
     for (let i = 0; i < 10; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: 0x8a8580, transparent: true, depthWrite: false }));
-      s.userData = { base: top + 3, off: i / 10, x: I.c.x, z: I.c.y };
+      s.userData = { base: level + 3, off: i / 10, x: I.c.x, z: I.c.y };
       scene.add(s); smokePuffs.push(s);
     }
   }
@@ -2291,6 +2324,8 @@ window.__pgBoot = () => {
     for (const F of HMX.flames) { const k = 0.8 + 0.25 * Math.sin(t * 9 + F.ph) + 0.15 * Math.sin(t * 23 + F.ph * 2); F.f.scale.set(F.s * (0.85 + 0.15 * Math.sin(t * 7 + F.ph)), F.s * k * 1.2, 1); F.f.material.opacity = 0.75 + 0.25 * Math.sin(t * 13 + F.ph); }
     for (const m of HMX.lavaM) m.emissiveIntensity = 0.7 + 0.3 * Math.sin(t * 1.7) * Math.sin(t * 0.7 + 1);
     for (const tx of HMX.falls) tx.offset.y -= dt * 1.6;
+    if (VOLC.tex) { VOLC.tex[0].offset.x += dt * 0.012; VOLC.tex[0].offset.y += dt * 0.007; VOLC.tex[1].offset.x -= dt * 0.006; VOLC.tex[1].offset.y += dt * 0.004; if (VOLC.tex[2]) VOLC.tex[2].offset.y -= dt * 0.35;   // the lake churns, the crust drifts, the spill pours
+      if (VOLC.light) VOLC.light.intensity = 2.0 + 0.5 * Math.sin(t * 1.3) * Math.sin(t * 3.7 + 1); }
     if (HMX.foamRings) for (const f of HMX.foamRings) { const k = 1 + 0.12 * Math.sin(t * 3.1); f.scale.set(k, k, 1); f.material.opacity = 0.45 + 0.15 * Math.sin(t * 4.3); }
     if (HMX.dolphins) for (const D of HMX.dolphins) {   // a dolphin's leap: up out of the water in an arc and back in nose first
       if (Math.abs(D.x - camera.position.x) > 1500 || Math.abs(D.z - camera.position.z) > 1500) { D.g.visible = false; continue; }
