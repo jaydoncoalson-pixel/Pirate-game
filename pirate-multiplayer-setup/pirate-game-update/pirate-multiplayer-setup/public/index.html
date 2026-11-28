@@ -7555,6 +7555,7 @@ window.__pgBoot = () => {
   // fuller, then a hilt), and the magic ones are animated through the same per-frame tick as the Sword of the Sea ----
   const metal = (c, sh = 110, em = 0x000000) => new THREE.MeshPhongMaterial({ color: c, specular: 0xffffff, shininess: sh, emissive: em });
   const matte = c => new THREE.MeshLambertMaterial({ color: c });
+  function legendGlow(col, size) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.75 })); sp.scale.setScalar(size); return sp; }
   function bladeKit(g, o) {
     // o: len, curve, w(t) width along the blade, body/edge/fuller materials, z0, tipLen, segs, thick
     // One smooth swept blade instead of a stack of boxes: a lens-shaped section (a flat spine, faces tapering to a
@@ -7630,40 +7631,67 @@ window.__pgBoot = () => {
       return g;
     }
     if (S === 'krakenfang') {
-      // Krakenfang: an ivory beak-tooth blade, ridged and yellowed at the spine, a grip wound in dried purple tentacle,
-      // two tentacle-tips curling back as the guard, a row of suckers down the spine and a black beak for a pommel
-      const ivory = metal(0xece2cc, 40), spine = matte(0xc8b48a), purple = matte(0x6a3a7a), sucker = matte(0xe8b8d8), beak = metal(0x141018, 120);
-      gripKit(g, { len: 0.25, r: 0.034, mat: purple, band: matte(0x4a2858), bands: 7 });
-      g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 6), beak), 0, 0, -0.3, -Math.PI / 2));
-      for (const sd of [-1, 1]) { const t1 = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 6, 10, Math.PI * 1.3), purple); t1.position.set(0, sd * 0.07, 0.02); t1.rotation.set(0, Math.PI / 2, sd > 0 ? -0.4 : Math.PI + 0.4); g.add(t1);
-        for (let k = 0; k < 3; k++) g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), sucker), 0.012, sd * (0.05 + k * 0.03), 0.06 - k * 0.012)); }
-      bladeKit(g, { len: lk.len, curve: lk.curve, body: ivory, edge: metal(0xfffaf0, 80), w: t => lk.width * (1 - 0.55 * Math.pow(t, 1.3)) + 0.012, thick: 0.034,
-        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0) { const sk = new THREE.Mesh(new THREE.CircleGeometry(0.011 + (1 - tm) * 0.006, 8), sucker); sk.position.set(0.019, cy - w * 0.32, cz); sk.rotation.y = Math.PI / 2; g.add(sk); const sk2 = sk.clone(); sk2.position.x = -0.019; g.add(sk2); }
-          if (i % 3 === 1) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.008, 0.012), spine); r.position.set(0, cy - w * 0.48, cz); r.rotation.x = rx; g.add(r); } } });
+      // Krakenfang: an ivory beak-tooth blade with a purple ink groove, hooked barbs down the spine and suckers on both
+      // faces; a tentacle winds up the base of the blade, two more curl up as the guard, another spirals down the grip,
+      // and the pommel is the Kraken's black beak with two yellow eyes
+      const ivory = metal(0xf2e8d2, 50), purple = matte(0x6a3a7a), purpleL = matte(0x8a5aa0), sucker = matte(0xf4cce4), beak = metal(0x141018, 150), eyeM = new THREE.MeshBasicMaterial({ color: 0xffd84a });
+      gripKit(g, { len: 0.25, r: 0.033, mat: purple, band: matte(0x4a2858), bands: 7 });
+      for (let k = 0; k < 20; k++) { const a = k * 0.85, z = -0.235 + k * 0.0125, r = 0.036; g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.014 - k * 0.0002, 7, 5), purpleL), Math.cos(a) * r, Math.sin(a) * r, z));
+        if (k % 2 === 0) g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 4), sucker), Math.cos(a) * (r + 0.011), Math.sin(a) * (r + 0.011), z)); }   // a tentacle spiralling down the grip
+      for (const sd of [-1, 1]) { const bk = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.08, 6), beak); bk.scale.set(1, 1, 0.6); bk.position.set(0, sd * 0.012, -0.29); bk.rotation.set(-Math.PI / 2 + sd * 0.25, 0, 0); g.add(bk);   // the beak, a little open
+        g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), eyeM), sd * 0.03, 0, -0.255)); g.add(at3(legendGlow(0xffd84a, 0.06), sd * 0.032, 0, -0.255)); }
+      for (const sd of [-1, 1]) for (let k = 0; k <= 12; k++) { const t = k / 12, a = t * Math.PI * 1.45, r = 0.024 * (1 - t * 0.72);   // the guard: two tentacles curling up toward the blade
+        const y = sd * (0.03 + Math.sin(a) * 0.085), z = 0.02 + (1 - Math.cos(a)) * 0.06; g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), k % 2 ? purple : purpleL), 0, y, z));
+        if (k % 2 === 0 && k < 11) for (const sx of [-1, 1]) g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(r * 0.38, 6, 4), sucker), sx * r * 0.8, y - sd * r * 0.3, z)); }
+      const W = t => lk.width * (1 - 0.55 * Math.pow(t, 1.3)) + 0.012;
+      const B = bladeKit(g, { len: lk.len, curve: lk.curve, body: ivory, edge: metal(0xfff8ee, 130), fuller: matte(0x4a1a5a), fullerEnd: 0.78, w: W, thick: 0.036, segs: 14,
+        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 0) for (const sx of [-1, 1]) { const sk = new THREE.Mesh(new THREE.CircleGeometry(0.011 + (1 - tm) * 0.006, 10), sucker); sk.position.set(sx * 0.0195, cy - w * 0.3, cz); sk.rotation.y = sx * Math.PI / 2; g.add(sk);
+          const ring = new THREE.Mesh(new THREE.RingGeometry(0.011 + (1 - tm) * 0.006, 0.015 + (1 - tm) * 0.007, 10), purpleL); ring.position.copy(sk.position); ring.position.x += sx * 0.0005; ring.rotation.y = sx * Math.PI / 2; ring.material.side = THREE.DoubleSide; g.add(ring); } } });
+      for (let i = 1; i < 12; i++) { const t = i / 12, p = B.at(t), w = W(t), c = new THREE.Mesh(new THREE.ConeGeometry(0.009 * (1.2 - t * 0.6), 0.04 * (1.2 - t * 0.6), 5), metal(0xd8c8a4, 40)); c.position.set(0, p.y + w / 2 + 0.012, p.z); c.rotation.x = -0.9; g.add(c); }   // hooked barbs down the spine
+      for (let k = 0; k <= 16; k++) { const t = k / 16 * 0.24, p = B.at(t), w = W(t), a = k * 1.15; g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.016 - k * 0.0006, 7, 5), k % 2 ? purpleL : purple), Math.cos(a) * 0.026, p.y + Math.sin(a) * (w / 2 + 0.006), p.z)); }   // a tentacle wound round the blade's root
+      g.add(at3(legendGlow(0xb070ff, 0.22), 0, 0, 0.06));
       return g;
     }
     if (S === 'serpent') {
-      // Serpent's Tooth: a long translucent green fang, darker at the edge, with a serpent's head for a guard (red eyes,
-      // fangs bared down the blade) and a grip of overlapping scales
-      const fang = new THREE.MeshPhongMaterial({ color: 0x4ad88a, specular: 0xffffff, shininess: 140, emissive: 0x0a3a1c, transparent: true, opacity: 0.86 }), edge = metal(0x2a8a54, 120, 0x05200e), scale = matte(0x2e6a3a), scaleD = matte(0x1e4a28), bone = metal(0xf0ead8, 60);
-      gripKit(g, { len: 0.22, r: 0.03, mat: scale, band: scaleD, bands: 8 });
-      g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 6), scaleD), 0, 0, -0.25));
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.09), scale); head.position.set(0, 0, 0.03); g.add(head);
-      const snout = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.08, 0.06), scaleD); snout.position.set(0, 0, 0.09); g.add(snout);
-      for (const sd of [-1, 1]) { g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff2a2a })), sd * 0.036, 0.03, 0.06));
-        g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.06, 5), bone), sd * 0.018, -0.03, 0.13, Math.PI / 2)); }
-      bladeKit(g, { len: lk.len, curve: lk.curve, body: fang, edge, w: t => lk.width * (1 - 0.7 * Math.pow(t, 1.1)) + 0.008, thick: 0.026 });
+      // Serpent's Tooth: a translucent green fang with a glowing venom core, a serrated edge and venom beading at the tip;
+      // the guard is a serpent's head whose jaws close on the blade, with fins, fangs and burning red eyes; its body coils
+      // down the grip to a curled tail
+      const fang = new THREE.MeshPhongMaterial({ color: 0x4ad88a, specular: 0xffffff, shininess: 150, emissive: 0x0a3a1c, transparent: true, opacity: 0.82 }), edge = metal(0x2a8a54, 140, 0x05200e);
+      const scale = matte(0x2e6a3a), scaleD = matte(0x1e4a28), belly = matte(0xa8c878), bone = metal(0xf4eedc, 80), venom = new THREE.MeshBasicMaterial({ color: 0x8affa8 }), eyeM = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
+      gripKit(g, { len: 0.22, r: 0.028, mat: scaleD, band: scaleD, bands: 2 });
+      for (let k = 0; k < 22; k++) { const a = k * 0.8, z = -0.22 + k * 0.0105; g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.016, 7, 5), k % 3 ? scale : belly), Math.cos(a) * 0.03, Math.sin(a) * 0.03, z)); }   // its body, coiled down the grip
+      { const tl = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.08, 6), scale); tl.position.set(0, 0.02, -0.27); tl.rotation.set(-Math.PI / 2 - 0.6, 0, 0); g.add(tl); }   // the tail, curling off the pommel
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), scale); head.scale.set(0.85, 1, 1.25); head.position.set(0, 0.012, 0.03); g.add(head);
+      const jawU = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.09), scale); jawU.position.set(0, 0.045, 0.1); jawU.rotation.x = -0.25; g.add(jawU);   // jaws closing on the blade
+      const jawL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.022, 0.08), belly); jawL.position.set(0, -0.045, 0.095); jawL.rotation.x = 0.3; g.add(jawL);
+      for (const sd of [-1, 1]) { g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.05, 5), bone), sd * 0.02, 0.03, 0.135, Math.PI)); g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.03, 5), bone), sd * 0.016, -0.035, 0.13));
+        g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), eyeM), sd * 0.036, 0.04, 0.06)); g.add(at3(legendGlow(0xff3a2a, 0.07), sd * 0.04, 0.04, 0.06));
+        for (let k = 0; k < 4; k++) { const fn = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.08 - k * 0.012, 4), scaleD); fn.position.set(sd * 0.05, 0.03 - k * 0.022, 0.0); fn.rotation.set(0, 0, sd * (1.2 + k * 0.25)); g.add(fn); }   // fins swept back from the head
+        const mem = new THREE.Mesh(new THREE.CircleGeometry(0.06, 8, 0, Math.PI * 0.6), new THREE.MeshLambertMaterial({ color: 0x5ad08a, transparent: true, opacity: 0.6, side: THREE.DoubleSide })); mem.position.set(sd * 0.045, 0.0, 0.0); mem.rotation.set(0, sd * Math.PI / 2, -0.4); g.add(mem); }
+      const W = t => lk.width * (1 - 0.7 * Math.pow(t, 1.1)) + 0.008;
+      const B = bladeKit(g, { len: lk.len, curve: lk.curve, body: fang, edge, fuller: venom, fullerEnd: 0.85, w: W, thick: 0.026, segs: 14,
+        each: (i, tm, cy, cz, rx, w) => { const sr = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.022, 4), edge); sr.position.set(0, cy - w * 0.5 - 0.006, cz); sr.rotation.x = rx + Math.PI * 0.62; g.add(sr);   // serrations
+          if (i % 2) { const sc = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.02), scaleD); sc.position.set(0, cy + w * 0.5 + 0.002, cz); sc.rotation.x = rx; g.add(sc); } } });   // scales down the spine
+      for (let k = 0; k < 3; k++) { const t = 0.86 + k * 0.05, p = B.at(t), w = W(t); g.add(at3(new THREE.Mesh(new THREE.SphereGeometry(0.008 - k * 0.0015, 8, 6), venom), 0, p.y - w / 2 - 0.012 - k * 0.004, p.z)); }   // venom beading at the point
+      g.add(at3(legendGlow(0x6aff8a, 0.2), 0, 0, 0.14));
       return g;
     }
     if (S === 'ember') {
-      // Emberbrand: black glassy obsidian with molten fire running in its cracks, a glowing orange edge, a cross-guard of
-      // rough basalt blocks and a fire gem burning in the pommel
-      const obs = metal(0x161010, 170), lavaE = metal(0xff6a1a, 60, 0xff3a00), basalt = matte(0x2a2420), glow = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
-      gripKit(g, { len: 0.24, r: 0.033, mat: matte(0x1a1412), band: basalt, bands: 6 });
-      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.04, 0), glow), 0, 0, -0.27));
-      for (const sd of [-1, 1]) { g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.05), basalt), 0, sd * 0.06, 0.03, 0.2 * sd, 0, 0)); g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.04), basalt), 0, sd * 0.115, 0.04, -0.3 * sd, 0, 0)); }
-      bladeKit(g, { len: lk.len, curve: lk.curve, body: obs, edge: lavaE, w: t => lk.width * (1 - 0.42 * t) + 0.014, thick: 0.032,
-        each: (i, tm, cy, cz, rx, w) => { if (i % 2 === 1 || i === 4) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.006, 0.05 + (i % 3) * 0.02), glow); c.position.set(0, cy + (i % 4 - 1.5) * w * 0.18, cz); c.rotation.set(rx + (i % 2 ? 0.5 : -0.4), 0, 0); g.add(c); } } });
+      // Emberbrand: black glassy obsidian split by a branching web of molten cracks, a glowing edge, jagged obsidian chips
+      // down the spine; a cross-guard of basalt blocks with lava in its seams and a fire gem at its heart; lava rings on
+      // the grip and a blazing gem in the pommel
+      const obs = metal(0x141010, 180), lavaE = metal(0xff6a1a, 60, 0xff3a00), basalt = matte(0x2a2420), basaltL = matte(0x3a322c), glow = new THREE.MeshBasicMaterial({ color: 0xff8a2a }), glowY = new THREE.MeshBasicMaterial({ color: 0xffd060 });
+      gripKit(g, { len: 0.24, r: 0.033, mat: matte(0x1a1412), band: glow, bands: 5 });
+      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.045, 0), glowY), 0, 0, -0.28)); g.add(at3(legendGlow(0xff8a2a, 0.16), 0, 0, -0.28));
+      for (let k = 0; k < 4; k++) g.add(at3(new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.04, 4), basalt), Math.cos(k * 1.57) * 0.035, Math.sin(k * 1.57) * 0.035, -0.255, 0, 0, k * 1.57 + Math.PI / 2));   // claws holding the gem
+      for (const sd of [-1, 1]) { for (let k = 0; k < 3; k++) g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.058 - k * 0.008, 0.045, 0.05 - k * 0.006), k % 2 ? basaltL : basalt), 0, sd * (0.045 + k * 0.042), 0.03 + k * 0.006, sd * (0.15 + k * 0.12), 0, 0));
+        for (let k = 0; k < 2; k++) g.add(at3(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.006, 0.052), glow), 0, sd * (0.066 + k * 0.042), 0.033 + k * 0.006, sd * (0.2 + k * 0.12), 0, 0)); }   // lava in the seams
+      g.add(at3(new THREE.Mesh(new THREE.OctahedronGeometry(0.028, 0), glowY), 0, 0, 0.035)); g.add(at3(legendGlow(0xff7a20, 0.14), 0, 0, 0.04));
+      const W = t => lk.width * (1 - 0.42 * t) + 0.014;
+      const B = bladeKit(g, { len: lk.len, curve: lk.curve, body: obs, edge: lavaE, w: W, thick: 0.032, segs: 14,
+        each: (i, tm, cy, cz, rx, w) => { for (let k = 0; k < 2; k++) { if ((i + k) % 3 === 2) continue; const L = 0.03 + ((i * 7 + k * 3) % 5) * 0.012, c = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.005, L), (i + k) % 4 ? glow : glowY);
+            c.position.set(0, cy + (((i * 5 + k * 11) % 9) / 9 - 0.55) * w * 0.7, cz + (k - 0.5) * 0.03); c.rotation.set(rx + (((i + k) % 2) ? 0.7 : -0.6), 0, 0); g.add(c); } } });   // the web of molten cracks
+      for (let i = 1; i < 13; i++) { const t = i / 13, p = B.at(t), w = W(t), c = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.03 + (i % 3) * 0.01, 4), obs); c.position.set(0, p.y + w / 2 + 0.01, p.z); c.rotation.x = -0.5 - (i % 2) * 0.4; g.add(c); }   // obsidian chips down the spine
       return g;
     }
     if (S === 'cursed') {
@@ -8056,9 +8084,9 @@ window.__pgBoot = () => {
     stormcaller: { name: 'Stormcaller', desc: 'A blued-steel pistol wound with copper coils round a captive storm. Its bolt strikes yer foe and leaps on to three more nearby.', dmg: 72, chain: 3, rounds: 2, reload: 2.0, fire: 0.3, range: 85, cone: 0.94, legendary: true, gold: 0, cost: {},
                get claim() { return `Sink 30 Blackwater ships (${Math.min(30, STATE.raiderKills || 0)}/30).`; }, look: { wood: 0x1a2030, metal: 0x2a3a5a, trim: 0xd08a4a, len: 0.44, bands: 3, coil: true } },
     widowskiss: { name: "Widow's Kiss", desc: "Captain Hollowell's own pistol, raised from the deep with his blade. Its pale shot passes through two foes, and drinks a third of the harm it does to mend ye.", dmg: 64, pierce: 2, drain: 0.3, rounds: 1, reload: 1.5, fire: 0.3, range: 90, cone: 0.95, legendary: true, gold: 0, cost: {},
-               claim: 'Lay Captain Hollowell to rest (finish the quest The Ghost Blade).', look: { wood: 0x2a3a34, metal: 0x8ab0a0, trim: 0xc8fff0, len: 0.5, bands: 2, slim: true, ghost: true } },
+               claim: 'Lay Captain Hollowell to rest (finish the quest The Ghost Blade).', look: { wood: 0x1e2a26, metal: 0x4e6a62, trim: 0xd8f8ee, len: 0.5, bands: 2, slim: true, ghost: true } },
     dragonbreath: { name: "Dragon's Breath", desc: 'A flared hand-mortar packed with blasting powder and the Leviathan\'s burning oil. It breathes a cone of fire that sets everything in front of ye alight.', dmg: 13, pellets: 9, fire: 0.4, rounds: 1, reload: 2.0, range: 18, cone: 0.68, kb: true, burn: true, legendary: true, gold: 0, cost: {},
-               get claim() { return `Slay the Leviathan (${Math.min(1, STATE.levKills || 0)}/1).`; }, look: { wood: 0x3a1410, metal: 0x6a1a10, trim: 0xe8b04a, len: 0.34, flare: true, fangs: true } },
+               get claim() { return `Slay the Leviathan (${Math.min(1, STATE.levKills || 0)}/1).`; }, look: { wood: 0x3a1410, metal: 0x7a1a12, trim: 0xe8b04a, len: 0.36, dragon: true, ember: true, bands: 2 } },
     thunder: { name: 'The Thunderer', desc: 'A brass hand-mortar with a dragon for a muzzle. Every shell bursts on impact, blasting everything within four metres.', dmg: 70, splash: 4, splashDmg: 45, rounds: 1, reload: 2.6, fire: 0.4, range: 70, cone: 0.93, gold: 650, cost: { gem: 2, steel: 4 },
                look: { wood: 0x3a1a10, metal: 0xc9962e, trim: 0xffd76a, len: 0.4, dragon: true } },
   };
@@ -8118,10 +8146,33 @@ window.__pgBoot = () => {
     }
     for (let i = 0; i < (lk.bands || 0); i++) cyl(br * 1.25, br * 1.25, 0.012, trim, 0, y0 - len * (0.25 + 0.5 * i / Math.max(1, lk.bands - 1)), -0.006);
     if (lk.slim) { const inl = box(0.004, len * 0.6, 0.004, trim, 0.02, yc, -0.008); box(0.004, len * 0.6, 0.004, trim, -0.02, yc, -0.008); }   // silver inlay
-    if (lk.coil) { for (let i = 0; i < 6; i++) { const t2 = new THREE.Mesh(new THREE.TorusGeometry(br * 1.5, 0.004, 5, 12), trim); t2.rotation.x = Math.PI / 2; t2.position.set(0, y0 - len * (0.15 + i * 0.12), -0.008); g.add(t2); }
-      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), new THREE.MeshBasicMaterial({ color: 0x9ad8ff })); orb.position.set(0, -0.02, -0.045); g.add(orb); }   // copper coils down the barrel and a captive spark by the lock
+    if (lk.coil) {   // Stormcaller: copper coils down the barrel with arcs crackling between them, two prongs at the muzzle with a spark held between, a glass orb of storm by the lock and a lightning bolt inlaid on the grip
+      const arcM = new THREE.MeshBasicMaterial({ color: 0xbfe8ff }), copper = M(0xd08a4a);
+      for (let i = 0; i < 7; i++) { const t2 = new THREE.Mesh(new THREE.TorusGeometry(br * 1.55, 0.0045, 5, 14), copper); t2.rotation.x = Math.PI / 2; t2.position.set(0, y0 - len * (0.12 + i * 0.11), -0.008); g.add(t2); }
+      for (let i = 0; i < 6; i++) { const ya = y0 - len * (0.12 + i * 0.11), yb = ya - len * 0.11, a = i * 1.7, r = br * 1.55, ar = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0018, len * 0.12, 3), arcM); ar.position.set(Math.cos(a) * r, (ya + yb) / 2, -0.008 + Math.sin(a) * r); ar.rotation.set(0.35 * Math.sin(a), 0, 0.35 * Math.cos(a)); g.add(ar); }
+      for (const sd of [-1, 1]) { const pr = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.05, 5), copper); pr.position.set(sd * 0.018, y0 - len - 0.02, -0.008); pr.rotation.set(Math.PI, 0, sd * 0.35); g.add(pr); }
+      { const sp = legendGlow(0x9ad8ff, 0.07); sp.position.set(0, y0 - len - 0.04, -0.008); g.add(sp); }
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 10), new THREE.MeshPhongMaterial({ color: 0xbfe8ff, emissive: 0x3a7aff, transparent: true, opacity: 0.85, shininess: 120 })); orb.position.set(0, -0.02, -0.045); g.add(orb);
+      { const sp = legendGlow(0x6ab8ff, 0.09); sp.position.copy(orb.position); g.add(sp); }
+      for (let k = 0; k < 3; k++) { const z = box(0.052, 0.006, 0.03, arcM, 0, 0.0 + k * 0.022, 0.07 + k * 0.03); z.rotation.x = 0.25 + (k % 2 ? 0.7 : -0.7); }   // the bolt on the grip
+    }
+    if (lk.ghost) {   // Widow's Kiss: a skull on the grip's end, silver filigree on the lock and grip, a broken chain hanging from the skull, and pale wisps drifting off it
+      const silver = M(0xe8fff8), dark = new THREE.MeshBasicMaterial({ color: 0x0a1a14 });
+      const sk = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), silver); sk.scale.set(0.95, 1, 1.05); sk.position.set(0, 0.075, 0.215); g.add(sk);
+      for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 5), dark); e.position.set(sd * 0.011, 0.084, 0.24); g.add(e); }
+      box(0.018, 0.012, 0.02, silver, 0, 0.06, 0.238);   // the jaw
+      for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.0022, 4, 10, Math.PI * 1.5), silver); f.position.set(0.027, -0.03 + (k % 2) * 0.03, -0.01 + Math.floor(k / 2) * 0.05); f.rotation.set(0, Math.PI / 2, k * 1.2); g.add(f); const f2 = f.clone(); f2.position.x = -0.027; g.add(f2); }   // filigree curls
+      for (let k = 0; k < 3; k++) { const ln = new THREE.Mesh(new THREE.TorusGeometry(0.009, 0.0025, 4, 8), silver); ln.position.set(0, 0.09 + k * 0.016, 0.25 + k * 0.004); ln.rotation.set(0, k % 2 ? Math.PI / 2 : 0, 0); g.add(ln); }   // a broken chain
+      for (let k = 0; k < 3; k++) { const sp = legendGlow(0x8affd0, 0.05 + k * 0.015); sp.position.set((k - 1) * 0.02, -0.02 - k * 0.08, -0.03); g.add(sp); }
+    }
+    if (lk.ember) {   // Dragon's Breath: scales down the barrel, swept gold wings at the lock and a live ember glowing in the dragon's throat
+      for (let i = 0; i < 6; i++) for (const sd of [-1, 1]) { const sc = box(0.014, 0.012, 0.012, trim, sd * 0.016, y0 - len * (0.12 + i * 0.13), -0.026); sc.rotation.set(0.6, 0, sd * 0.4); }
+      for (const sd of [-1, 1]) { const wg = new THREE.Mesh(new THREE.CircleGeometry(0.05, 6, 0, Math.PI * 0.55), new THREE.MeshLambertMaterial({ color: lk.trim, side: THREE.DoubleSide })); wg.position.set(sd * 0.03, -0.02, -0.01); wg.rotation.set(0, sd * Math.PI / 2, Math.PI * 0.55); g.add(wg); }
+      const em = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa040 })); em.position.set(0, y0 - len - 0.07, -0.008); g.add(em);
+      { const sp = legendGlow(0xff7a20, 0.09); sp.position.copy(em.position); g.add(sp); }
+    }
     if (lk.fangs) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, f = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.035, 4), trim); f.position.set(Math.cos(a) * 0.05, y0 - len - 0.105, -0.008 + Math.sin(a) * 0.05); f.rotation.x = Math.PI; g.add(f); }   // teeth round the dragon's mouth
-    if (lk.ghost) g.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.72; if (o.material.emissive) o.material.emissive.setHex(0x1a5a44); } });   // pale and half there
+    if (lk.ghost) g.traverse(o => { if (o.isMesh && !(o.material instanceof THREE.MeshBasicMaterial)) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.86; if (o.material.emissive) o.material.emissive.setHex(0x0c3428); } });   // pale and half there
     g.userData.muzzleY = y0 - len - (lk.flare ? 0.1 : lk.dragon ? 0.09 : lk.claw ? 0.06 : 0.01);
     return g;
   }
@@ -8278,6 +8329,7 @@ window.__pgBoot = () => {
     return `2 · ${G.name}` + (G.rounds > 1 ? ' ' + '●'.repeat(PLAYER.rounds) + '○'.repeat(Math.max(0, G.rounds - PLAYER.rounds)) : '');
   }
   setTimeout(() => { try { refreshPistol(); } catch (e) {} }, 0);
+  window.__legCam = (n) => { const P0 = P.pos; if (n === 'hilt') window.__camO = [P0.x + 1.5, 296.5, P0.z - 50.5, P0.x, 296.2, P0.z - 60]; else if (n === 'pist') window.__camO = [P0.x + 210, 300.3, P0.z - 52.5, P0.x + 210, 300, P0.z - 60]; };
   window.__leg = { give: () => { for (const k of ['krakenfang', 'serpenttooth', 'emberbrand']) if (!STATE.swords.includes(k)) STATE.swords.push(k); }, sword: id => { STATE.sword = id; refreshBlade(); onSwordChanged(); setWeapon('cutlass'); }, swing: () => { const b = bandits.filter(b => b.state !== 'dead' && b.state !== 'gone').sort((x, y) => Math.hypot(x.pos.x - P.pos.x, x.pos.z - P.pos.z) - Math.hypot(y.pos.x - P.pos.x, y.pos.z - P.pos.z))[0]; if (b) { P.facing = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z); yaw = P.facing + Math.PI; } playerAttack(); }, feats: () => { STATE.krKills = 3; STATE.serpKills = 5; STATE.raiderKills = 30; STATE.levKills = 1; STATE.quests.ghostblade = 'done'; legendCheck(); return JSON.stringify([STATE.swords, STATE.pistols]); },
     showSwords: () => { const g = new THREE.Group(); ['krakenfang', 'serpenttooth', 'emberbrand'].forEach((k, i) => { const o = new THREE.Group(), b = buildBlade(SWORDS[k].look); b.rotation.x = -Math.PI / 2; o.add(b); o.rotation.y = Math.PI / 2; o.position.set(-0.5 + i * 0.5, -0.7, 0); g.add(o); }); g.scale.setScalar(9); g.position.set(P.pos.x, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x + 4, 300, P.pos.z - 36, P.pos.x, 300, P.pos.z - 60]; },
     showPistols: () => { const g = new THREE.Group(); ['stormcaller', 'widowskiss', 'dragonbreath'].forEach((k, i) => { const o = new THREE.Group(), m = buildPistol(PISTOLS[k].look); m.rotation.x = Math.PI / 2; o.add(m); o.rotation.y = -Math.PI / 2; o.position.set(-0.75 + i * 0.75, 0, 0); g.add(o); }); g.scale.setScalar(10); g.position.set(P.pos.x + 200, 300, P.pos.z - 60); scene.add(g); window.__camO = [P.pos.x + 200, 300, P.pos.z - 47, P.pos.x + 200, 300, P.pos.z - 60]; } };
